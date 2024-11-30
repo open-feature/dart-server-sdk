@@ -1,0 +1,29 @@
+# To ensure long-term stability and maintain high standards of code quality,
+# we include only packages from well-known providers and official Dart and Google sources.
+# Specifically, packages are selected from the following trusted publishers:
+# - Google packages: https://pub.dev/publishers/google.dev/packages
+# - Official Dart team packages: https://dart.dev/resources/dart-team-packages
+#
+# This approach minimizes risks associated with unverified dependencies and guarantees
+# consistent support and updates from reputable maintainers.
+
+# Package names are alphabetized
+
+name: open_feature_dart_server_sdk
+description: A server-side Dart implementation of the OpenFeature SDK.
+version: 0.0.1-pre
+homepage: https://github.com/your-repo/open-feature-dart-server-sdk
+environment:
+  sdk: ">=3.5.4 <4.0.0"
+
+dependencies:
+  # Core dependencies
+  collection: ^1.17.0   # For efficient list and map operations
+  logging: ^1.1.0       # For structured logging
+  meta: ^1.9.0          # For annotations like @required
+
+dev_dependencies:
+  # For testing
+  test: ^1.22.0         # Dart's core testing framework
+  mockito: ^5.3.0       # For mocking objects in unit tests
+  lints: ^5.0.0         # Recommended lints for maintaining code quality

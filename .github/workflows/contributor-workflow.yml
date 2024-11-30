@@ -35,6 +35,12 @@ jobs:
             exit 1
           fi
 
+      - name: Check for Outdated Dependencies
+        run: |
+          echo "Checking for outdated dependencies..."
+          cd dart-server-sdk-openfeature
+          dart pub outdated || true
+
       - name: Run Static Analysis
         run: |
           echo "Running static analysis for core SDK..."
