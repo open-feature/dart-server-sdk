@@ -1,15 +1,15 @@
-// Interface/Contract for feature providers and NoOpProvider.
+// Interface/Contract for feature providers and OpenFeatureNoOpProvider.
 // Metadata describing the provider.
-class ProviderMetadata {
+class OpenFeatureProviderMetadata {
   final String name;
 
-  ProviderMetadata(this.name);
+  OpenFeatureProviderMetadata(this.name);
 }
 
 // Abstract interface for feature providers.
-abstract class FeatureProvider {
+abstract class OpenFeatureProvider {
   // Returns metadata about the provider.
-  ProviderMetadata get metadata;
+  OpenFeatureProviderMetadata get metadata;
 
   // Type-safe flag evaluation methods.
   Future<bool> getBooleanFlag(String flagKey, {Map<String, dynamic>? context});
@@ -20,10 +20,11 @@ abstract class FeatureProvider {
       {Map<String, dynamic>? context});
 }
 
-// Default NoOpProvider implementation as a safe fallback.
-class NoOpProvider implements FeatureProvider {
+// Default OpenFeatureNoOpProvider implementation as a safe fallback.
+class OpenFeatureNoOpProvider implements OpenFeatureProvider {
   @override
-  ProviderMetadata get metadata => ProviderMetadata("NoOpProvider");
+  OpenFeatureProviderMetadata get metadata =>
+      OpenFeatureProviderMetadata("OpenFeatureNoOpProvider");
 
   @override
   Future<bool> getBooleanFlag(String flagKey,
