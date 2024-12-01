@@ -1,5 +1,5 @@
 // Hook interface and default hooks.
-abstract class Hook {
+abstract class OpenFeatureHook {
   /// Logic to execute before a flag is evaluated.
   void beforeEvaluation(String flagKey, Map<String, dynamic>? context);
 
@@ -9,7 +9,7 @@ abstract class Hook {
 }
 
 /// Example AuditHook implementation
-class AuditHook implements Hook {
+class OpenFeatureAuditHook implements OpenFeatureHook {
   @override
   void beforeEvaluation(String flagKey, Map<String, dynamic>? context) {
     print('Before evaluating flag: $flagKey');
