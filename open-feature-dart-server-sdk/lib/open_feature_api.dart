@@ -3,18 +3,18 @@
 import 'dart:async';
 import 'package:meta/meta.dart'; // Required for @visibleForTesting
 
-// Abstract FeatureProvider interface for extensibility.
-abstract class FeatureProvider {
+// Abstract OpenFeatureProvider interface for extensibility.
+abstract class OpenFeatureProvider {
   String get name;
 
   // Generic method to get a feature flag's value.
   Future<dynamic> getFlag(String flagKey, {Map<String, dynamic>? context});
 }
 
-// Default NoOpProvider implementation as a safe fallback.
-class NoOpProvider implements FeatureProvider {
+// Default OpenFeatureNoOpProvider implementation as a safe fallback.
+class OpenFeatureNoOpProvider implements OpenFeatureProvider {
   @override
-  String get name => "NoOpProvider";
+  String get name => "OpenFeatureNoOpProvider";
 
   @override
   Future<dynamic> getFlag(String flagKey,
@@ -25,19 +25,19 @@ class NoOpProvider implements FeatureProvider {
 }
 
 // Global evaluation context shared across feature evaluations.
-class EvaluationContext {
+class OpenFeatureEvaluationContext {
   final Map<String, dynamic> attributes;
 
-  EvaluationContext(this.attributes);
+  OpenFeatureEvaluationContext(this.attributes);
 
   /// Merge this context with another context.
-  EvaluationContext merge(EvaluationContext other) {
-    return EvaluationContext({...attributes, ...other.attributes});
+  OpenFeatureEvaluationContext merge(OpenFeatureEvaluationContext other) {
+    return OpenFeatureEvaluationContext({...attributes, ...other.attributes});
   }
 }
 
-// Abstract Hook interface for pre/post evaluation logic.
-abstract class Hook {
+// Abstract OpenFeatureHook interface for pre/post evaluation logic.
+abstract class OpenFeatureHook {
   void beforeEvaluation(String flagKey, Map<String, dynamic>? context);
   void afterEvaluation(
       String flagKey, dynamic result, Map<String, dynamic>? context);
@@ -48,19 +48,20 @@ class OpenFeatureAPI {
   // Singleton instance
   static OpenFeatureAPI? _instance; // Nullable to allow reinitialization
 
-  // Default provider (NoOpProvider initially)
-  FeatureProvider _provider = NoOpProvider();
+  // Default provider (OpenFeatureNoOpProvider initially)
+  OpenFeatureProvider _provider = OpenFeatureNoOpProvider();
 
   // Global hooks and evaluation context
-  final List<Hook> _hooks = [];
-  EvaluationContext? _globalContext;
+  final List<OpenFeatureHook> _hooks = [];
+  OpenFeatureEvaluationContext? _globalContext;
 
   // StreamController for provider updates
-  late final StreamController<FeatureProvider> _providerStreamController;
+  late final StreamController<OpenFeatureProvider> _providerStreamController;
 
   // Private constructor
   OpenFeatureAPI._internal() {
-    _providerStreamController = StreamController<FeatureProvider>.broadcast();
+    _providerStreamController =
+        StreamController<OpenFeatureProvider>.broadcast();
   }
 
   // Factory constructor for singleton instance
@@ -75,33 +76,33 @@ class OpenFeatureAPI {
   }
 
   /// Set the active feature provider and notify listeners.
-  void setProvider(FeatureProvider provider) {
+  void setProvider(OpenFeatureProvider provider) {
     _provider = provider;
     _providerStreamController
         .add(provider); // Notify listeners about the change.
   }
 
   /// Get the active feature provider.
-  FeatureProvider get provider => _provider;
+  OpenFeatureProvider get provider => _provider;
 
   /// Set the global evaluation context for the API.
-  void setGlobalContext(EvaluationContext context) {
+  void setGlobalContext(OpenFeatureEvaluationContext context) {
     _globalContext = context;
   }
 
   /// Get the current global evaluation context.
-  EvaluationContext? get globalContext => _globalContext;
+  OpenFeatureEvaluationContext? get globalContext => _globalContext;
 
   /// Add global hooks to the API.
-  void addHooks(List<Hook> hooks) {
+  void addHooks(List<OpenFeatureHook> hooks) {
     _hooks.addAll(hooks);
   }
 
   /// Retrieve the global hooks.
-  List<Hook> get hooks => List.unmodifiable(_hooks);
+  List<OpenFeatureHook> get hooks => List.unmodifiable(_hooks);
 
   /// Stream to listen for provider updates.
-  Stream<FeatureProvider> get providerUpdates =>
+  Stream<OpenFeatureProvider> get providerUpdates =>
       _providerStreamController.stream;
 
   /// Reset the singleton instance for testing purposes.
