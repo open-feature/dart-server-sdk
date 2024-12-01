@@ -9,11 +9,14 @@ import 'transaction_context.dart'; // Required for @visibleForTesting
 // Abstract OpenFeatureProvider interface for extensibility.
 abstract class OpenFeatureProvider {
   static final Logger _logger = Logger('OpenFeatureProvider');
+
 // Abstract OpenFeatureProvider interface for extensibility.
 
   String get name;
 
   // Shutdown method for cleaning u p resources.
+
+  // Shutdown method for cleaning up resources.
   Future<void> shutdown() async {
     _logger.info('Shutting down provider: $name');
     // Default implementation does nothing.
@@ -263,6 +266,7 @@ class OpenFeatureAPI {
     _logger.info('Shutting down OpenFeatureAPI...');
     await _provider.shutdown(); // Shutdown the provider
     // Optionally, cleanup transaction contexts
+
     _transactionContextStack.clear();
     dispose();
   }
