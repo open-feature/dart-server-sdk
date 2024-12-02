@@ -14,9 +14,18 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+<<<<<<< HEAD
     
     steps:
       - name: Notify Google Chat
         uses: SimonScholz/google-chat-action@main
         with:
           webhookUrl: '${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}'
+=======
+
+    steps:
+    - id: 'notify_google_chat'
+      uses: 'google-github-actions/send-google-chat-webhook@v0.0.4'
+      with:
+        webhook_url: '${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}'
+>>>>>>> ea49837 (ci: add google chat notifications (#7))
