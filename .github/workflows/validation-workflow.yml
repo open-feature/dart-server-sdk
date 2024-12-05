@@ -49,7 +49,7 @@ jobs:
           echo "Validating commit messages..."
 
           # Define the regex for conventional commit format
-          REGEX="^(feat|fix|hotfix|chore|test|refactor|release)(\([a-z0-9_-]+\))?: .{1,72}$"
+          REGEX="^(feat|fix|hotfix|chore|test|refactor|release|ci)(\([a-z0-9_-]+\))?: .{1,72}$"
 
           # Fetch the base branch dynamically (fallback to 'main' if not in a pull request)
           BASE_BRANCH=${{ github.event.pull_request.base.ref || 'main' }}
