@@ -1,0 +1,24 @@
+name: Notifications
+
+on:
+  issue_comment:
+    types: [created, edited, deleted]
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, edited, closed, reopened, synchronize]
+  deployment_status:
+  release:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+    - id: 'notify_google_chat'
+      uses: 'google-github-actions/send-google-chat-webhook@v0.0.4'
+      with:
+        webhook_url: '${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}'
