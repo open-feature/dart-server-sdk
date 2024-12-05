@@ -61,6 +61,7 @@ jobs:
           # Extract all commit messages excluding auto-generated ones
           INVALID_COMMITS=$(git log origin/$BASE_BRANCH..HEAD --pretty=format:"%s" \
             | grep -vE "^(Merge pull request|Initial commit)" \
+            | grep -vE "^(Merge remote-tracking branch|Merge pull request)" \
             | grep -vE "$REGEX" || true)
 
           # Check if there are invalid commit messages
