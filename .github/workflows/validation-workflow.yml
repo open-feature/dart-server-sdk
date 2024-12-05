@@ -48,9 +48,22 @@ jobs:
           set -euo pipefail
           echo "Validating commit messages..."
 
+          # Define the regex for conventional commit format
           REGEX="^(feat|fix|hotfix|chore|test|refactor|release)(\([a-z0-9_-]+\))?: .{1,72}$"
-          INVALID_COMMITS=$(git log -1 --format=%s | grep -vE "$REGEX" || true)
 
+          # Fetch the base branch dynamically (fallback to 'main' if not in a pull request)
+          BASE_BRANCH=${{ github.event.pull_request.base.ref || 'main' }}
+          echo "Base branch: $BASE_BRANCH"
+
+          # Fetch all commits between the base branch and the current branch
+          git fetch origin $BASE_BRANCH
+
+          # Extract all commit messages excluding auto-generated ones
+          INVALID_COMMITS=$(git log origin/$BASE_BRANCH..HEAD --pretty=format:"%s" \
+            | grep -vE "^(Merge pull request|Initial commit)" \
+            | grep -vE "$REGEX" || true)
+
+          # Check if there are invalid commit messages
           if [[ -n "$INVALID_COMMITS" ]]; then
             echo "❌ The following commit messages do not follow the convention:"
             echo "$INVALID_COMMITS"
@@ -62,5 +75,5 @@ jobs:
             echo "  fix(payment): resolve rounding error in total calculation"
             exit 1
           else
-            echo "✅ All commit messages follow the convention."
+            echo "✅ All developer-made commit messages follow the convention."
           fi

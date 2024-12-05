@@ -7,11 +7,11 @@ import '../lib/feature_provider.dart';
 
 void main() {
   group('FeatureProvider Tests', () {
-    late FeatureProvider noOpProvider;
+    late OpenFeatureNoOpProvider noOpProvider;
 
     setUp(() {
       // Initialize the NoOpProvider for each test
-      noOpProvider = NoOpProvider();
+      noOpProvider = OpenFeatureNoOpProvider();
     });
 
     test('NoOpProvider has correct metadata', () {

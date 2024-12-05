@@ -1,0 +1,28 @@
+# This workflow valides that branch and commit names are standardized for better workflow.
+
+name: Coverage Workflow
+
+on:
+  workflow_call: # Makes the workflow reusable
+    inputs:
+      branch_name:
+        required: true
+        type: string
+      event_name:
+        required: true
+        type: string
+
+jobs:
+  upload-coverage:
+    runs-on: ubuntu-latest
+    needs: test-and-upload
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_UPLOAD_TOKEN }}
+          slug: open-feature/dart-server-sdk
+          files: ./coverage/lcov.info
