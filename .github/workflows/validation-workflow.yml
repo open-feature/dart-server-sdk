@@ -64,6 +64,10 @@ jobs:
             | grep -vE "^(Merge remote-tracking branch|Merge pull request)" \
             | grep -vE "$REGEX" || true)
 
+          # Check for overly long summaries
+          LONG_SUMMARIES=$(git log origin/$BASE_BRANCH..HEAD --pretty=format:"%s" \
+            | awk 'length($0) > 72')
+
           # Check if there are invalid commit messages
           if [[ -n "$INVALID_COMMITS" ]]; then
             echo "❌ The following commit messages do not follow the convention:"
