@@ -11,7 +11,7 @@ abstract class OpenFeatureProvider {
   static final Logger _logger = Logger('OpenFeatureProvider');
   String get name;
 
-  // Shutdown method for cleaning up resources.
+  // Shutdown method for cleaning u p resources.
   Future<void> shutdown() async {
     _logger.info('Shutting down provider: $name');
     // Default implementation does nothing.
