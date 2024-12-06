@@ -9,6 +9,8 @@ import 'transaction_context.dart'; // Required for @visibleForTesting
 // Abstract OpenFeatureProvider interface for extensibility.
 abstract class OpenFeatureProvider {
   static final Logger _logger = Logger('OpenFeatureProvider');
+// Abstract OpenFeatureProvider interface for extensibility.
+
   String get name;
 
   // Shutdown method for cleaning u p resources.
