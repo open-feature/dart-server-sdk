@@ -110,6 +110,12 @@
       "languageVersion": "3.0"
     },
     {
+      "name": "git_hooks",
+      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/git_hooks-1.0.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "glob",
       "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/glob-2.1.2",
       "packageUri": "lib/",
@@ -356,7 +362,7 @@
       "languageVersion": "3.5"
     }
   ],
-  "generated": "2024-12-05T20:42:05.712357Z",
+  "generated": "2024-12-06T13:15:08.226386Z",
   "generator": "pub",
   "generatorVersion": "3.5.4",
   "pubCache": "file:///C:/Users/preth/AppData/Local/Pub/Cache"
