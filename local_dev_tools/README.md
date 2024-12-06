@@ -87,17 +87,17 @@ Yes, you can modify the hook scripts (`validate_commit.dart`, `validate_commit_m
 
 ---
 
-### **Additional Notes**
-- These hooks run locally on your machine and do not affect other developers.
-- Hooks ensure that most issues are caught during development, saving time and effort during code reviews and CI/CD processes.
-
-For further assistance, feel free to contact the repository maintainers. Happy coding! 🎉
-
-
-#!/bin/bash
 # Automatically add Signed-off-by to commit message
+#!/bin/bash
+
 if ! grep -q "Signed-off-by:" "$1"; then
   echo "Signed-off-by: $(git config user.name) <$(git config user.email)>" >> "$1"
 fi
 
 chmod +x .git/hooks/prepare-commit-msg
+
+### **Additional Notes**
+- These hooks run locally on your machine and do not affect other developers.
+- Hooks ensure that most issues are caught during development, saving time and effort during code reviews and CI/CD processes.
+
+For further assistance, feel free to contact the repository maintainers. Happy coding! 🎉
