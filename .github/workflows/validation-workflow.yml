@@ -62,6 +62,7 @@ jobs:
           INVALID_COMMITS=$(git log origin/$BASE_BRANCH..HEAD --pretty=format:"%s" \
             | grep -vE "^(Merge pull request|Initial commit)" \
             | grep -vE "^(Merge remote-tracking branch|Merge pull request)" \
+            | grep -vE "^(Merge branch|DCO Remediation|Signed-off-by)" \
             | grep -vE "$REGEX" || true)
 
           # Check for overly long summaries
