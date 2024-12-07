@@ -8,8 +8,8 @@ on:
       - test
 
   pull_request:
-    branches:
-      - '*' # Matches pull requests to any branch
+    branches-ignore:
+      - test
 
 jobs:
   determine-workflow:
