@@ -7,9 +7,11 @@ on:
     branches-ignore:
       - test
 
-  pull_request:
-    branches-ignore:
-      - test
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
 
 jobs:
   determine-workflow:
