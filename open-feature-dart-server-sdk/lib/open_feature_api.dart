@@ -1,5 +1,3 @@
-// Implementation of the OpenFeatureAPI singleton.
-
 import 'dart:async';
 import 'package:meta/meta.dart'; // Required for @visibleForTesting
 
@@ -43,10 +41,10 @@ abstract class OpenFeatureHook {
       String flagKey, dynamic result, Map<String, dynamic>? context);
 }
 
-// Singleton implementation of OpenFeatureAPI.
+// Singleton implementation of OpenFeatureAPI, managed through dependency injection.
 class OpenFeatureAPI {
-  // Singleton instance
-  static OpenFeatureAPI? _instance; // Nullable to allow reinitialization
+  // Dependency Injection: Manage the singleton lifecycle externally.
+  static final OpenFeatureAPI _instance = OpenFeatureAPI._internal();
 
   // Default provider (OpenFeatureNoOpProvider initially)
   OpenFeatureProvider _provider = OpenFeatureNoOpProvider();
@@ -64,10 +62,9 @@ class OpenFeatureAPI {
         StreamController<OpenFeatureProvider>.broadcast();
   }
 
-  // Factory constructor for singleton instance
+  // Public factory to return the singleton instance
   factory OpenFeatureAPI() {
-    _instance ??= OpenFeatureAPI._internal();
-    return _instance!;
+    return _instance;
   }
 
   /// Dispose resources, particularly the StreamController.
@@ -105,16 +102,6 @@ class OpenFeatureAPI {
   Stream<OpenFeatureProvider> get providerUpdates =>
       _providerStreamController.stream;
 
-  /// Reset the singleton instance for testing purposes.
-  ///
-  /// This ensures a clean state for each test case.
-  @visibleForTesting
-  static void resetInstance() {
-    _instance
-        ?.dispose(); // Call the public dispose() method to clean up resources.
-    _instance = null; // Reset the singleton.
-  }
-
   /// Evaluate a boolean flag with the hook lifecycle.
   Future<bool> evaluateBooleanFlag(String flagKey,
       {Map<String, dynamic>? context}) async {
@@ -143,4 +130,10 @@ class OpenFeatureAPI {
       hook.afterEvaluation(flagKey, result, context);
     }
   }
+}
+
+// Dependency Injection for managing the singleton lifecycle
+class OpenFeatureAPILocator {
+  // This allows replacing the instance during tests.
+  static OpenFeatureAPI instance = OpenFeatureAPI();
 }
