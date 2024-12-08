@@ -14,7 +14,7 @@ description: A server-side Dart implementation of the OpenFeature SDK.
 version: 0.0.1-pre
 homepage: https://github.com/your-repo/open-feature-dart-server-sdk
 environment:
-  sdk: ">=3.5.4 <4.0.0"
+  sdk: ">=3.5.2 <4.0.0"
 
 dependencies:
   # Core dependencies
