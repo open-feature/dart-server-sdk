@@ -13,7 +13,7 @@ void main() {
 
     test('Global hooks run before and after evaluation', () async {
       final hook = _MockHook();
-      api.addHook(hook);
+      api.addHooks([hook]); // Corrected to wrap hook in a list
 
       await api
           .evaluateBooleanFlag('test-flag', context: {'user': 'test-user'});
@@ -25,7 +25,8 @@ void main() {
   });
 }
 
-class _MockHook implements Hook {
+class _MockHook implements OpenFeatureHook {
+  // Updated to implement OpenFeatureHook
   bool beforeCalled = false;
   bool afterCalled = false;
 

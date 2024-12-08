@@ -27,3 +27,11 @@ dev_dependencies:
   test: ^1.22.0         # Dart's core testing framework
   mockito: ^5.3.0       # For mocking objects in unit tests
   lints: ^5.0.0         # Recommended lints for maintaining code quality
+  git_hooks: ^1.0.0
+
+# Optional Local Hooks for development.
+git_hooks:
+  hooks:
+    pre-commit: ../local_dev_tools/validate_commit.dart
+    commit-msg: ../local_dev_tools/validate_commit_msg.dart
+    pre-push: ../local_dev_tools/validate_branch.dart
