@@ -83,3 +83,23 @@ jobs:
           else
             echo "✅ All developer-made commit messages follow the convention."
           fi
+
+  validate-dart-sdk-version:
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+          
+        - name: Validate Dart SDK version
+          run: |
+            # Extract the Dart SDK version from pubspec.yaml
+            SDK_VERSION=$(grep 'sdk: ">=*' open-feature-dart-server-sdk/pubspec.yaml | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+')
+            MINIMUM_VERSION="3.5.4"
+
+            # Use sort and version compare to determine if the SDK version is less than the minimum version
+            if [[ $(echo -e "${SDK_VERSION}\n${MINIMUM_VERSION}" | sort -V | head -n1) != "$MINIMUM_VERSION" ]]; then
+              echo "❌ Dart SDK version must be at least $MINIMUM_VERSION, found $SDK_VERSION"
+              exit 1
+            else
+              echo "✅ Dart SDK version is satisfactory: $SDK_VERSION"
+            fi
