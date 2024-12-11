@@ -1,8 +1,12 @@
 import 'dart:async';
-import 'package:meta/meta.dart'; // Required for @visibleForTesting
+import 'package:logging/logging.dart';
+
+import 'domain_manager.dart'; // Required for @visibleForTesting
 
 // Abstract OpenFeatureProvider interface for extensibility.
 abstract class OpenFeatureProvider {
+  static final Logger _logger = Logger('OpenFeatureProvider');
+
   String get name;
 
   // Generic method to get a feature flag's value.
@@ -43,11 +47,14 @@ abstract class OpenFeatureHook {
 
 // Singleton implementation of OpenFeatureAPI, managed through dependency injection.
 class OpenFeatureAPI {
-  // Dependency Injection: Manage the singleton lifecycle externally.
-  static final OpenFeatureAPI _instance = OpenFeatureAPI._internal();
+  static final Logger _logger = Logger('OpenFeatureAPI');
+  static OpenFeatureAPI? _instance;
 
   // Default provider (OpenFeatureNoOpProvider initially)
   OpenFeatureProvider _provider = OpenFeatureNoOpProvider();
+
+  // Domain manager to manage client-provider bindings
+  final DomainManager _domainManager = DomainManager();
 
   // Global hooks and evaluation context
   final List<OpenFeatureHook> _hooks = [];
@@ -56,78 +63,102 @@ class OpenFeatureAPI {
   // StreamController for provider updates
   late final StreamController<OpenFeatureProvider> _providerStreamController;
 
-  // Private constructor
   OpenFeatureAPI._internal() {
+    _configureLogging();
     _providerStreamController =
         StreamController<OpenFeatureProvider>.broadcast();
   }
 
-  // Public factory to return the singleton instance
   factory OpenFeatureAPI() {
-    return _instance;
+    _instance ??= OpenFeatureAPI._internal();
+    return _instance!;
   }
 
-  /// Dispose resources, particularly the StreamController.
+  void _configureLogging() {
+    Logger.root.level = Level.ALL;
+    Logger.root.onRecord.listen((record) {
+      print(
+          '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}');
+    });
+  }
+
   void dispose() {
+    _logger.info('Disposing OpenFeatureAPI resources.');
     _providerStreamController.close();
   }
 
-  /// Set the active feature provider and notify listeners.
   void setProvider(OpenFeatureProvider provider) {
+    _logger.info('Provider is being set to: ${provider.name}');
     _provider = provider;
-    _providerStreamController
-        .add(provider); // Notify listeners about the change.
+    _providerStreamController.add(provider);
   }
 
-  /// Get the active feature provider.
   OpenFeatureProvider get provider => _provider;
 
-  /// Set the global evaluation context for the API.
   void setGlobalContext(OpenFeatureEvaluationContext context) {
+    _logger.info('Setting global evaluation context: ${context.attributes}');
     _globalContext = context;
   }
 
-  /// Get the current global evaluation context.
   OpenFeatureEvaluationContext? get globalContext => _globalContext;
 
-  /// Add global hooks to the API.
   void addHooks(List<OpenFeatureHook> hooks) {
+    _logger.info('Adding hooks: ${hooks.length} hook(s) added.');
     _hooks.addAll(hooks);
   }
 
-  /// Retrieve the global hooks.
   List<OpenFeatureHook> get hooks => List.unmodifiable(_hooks);
 
-  /// Stream to listen for provider updates.
   Stream<OpenFeatureProvider> get providerUpdates =>
       _providerStreamController.stream;
 
-  /// Evaluate a boolean flag with the hook lifecycle.
-  Future<bool> evaluateBooleanFlag(String flagKey,
-      {Map<String, dynamic>? context}) async {
-    _runBeforeEvaluationHooks(flagKey, context);
-
-    // Perform evaluation using the provider
-    final result = await _provider.getFlag(flagKey, context: context);
-
-    _runAfterEvaluationHooks(flagKey, result, context);
-
-    return result ?? false; // Default to false if no result
+  void bindClientToProvider(String clientId, String providerName) {
+    _domainManager.bindClientToProvider(clientId, providerName);
   }
 
-  /// Run hooks before evaluation.
-  void _runBeforeEvaluationHooks(
-      String flagKey, Map<String, dynamic>? context) {
-    for (var hook in _hooks) {
-      hook.beforeEvaluation(flagKey, context);
+  Future<bool> evaluateBooleanFlag(String flagKey, String clientId,
+      {Map<String, dynamic>? context}) async {
+    // Get provider for the client
+    final providerName = _domainManager.getProviderForClient(clientId);
+    if (providerName != null) {
+      _logger.info('Using provider $providerName for client $clientId');
+      // Set the active provider before evaluation
+      _provider =
+          OpenFeatureNoOpProvider(); // Placeholder for real provider lookup
+      _runBeforeEvaluationHooks(flagKey, context);
+
+      final result = await _provider.getFlag(flagKey, context: context);
+      _runAfterEvaluationHooks(flagKey, result, context);
+      return result ?? false;
+    } else {
+      _logger.warning('No provider found for client $clientId');
+      return false;
     }
   }
 
-  /// Run hooks after evaluation.
+  void _runBeforeEvaluationHooks(
+      String flagKey, Map<String, dynamic>? context) {
+    _logger.info('Running before-evaluation hooks for flag: $flagKey');
+    for (var hook in _hooks) {
+      try {
+        hook.beforeEvaluation(flagKey, context);
+      } catch (e, stack) {
+        _logger.warning(
+            'Error in before-evaluation hook for flag: $flagKey', e, stack);
+      }
+    }
+  }
+
   void _runAfterEvaluationHooks(
       String flagKey, dynamic result, Map<String, dynamic>? context) {
+    _logger.info('Running after-evaluation hooks for flag: $flagKey');
     for (var hook in _hooks) {
-      hook.afterEvaluation(flagKey, result, context);
+      try {
+        hook.afterEvaluation(flagKey, result, context);
+      } catch (e, stack) {
+        _logger.warning(
+            'Error in after-evaluation hook for flag: $flagKey', e, stack);
+      }
     }
   }
 }
