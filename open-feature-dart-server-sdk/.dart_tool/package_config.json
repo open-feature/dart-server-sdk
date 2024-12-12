@@ -359,10 +359,10 @@
       "name": "open_feature_dart_server_sdk",
       "rootUri": "../",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "3.6"
     }
   ],
-  "generated": "2024-12-12T14:19:17.194387Z",
+  "generated": "2024-12-12T14:20:11.537070Z",
   "generator": "pub",
   "generatorVersion": "3.6.0",
   "pubCache": "file:///C:/Users/preth/AppData/Local/Pub/Cache"
