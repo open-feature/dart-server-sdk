@@ -94,7 +94,7 @@ jobs:
           run: |
             # Extract the Dart SDK version from pubspec.yaml
             SDK_VERSION=$(grep 'sdk: ">=*' open-feature-dart-server-sdk/pubspec.yaml | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+')
-            MINIMUM_VERSION="3.5.4"
+            MINIMUM_VERSION="3.6.0"
 
             # Use sort and version compare to determine if the SDK version is less than the minimum version
             if [[ $(echo -e "${SDK_VERSION}\n${MINIMUM_VERSION}" | sort -V | head -n1) != "$MINIMUM_VERSION" ]]; then
