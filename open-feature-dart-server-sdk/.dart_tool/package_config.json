@@ -111,7 +111,7 @@
     },
     {
       "name": "git_hooks",
-      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/git_hooks-1.0.1",
+      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/git_hooks-1.0.1",
       "packageUri": "lib/",
       "languageVersion": "2.12"
     },
@@ -362,7 +362,15 @@
       "languageVersion": "3.5"
     }
   ],
+<<<<<<< HEAD
   "generated": "2024-12-12T13:52:36.316776Z",
+=======
+<<<<<<< HEAD
+  "generated": "2024-12-12T13:34:40.670015Z",
+=======
+  "generated": "2024-12-12T13:32:41.664278Z",
+>>>>>>> e8375be (chore: add lock and pubspec)
+>>>>>>> 252a9d5 (chore: resolve package json conflict)
   "generator": "pub",
   "generatorVersion": "3.6.0",
   "pubCache": "file:///C:/Users/preth/AppData/Local/Pub/Cache"
