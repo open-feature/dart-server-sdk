@@ -2,60 +2,102 @@
 // Implementation of the evaluation context for feature flag decisions
 // Extends the existing basic context to support hierarchical contexts and targeting rules
 
-/// Represents a structure for holding targeting attributes and rules
+/// Represents a targeting rule operator
+enum TargetingOperator {
+  EQUALS,
+  NOT_EQUALS,
+  CONTAINS,
+  NOT_CONTAINS,
+  STARTS_WITH,
+  ENDS_WITH,
+  GREATER_THAN,
+  LESS_THAN,
+  IN_LIST,
+  NOT_IN_LIST,
+}
+
+/// Represents a targeting rule for feature flag evaluation
 class TargetingRule {
-  final String attribute; // The attribute to evaluate
-  final String operator; // The comparison operator (equals, contains,)
-  final dynamic value; // Value to compare against
+  final String attribute;
+  final TargetingOperator operator;
+  final dynamic value;
+  final Map<String, dynamic>? metadata;
 
-  TargetingRule(this.attribute, this.operator, this.value);
+  const TargetingRule(
+    this.attribute,
+    this.operator,
+    this.value, {
+    this.metadata,
+  });
 
-  ///Evaluates if the rule matches given context
+  /// Evaluate the rule against a context
   bool evaluate(Map<String, dynamic> context) {
     final attributeValue = context[attribute];
+    if (attributeValue == null) return false;
+
     switch (operator) {
-      case 'equals':
+      case TargetingOperator.EQUALS:
         return attributeValue == value;
-      case 'contains':
-        return attributeValue?.contains(value) ?? false;
-      case 'startsWith':
-        return attributeValue?.startsWith(value) ?? false;
-      default:
-        return false;
+      case TargetingOperator.NOT_EQUALS:
+        return attributeValue != value;
+      case TargetingOperator.CONTAINS:
+        return attributeValue.toString().contains(value.toString());
+      case TargetingOperator.NOT_CONTAINS:
+        return !attributeValue.toString().contains(value.toString());
+      case TargetingOperator.STARTS_WITH:
+        return attributeValue.toString().startsWith(value.toString());
+      case TargetingOperator.ENDS_WITH:
+        return attributeValue.toString().endsWith(value.toString());
+      case TargetingOperator.GREATER_THAN:
+        return (attributeValue as num) > (value as num);
+      case TargetingOperator.LESS_THAN:
+        return (attributeValue as num) < (value as num);
+      case TargetingOperator.IN_LIST:
+        return (value as List).contains(attributeValue);
+      case TargetingOperator.NOT_IN_LIST:
+        return !(value as List).contains(attributeValue);
     }
   }
 }
 
-/// Enhanced evaluation context with support for hierarchical relationships
-/// and targeting rule evaluation
+/// Evaluation context with enhanced targeting capabilities
 class EvaluationContext {
   final Map<String, dynamic> attributes;
-  final EvaluationContext? parent; // Support for hierarchical contexts
-  final List<TargetingRule> rules; // Targeting rules for this context
+  final EvaluationContext? parent;
+  final List<TargetingRule> rules;
 
-  EvaluationContext({
+  const EvaluationContext({
     required this.attributes,
     this.parent,
     this.rules = const [],
   });
 
-  //Get an attribute value, checking parent context if not found
-  dynamic getAttribute(String Key) {
-    return attributes[Key] ?? parent?.getAttribute(Key);
+  /// Get an attribute value, checking parent context if not found
+  dynamic getAttribute(String key) {
+    return attributes[key] ?? parent?.getAttribute(key);
   }
 
-  /// Merge this context with another, creating a new context
+  /// Create a new context by merging with another
   EvaluationContext merge(EvaluationContext other) {
     return EvaluationContext(
-      attributes: {...attributes, ...other.attributes},
-      parent: parent,
+      attributes: {
+        ...parent?.attributes ?? {},
+        ...attributes,
+        ...other.attributes,
+      },
       rules: [...rules, ...other.rules],
     );
   }
 
-  /// Evaluate all targeting rules against this context
+  /// Evaluate all targeting rules
   bool evaluateRules() {
-    for (var rule in rules) {
+    // First evaluate parent rules if they exist
+    if (parent != null && !parent!.evaluateRules()) {
+      return false;
+    }
+
+    // Then evaluate this context's rules
+    for (final rule in rules) {
       if (!rule.evaluate(attributes)) {
         return false;
       }
@@ -63,23 +105,34 @@ class EvaluationContext {
     return true;
   }
 
-  /// Create a child context with additional attributes
-  EvaluationContext createChild(Map<String, dynamic> childAttributes) {
+  /// Create a child context
+  EvaluationContext createChild(
+    Map<String, dynamic> childAttributes, {
+    List<TargetingRule>? childRules,
+  }) {
     return EvaluationContext(
       attributes: childAttributes,
       parent: this,
-      rules: rules,
+      rules: childRules ?? [],
     );
   }
 }
 
 /// Factory for creating common targeting rules
-class TargetRuleFactory {
-  static TargetingRule equalTo(String attribute, dynamic value) {
-    return TargetingRule(attribute, 'equals', value);
+class TargetingRuleBuilder {
+  static TargetingRule equals(String attribute, dynamic value) {
+    return TargetingRule(attribute, TargetingOperator.EQUALS, value);
   }
 
-  static TargetingRule contains(String attribute, dynamic value) {
-    return TargetingRule(attribute, 'contains', value);
+  static TargetingRule notEquals(String attribute, dynamic value) {
+    return TargetingRule(attribute, TargetingOperator.NOT_EQUALS, value);
+  }
+
+  static TargetingRule contains(String attribute, String value) {
+    return TargetingRule(attribute, TargetingOperator.CONTAINS, value);
+  }
+
+  static TargetingRule inList(String attribute, List<dynamic> values) {
+    return TargetingRule(attribute, TargetingOperator.IN_LIST, values);
   }
 }

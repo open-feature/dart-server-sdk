@@ -7,7 +7,6 @@ import 'hooks.dart';
 import 'feature_provider.dart';
 
 /// Metadata about the client instance
-/// Used to identify and configure the client
 class ClientMetadata {
   /// Name of the client instance
   final String name;
@@ -26,7 +25,6 @@ class ClientMetadata {
 }
 
 /// Main client interface for interacting with feature flags
-/// Handles flag evaluation with context and hooks support
 class FeatureClient {
   /// Client metadata for identification
   final ClientMetadata metadata;
@@ -38,16 +36,35 @@ class FeatureClient {
   final EvaluationContext _defaultContext;
 
   /// Provider for feature flag evaluations
-  final OpenFeatureProvider _provider;
+  final FeatureProvider _provider;
 
   FeatureClient({
     required this.metadata,
     required HookManager hookManager,
     required EvaluationContext defaultContext,
-    OpenFeatureProvider? provider,
+    FeatureProvider? provider,
   })  : _hookManager = hookManager,
         _defaultContext = defaultContext,
-        _provider = provider ?? OpenFeatureNoOpProvider();
+        _provider = provider ?? NoOpProvider();
+
+  /// Create hook context for execution
+  HookContext _createHookContext(
+    String flagKey,
+    Map<String, dynamic> context, {
+    dynamic result,
+    Exception? error,
+  }) {
+    return HookContext(
+      flagKey: flagKey,
+      evaluationContext: context,
+      result: result,
+      error: error,
+      metadata: {
+        'clientName': metadata.name,
+        'clientVersion': metadata.version,
+      },
+    );
+  }
 
   /// Evaluate a boolean feature flag with hook lifecycle
   Future<bool> getBooleanFlag(
@@ -56,49 +73,236 @@ class FeatureClient {
     bool defaultValue = false,
   }) async {
     final evaluationContext = context ?? _defaultContext;
+    final currentContext = evaluationContext.attributes;
 
     try {
-      // Execute before hooks
       await _hookManager.executeHooks(
-        HookStage.before,
+        HookStage.BEFORE,
         flagKey,
-        evaluationContext.attributes,
+        currentContext,
       );
 
-      // Evaluate flag using provider
       final result = await _provider.getBooleanFlag(
         flagKey,
-        context: evaluationContext.attributes,
+        defaultValue,
+        context: currentContext,
       );
 
-      // Execute after hooks
       await _hookManager.executeHooks(
-        HookStage.after,
+        HookStage.AFTER,
         flagKey,
-        evaluationContext.attributes,
+        currentContext,
         result: result,
       );
 
-      return result;
+      return result.value;
     } catch (e) {
-      // Execute error hooks and handle exception
+      final error = e is Exception ? e : Exception(e.toString());
       await _hookManager.executeHooks(
-        HookStage.error,
+        HookStage.ERROR,
         flagKey,
-        evaluationContext.attributes,
-        error: e is Exception ? e : Exception(e.toString()),
+        currentContext,
+        error: error,
       );
       return defaultValue;
     } finally {
-      // Always execute finally hooks
       await _hookManager.executeHooks(
-        HookStage.finally_,
+        HookStage.FINALLY,
         flagKey,
-        evaluationContext.attributes,
+        currentContext,
       );
     }
   }
 
-  // TODO: Implement other flag type methods (string, number, object)
-  // Following the same pattern as getBooleanFlag
+  /// Evaluate a string feature flag
+  Future<String> getStringFlag(
+    String flagKey, {
+    EvaluationContext? context,
+    String defaultValue = '',
+  }) async {
+    final evaluationContext = context ?? _defaultContext;
+    final currentContext = evaluationContext.attributes;
+
+    try {
+      await _hookManager.executeHooks(
+        HookStage.BEFORE,
+        flagKey,
+        currentContext,
+      );
+
+      final result = await _provider.getStringFlag(
+        flagKey,
+        defaultValue,
+        context: currentContext,
+      );
+
+      await _hookManager.executeHooks(
+        HookStage.AFTER,
+        flagKey,
+        currentContext,
+        result: result,
+      );
+
+      return result.value;
+    } catch (e) {
+      final error = e is Exception ? e : Exception(e.toString());
+      await _hookManager.executeHooks(
+        HookStage.ERROR,
+        flagKey,
+        currentContext,
+        error: error,
+      );
+      return defaultValue;
+    } finally {
+      await _hookManager.executeHooks(
+        HookStage.FINALLY,
+        flagKey,
+        currentContext,
+      );
+    }
+  }
+
+  /// Evaluate an integer feature flag
+  Future<int> getIntegerFlag(
+    String flagKey, {
+    EvaluationContext? context,
+    int defaultValue = 0,
+  }) async {
+    final evaluationContext = context ?? _defaultContext;
+    final currentContext = evaluationContext.attributes;
+
+    try {
+      await _hookManager.executeHooks(
+        HookStage.BEFORE,
+        flagKey,
+        currentContext,
+      );
+
+      final result = await _provider.getIntegerFlag(
+        flagKey,
+        defaultValue,
+        context: currentContext,
+      );
+
+      await _hookManager.executeHooks(
+        HookStage.AFTER,
+        flagKey,
+        currentContext,
+        result: result,
+      );
+
+      return result.value;
+    } catch (e) {
+      final error = e is Exception ? e : Exception(e.toString());
+      await _hookManager.executeHooks(
+        HookStage.ERROR,
+        flagKey,
+        currentContext,
+        error: error,
+      );
+      return defaultValue;
+    } finally {
+      await _hookManager.executeHooks(
+        HookStage.FINALLY,
+        flagKey,
+        currentContext,
+      );
+    }
+  }
+
+  /// Evaluate a double feature flag
+  Future<double> getDoubleFlag(
+    String flagKey, {
+    EvaluationContext? context,
+    double defaultValue = 0.0,
+  }) async {
+    final evaluationContext = context ?? _defaultContext;
+    final currentContext = evaluationContext.attributes;
+
+    try {
+      await _hookManager.executeHooks(
+        HookStage.BEFORE,
+        flagKey,
+        currentContext,
+      );
+
+      final result = await _provider.getDoubleFlag(
+        flagKey,
+        defaultValue,
+        context: currentContext,
+      );
+
+      await _hookManager.executeHooks(
+        HookStage.AFTER,
+        flagKey,
+        currentContext,
+        result: result,
+      );
+
+      return result.value;
+    } catch (e) {
+      final error = e is Exception ? e : Exception(e.toString());
+      await _hookManager.executeHooks(
+        HookStage.ERROR,
+        flagKey,
+        currentContext,
+        error: error,
+      );
+      return defaultValue;
+    } finally {
+      await _hookManager.executeHooks(
+        HookStage.FINALLY,
+        flagKey,
+        currentContext,
+      );
+    }
+  }
+
+  /// Evaluate an object feature flag
+  Future<Map<String, dynamic>> getObjectFlag(
+    String flagKey, {
+    EvaluationContext? context,
+    Map<String, dynamic> defaultValue = const {},
+  }) async {
+    final evaluationContext = context ?? _defaultContext;
+    final currentContext = evaluationContext.attributes;
+
+    try {
+      await _hookManager.executeHooks(
+        HookStage.BEFORE,
+        flagKey,
+        currentContext,
+      );
+
+      final result = await _provider.getObjectFlag(
+        flagKey,
+        defaultValue,
+        context: currentContext,
+      );
+
+      await _hookManager.executeHooks(
+        HookStage.AFTER,
+        flagKey,
+        currentContext,
+        result: result,
+      );
+
+      return result.value;
+    } catch (e) {
+      final error = e is Exception ? e : Exception(e.toString());
+      await _hookManager.executeHooks(
+        HookStage.ERROR,
+        flagKey,
+        currentContext,
+        error: error,
+      );
+      return defaultValue;
+    } finally {
+      await _hookManager.executeHooks(
+        HookStage.FINALLY,
+        flagKey,
+        currentContext,
+      );
+    }
+  }
 }
