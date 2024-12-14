@@ -1,77 +1,102 @@
 // Hook interface and default hooks.
+import 'dart:async';
+
 /// Defines the stages in the hook lifecycle
 /// Used internally by the hook manager for execution ordering
 enum HookStage {
-  before, // before flag evaluation
-  after, // after successful evaluation
-  error, // when error occur
-  finally_ // always executed at the end
+  BEFORE, // Before flag evaluation
+  AFTER, // After successful evaluation
+  ERROR, // When an error occurs
+  FINALLY // Always executed last
 }
 
-/// Simple priority levels for hook execution ordering
+/// Hook priority levels
 enum HookPriority {
-  HIGH, // executes first
-  NORMAL, // default priority
-  LOW // executes last
+  CRITICAL, // Highest priority, executes first
+  HIGH, // High priority
+  NORMAL, // Default priority
+  LOW // Lowest priority
 }
 
-/// Metadata for hooks providing identification and configuration
-class HookMetadata {
-  /// Name of the hook for identification
-  final String name;
-
-  /// Priority level determining execution order
-  final HookPriority priority;
-
-  /// Whether the hook should continue on errors
+/// Configuration for hook behavior
+class HookConfig {
   final bool continueOnError;
+  final Duration timeout;
+  final Map<String, dynamic> customConfig;
 
-  const HookMetadata({
-    required this.name,
-    this.priority = HookPriority.NORMAL,
+  const HookConfig({
     this.continueOnError = true,
+    this.timeout = const Duration(seconds: 5),
+    this.customConfig = const {},
   });
 }
 
-abstract class OpenFeatureHook {
-  /// Hook metadata - provides configuration and identification
-  HookMetadata get metadata;
+/// Metadata for hook identification and configuration
+class HookMetadata {
+  final String name;
+  final String version;
+  final HookPriority priority;
+  final HookConfig config;
 
-  /// Logic to execute before a flag is evaluated. (Before flag evaluation)
-  Future<void> beforeEvaluation(
-      String flagKey, Map<String, dynamic>? context) async {}
-
-  /// Logic to execute after a flag is evaluated. (After successful flag evaluation)
-  Future<void> afterEvaluation(
-    String flagKey,
-    dynamic result,
-    Map<String, dynamic>? context,
-  ) async {}
-
-  /// When an error occurs during evaluation
-  Future<void> onError(
-    String flagKey,
-    Exception error,
-    Map<String, dynamic>? context,
-  ) async {}
-
-  /// Always executed after evaluation completes
-  Future<void> finally_(String flagKey, Map<String, dynamic>? context) async {}
+  const HookMetadata({
+    required this.name,
+    this.version = '1.0.0',
+    this.priority = HookPriority.NORMAL,
+    this.config = const HookConfig(),
+  });
 }
 
-/// Manager class handling hook registration and execution
-class HookManager {
-  final List<OpenFeatureHook> _hooks = [];
-  final bool _failFast;
+/// Context passed to hooks during execution
+class HookContext {
+  final String flagKey;
+  final Map<String, dynamic>? evaluationContext;
+  final dynamic result;
+  final Exception? error;
+  final Map<String, dynamic> metadata;
 
-  HookManager({bool failFast = false}) : _failFast = failFast;
+  HookContext({
+    required this.flagKey,
+    this.evaluationContext,
+    this.result,
+    this.error,
+    this.metadata = const {},
+  });
+}
+
+/// Interface for implementing hooks
+abstract class Hook {
+  /// Hook metadata and configuration
+  HookMetadata get metadata;
+
+  /// Before flag evaluation
+  Future<void> before(HookContext context);
+
+  /// After successful evaluation
+  Future<void> after(HookContext context);
+
+  /// When an error occurs
+  Future<void> error(HookContext context);
+
+  /// Always executed at the end
+  Future<void> finally_(HookContext context);
+}
+
+/// Manager for hook registration and execution
+class HookManager {
+  final List<Hook> _hooks = [];
+  final bool _failFast;
+  final Duration _defaultTimeout;
+
+  HookManager({
+    bool failFast = false,
+    Duration defaultTimeout = const Duration(seconds: 5),
+  })  : _failFast = failFast,
+        _defaultTimeout = defaultTimeout;
 
   /// Register a new hook
-  void addHook(OpenFeatureHook hook) {
+  void addHook(Hook hook) {
     _hooks.add(hook);
-    // Sort hooks by priority
-    _hooks.sort((a, b) =>
-        a.metadata.priority.index.compareTo(b.metadata.priority.index));
+    _sortHooks();
   }
 
   /// Execute hooks for a specific stage
@@ -82,83 +107,68 @@ class HookManager {
     dynamic result,
     Exception? error,
   }) async {
+    final hookContext = HookContext(
+      flagKey: flagKey,
+      evaluationContext: context,
+      result: result,
+      error: error,
+    );
+
     for (final hook in _hooks) {
       try {
-        switch (stage) {
-          case HookStage.before:
-            await hook.beforeEvaluation(flagKey, context);
-            break;
-          case HookStage.after:
-            await hook.afterEvaluation(flagKey, result, context);
-            break;
-          case HookStage.error:
-            if (error != null) {
-              await hook.onError(flagKey, error, context);
-            }
-            break;
-          case HookStage.finally_:
-            await hook.finally_(flagKey, context);
-            break;
-        }
+        await _executeHookWithTimeout(
+          hook,
+          stage,
+          hookContext,
+          hook.metadata.config.timeout,
+        );
       } catch (e) {
-        if (_failFast || !hook.metadata.continueOnError) {
+        if (_failFast || !hook.metadata.config.continueOnError) {
           rethrow;
         }
-        // Log error but continue if hook allows it
         print('Error in ${hook.metadata.name} hook: $e');
       }
     }
   }
-}
 
-/// Example audit hook implementation showing usage of the enhanced system
-class AuditHook implements OpenFeatureHook {
-  final bool includeContext;
-  final HookPriority priority;
-
-  AuditHook({
-    this.includeContext = false,
-    this.priority = HookPriority.LOW,
-  });
-
-  @override
-  HookMetadata get metadata => HookMetadata(
-        name: 'AuditHook',
-        priority: priority,
-        continueOnError: true,
-      );
-
-  @override
-  Future<void> beforeEvaluation(
-      String flagKey, Map<String, dynamic>? context) async {
-    final contextLog = includeContext ? ', Context: $context' : '';
-    print('Before evaluating flag: $flagKey$contextLog');
+  /// Sort hooks by priority
+  void _sortHooks() {
+    _hooks.sort((a, b) =>
+        a.metadata.priority.index.compareTo(b.metadata.priority.index));
   }
 
-  @override
-  Future<void> afterEvaluation(
-    String flagKey,
-    dynamic result,
-    Map<String, dynamic>? context,
+  /// Execute a single hook with timeout
+  Future<void> _executeHookWithTimeout(
+    Hook hook,
+    HookStage stage,
+    HookContext context,
+    Duration? timeout,
   ) async {
-    final contextLog = includeContext ? ', Context: $context' : '';
-    print('After evaluating flag: $flagKey, Result: $result$contextLog');
-  }
+    final effectiveTimeout = timeout ?? _defaultTimeout;
 
-  @override
-  Future<void> onError(
-    String flagKey,
-    Exception error,
-    Map<String, dynamic>? context,
-  ) async {
-    final contextLog = includeContext ? ', Context: $context' : '';
-    print('Error evaluating flag: $flagKey, Error: $error$contextLog');
-  }
+    Future<void> hookExecution;
+    switch (stage) {
+      case HookStage.BEFORE:
+        hookExecution = hook.before(context);
+        break;
+      case HookStage.AFTER:
+        hookExecution = hook.after(context);
+        break;
+      case HookStage.ERROR:
+        hookExecution = hook.error(context);
+        break;
+      case HookStage.FINALLY:
+        hookExecution = hook.finally_(context);
+        break;
+    }
 
-  @override
-  Future<void> finally_(String flagKey, Map<String, dynamic>? context) {
-    final contextLog = includeContext ? ', Context: $context' : '';
-    print('Finally evaluating flag: $flagKey$contextLog');
-    return Future.value();
+    await hookExecution.timeout(
+      effectiveTimeout,
+      onTimeout: () {
+        throw TimeoutException(
+          'Hook ${hook.metadata.name} timed out after ${effectiveTimeout.inSeconds} seconds',
+        );
+      },
+    );
   }
 }
