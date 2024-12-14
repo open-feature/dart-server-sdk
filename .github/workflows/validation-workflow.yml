@@ -85,52 +85,52 @@ jobs:
           fi
 
   validate-dart-sdk-version:
-  runs-on: ubuntu-latest
-  steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Validate Dart SDK versions in all pubspec.yaml files
-      run: |
-        echo "Validating Dart SDK versions in all pubspec.yaml files..."
+      - name: Validate Dart SDK versions in all pubspec.yaml files
+        run: |
+          echo "Validating Dart SDK versions in all pubspec.yaml files..."
 
-        # Find all pubspec.yaml files (recursively)
-        PUBSPEC_FILES=$(find . -name "pubspec.yaml")
-        echo "Found the following pubspec.yaml files:"
-        echo "$PUBSPEC_FILES"
+          # Find all pubspec.yaml files (recursively)
+          PUBSPEC_FILES=$(find . -name "pubspec.yaml")
+          echo "Found the following pubspec.yaml files:"
+          echo "$PUBSPEC_FILES"
 
-        # Define the minimum required Dart SDK version
-        MINIMUM_VERSION="3.5.4"
-        ALL_VALID="true"
+          # Define the minimum required Dart SDK version
+          MINIMUM_VERSION="3.5.4"
+          ALL_VALID="true"
 
-        # Iterate over each pubspec.yaml file
-        for PUBSPEC in $PUBSPEC_FILES; do
-          echo "Checking $PUBSPEC..."
+          # Iterate over each pubspec.yaml file
+          for PUBSPEC in $PUBSPEC_FILES; do
+            echo "Checking $PUBSPEC..."
 
-          # Extract the Dart SDK version in the ^<version> format
-          SDK_VERSION=$(grep -Po '(?<=sdk:\s\^)[0-9]+\.[0-9]+\.[0-9]+' "$PUBSPEC" || echo "not_found")
-          echo "Extracted Dart SDK version from $PUBSPEC: $SDK_VERSION"
+            # Extract the Dart SDK version in the ^<version> format
+            SDK_VERSION=$(grep -Po '(?<=sdk:\s\^)[0-9]+\.[0-9]+\.[0-9]+' "$PUBSPEC" || echo "not_found")
+            echo "Extracted Dart SDK version from $PUBSPEC: $SDK_VERSION"
 
-          # Validate the extracted version
-          if [ "$SDK_VERSION" = "not_found" ]; then
-            echo "❌ Failed to extract Dart SDK version from $PUBSPEC. Ensure the file contains a valid 'sdk: ^<version>' entry."
-            ALL_VALID="false"
-            continue
-          fi
+            # Validate the extracted version
+            if [ "$SDK_VERSION" = "not_found" ]; then
+              echo "❌ Failed to extract Dart SDK version from $PUBSPEC. Ensure the file contains a valid 'sdk: ^<version>' entry."
+              ALL_VALID="false"
+              continue
+            fi
 
-          # Compare the version
-          if [[ $(echo -e "${SDK_VERSION}\n${MINIMUM_VERSION}" | sort -V | head -n1) != "$MINIMUM_VERSION" ]]; then
-            echo "❌ Dart SDK version in $PUBSPEC must be at least $MINIMUM_VERSION, found $SDK_VERSION"
-            ALL_VALID="false"
+            # Compare the version
+            if [[ $(echo -e "${SDK_VERSION}\n${MINIMUM_VERSION}" | sort -V | head -n1) != "$MINIMUM_VERSION" ]]; then
+              echo "❌ Dart SDK version in $PUBSPEC must be at least $MINIMUM_VERSION, found $SDK_VERSION"
+              ALL_VALID="false"
+            else
+              echo "✅ Dart SDK version in $PUBSPEC is satisfactory: $SDK_VERSION"
+            fi
+          done
+
+          # Exit with failure if any pubspec.yaml file has an invalid version
+          if [ "$ALL_VALID" != "true" ]; then
+            echo "❌ One or more pubspec.yaml files have an invalid Dart SDK version."
+            exit 1
           else
-            echo "✅ Dart SDK version in $PUBSPEC is satisfactory: $SDK_VERSION"
+            echo "✅ All pubspec.yaml files have a valid Dart SDK version."
           fi
-        done
-
-        # Exit with failure if any pubspec.yaml file has an invalid version
-        if [ "$ALL_VALID" != "true" ]; then
-          echo "❌ One or more pubspec.yaml files have an invalid Dart SDK version."
-          exit 1
-        else
-          echo "✅ All pubspec.yaml files have a valid Dart SDK version."
-        fi
