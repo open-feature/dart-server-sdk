@@ -1,8 +1,28 @@
 import 'dart:async';
 import 'package:logging/logging.dart';
-
 import 'domain_manager.dart'; // Required for @visibleForTesting
 import 'feature_provider.dart';
+import 'package:meta/meta.dart';
+
+// Define OpenFeatureEventType to represent different event types.
+enum OpenFeatureEventType {
+  providerChanged,
+  flagEvaluated,
+  contextUpdated,
+  error,
+}
+
+// Define OpenFeatureEvent to represent events in the system.
+class OpenFeatureEvent {
+  final OpenFeatureEventType type;
+  final String message;
+  final dynamic data;
+
+  OpenFeatureEvent(this.type, this.message, {this.data});
+}
+
+
+
 
 /// Abstract OpenFeatureProvider interface for extensibility
 abstract class OpenFeatureProvider {
@@ -22,8 +42,10 @@ class OpenFeatureNoOpProvider implements OpenFeatureProvider {
   @override
   Future<dynamic> getFlag(String flagKey,
       {Map<String, dynamic>? context}) async {
-    // Return null or default values for flags
-    return null;
+
+    return null; // Return null or default values for flags.
+
+
   }
 }
 
@@ -45,6 +67,21 @@ abstract class OpenFeatureHook {
   void afterEvaluation(
       String flagKey, dynamic result, Map<String, dynamic>? context);
 }
+
+// Domain manager to bind clients with providers.
+class DomainManager {
+  final Map<String, String> _clientProviderBindings = {};
+
+  void bindClientToProvider(String clientId, String providerName) {
+    _clientProviderBindings[clientId] = providerName;
+  }
+
+  String? getProviderForClient(String clientId) {
+    return _clientProviderBindings[clientId];
+  }
+}
+
+// Singleton implementation of OpenFeatureAPI, managed through dependency injection.
 
 /// Extension configuration for plugin management
 class ExtensionConfig {
@@ -77,6 +114,7 @@ class ExtensionEvent {
 }
 
 /// Singleton implementation of OpenFeatureAPI
+
 class OpenFeatureAPI {
   static final Logger _logger = Logger('OpenFeatureAPI');
   static OpenFeatureAPI? _instance;
@@ -87,6 +125,7 @@ class OpenFeatureAPI {
   // Domain manager to manage client-provider bindings
   final DomainManager _domainManager = DomainManager();
 
+
   // Extension management
   final Map<String, ExtensionConfig> _extensions = {};
   final Map<String, dynamic> _extensionInstances = {};
@@ -95,10 +134,12 @@ class OpenFeatureAPI {
   final List<OpenFeatureHook> _hooks = [];
   OpenFeatureEvaluationContext? _globalContext;
 
+
   // Stream controllers
   final StreamController<OpenFeatureProvider> _providerStreamController;
   final StreamController<ExtensionEvent> _extensionEventController;
-
+  final StreamController<OpenFeatureEvent> _eventStreamController =
+      StreamController<OpenFeatureEvent>.broadcast();
   OpenFeatureAPI._internal()
       : _providerStreamController =
             StreamController<OpenFeatureProvider>.broadcast(),
@@ -106,6 +147,7 @@ class OpenFeatureAPI {
             StreamController<ExtensionEvent>.broadcast() {
     _configureLogging();
   }
+
 
   factory OpenFeatureAPI() {
     _instance ??= OpenFeatureAPI._internal();
@@ -123,15 +165,32 @@ class OpenFeatureAPI {
   void dispose() {
     _logger.info('Disposing OpenFeatureAPI resources.');
     _providerStreamController.close();
+   _eventStreamController.close();
+
     _extensionEventController.close();
+
   }
 
   // Original API methods
   void setProvider(OpenFeatureProvider provider) {
     _logger.info('Provider is being set to: ${provider.name}');
     _provider = provider;
+
+
+    // Emit provider update
     _providerStreamController.add(provider);
+
+    // Emit providerChanged event
+    _emitEvent(OpenFeatureEvent(
+      OpenFeatureEventType.providerChanged,
+      'Provider changed to ${provider.name}',
+      data: provider,
+    ));
   }
+
+ 
+   
+  
 
   OpenFeatureProvider get provider => _provider;
 
@@ -142,23 +201,45 @@ class OpenFeatureAPI {
 
   OpenFeatureEvaluationContext? get globalContext => _globalContext;
 
+
   void addHooks(List<OpenFeatureHook> hooks) {
     _logger.info('Adding hooks: ${hooks.length} hook(s) added.');
     _hooks.addAll(hooks);
   }
+
+
+  /// Emit an event to the event stream.
+  void _emitEvent(OpenFeatureEvent event) {
+    _logger.info('Emitting event: ${event.type} - ${event.message}');
+    _eventStreamController.add(event);
+  }
+
+  /// Bind a client to a specific provider.
+  void bindClientToProvider(String clientId, String providerName) {
+    _domainManager.bindClientToProvider(clientId, providerName);
+
+    // Emit contextUpdated event
+    _emitEvent(OpenFeatureEvent(
+      OpenFeatureEventType.contextUpdated,
+      'Client $clientId bound to provider $providerName',
+    ));
+  }
+
+  /// Evaluate a boolean flag with hooks and emit events.
 
   List<OpenFeatureHook> get hooks => List.unmodifiable(_hooks);
 
   Stream<OpenFeatureProvider> get providerUpdates =>
       _providerStreamController.stream;
 
-  void bindClientToProvider(String clientId, String providerName) {
-    _domainManager.bindClientToProvider(clientId, providerName);
-  }
+  
 
   // New extension-related methods
   Future<void> registerExtension(
-      String extensionId, ExtensionConfig config) async {
+
+    
+    
+    String extensionId, ExtensionConfig config) async {
     _logger.info('Registering extension: $extensionId');
 
     // Validate dependencies
@@ -199,6 +280,7 @@ class OpenFeatureAPI {
   Stream<ExtensionEvent> get extensionEvents =>
       _extensionEventController.stream;
 
+
   Future<bool> evaluateBooleanFlag(String flagKey, String clientId,
       {Map<String, dynamic>? context}) async {
     // Get provider for the client
@@ -207,9 +289,28 @@ class OpenFeatureAPI {
       _logger.info('Using provider $providerName for client $clientId');
       _runBeforeEvaluationHooks(flagKey, context);
 
-      final result = await _provider.getFlag(flagKey, context: context);
-      _runAfterEvaluationHooks(flagKey, result, context);
-      return result ?? false;
+
+      try {
+        final result = await _provider.getFlag(flagKey, context: context);
+
+        _emitEvent(OpenFeatureEvent(
+          OpenFeatureEventType.flagEvaluated,
+          'Flag $flagKey evaluated for client $clientId',
+          data: {'result': result, 'context': context},
+        ));
+
+        _runAfterEvaluationHooks(flagKey, result, context);
+        return result ?? false;
+      } catch (error) {
+        _logger.warning('Error evaluating flag $flagKey: $error');
+        _emitEvent(OpenFeatureEvent(
+          OpenFeatureEventType.error,
+          'Error evaluating flag $flagKey',
+          data: error,
+        ));
+        return false;
+      }
+
     } else {
       _logger.warning('No provider found for client $clientId');
       return false;
@@ -222,9 +323,11 @@ class OpenFeatureAPI {
     for (var hook in _hooks) {
       try {
         hook.beforeEvaluation(flagKey, context);
+
       } catch (e, stack) {
         _logger.warning(
             'Error in before-evaluation hook for flag: $flagKey', e, stack);
+
       }
     }
   }
@@ -235,16 +338,24 @@ class OpenFeatureAPI {
     for (var hook in _hooks) {
       try {
         hook.afterEvaluation(flagKey, result, context);
+
       } catch (e, stack) {
         _logger.warning(
             'Error in after-evaluation hook for flag: $flagKey', e, stack);
+
       }
     }
   }
+
+  /// Streams for listening to events and provider updates.
+  Stream<OpenFeatureEvent> get events => _eventStreamController.stream;
+ 
 }
 
 // Dependency Injection for managing the singleton lifecycle
 class OpenFeatureAPILocator {
+
   // This allows replacing the instance during tests
+
   static OpenFeatureAPI instance = OpenFeatureAPI();
 }
