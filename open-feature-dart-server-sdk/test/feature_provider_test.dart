@@ -1,98 +1,211 @@
-/* Tests for providers and NoOpProvider.
-Verifies that the NoOpProvider returns the correct metadata (name).
-Ensures all flag evaluation methods in NoOpProvider return their respective default values:*/
-
 import 'package:test/test.dart';
 import '../lib/feature_provider.dart';
 
 void main() {
   group('Provider Tests', () {
-    late OpenFeatureNoOpProvider noOpProvider;
+    late NoOpProvider provider;
 
     setUp(() {
-      // Initialize the NoOpProvider for each test
-      noOpProvider = OpenFeatureNoOpProvider();
+      provider = NoOpProvider();
     });
 
-    test('NoOpProvider lifecycle', () async {
-      expect(noOpProvider.state, equals(ProviderState.NOT_READY));
+    group('Provider Lifecycle', () {
+      test('initial state is NOT_READY', () {
+        expect(provider.state, equals(ProviderState.NOT_READY));
+      });
 
-      await noOpProvider.initialize();
-      expect(noOpProvider.state, equals(ProviderState.READY));
+      test('initialization changes state to READY', () async {
+        await provider.initialize();
+        expect(provider.state, equals(ProviderState.READY));
+      });
 
-      await noOpProvider.shutdown();
-      expect(noOpProvider.state, equals(ProviderState.NOT_READY));
+      test('shutdown changes state to SHUTDOWN', () async {
+        await provider.initialize();
+        await provider.shutdown();
+        expect(provider.state, equals(ProviderState.SHUTDOWN));
+      });
+
+      test('health check returns true only when READY', () async {
+        expect(await provider.healthCheck(), isFalse);
+        await provider.initialize();
+        expect(await provider.healthCheck(), isTrue);
+        await provider.shutdown();
+        expect(await provider.healthCheck(), isFalse);
+      });
     });
 
-    test('NoOpProvider throws when not initialized', () {
-      expect(
-        () => noOpProvider.getBooleanFlag('test-flag'),
-        throwsA(isA<StateError>()),
-      );
+    group('Provider Metadata', () {
+      test('metadata contains correct default values', () {
+        final metadata = provider.metadata;
+        expect(metadata.name, equals('NoOpProvider'));
+        expect(metadata.version, equals('1.0.0'));
+        expect(metadata.capabilities, containsPair('supportsTargeting', false));
+        expect(metadata.supportedFeatures, isEmpty);
+      });
     });
 
-    test('NoOpProvider throws when not initialized', () {
-      expect(
-        () => noOpProvider.getBooleanFlag('test-flag'),
-        throwsA(isA<StateError>()),
-      );
-    });
-
-    test('Provider evaluates flags after initialization', () async {
-      await noOpProvider.initialize();
-
-      final boolResult = await noOpProvider.getBooleanFlag('test-flag');
-      expect(boolResult, isFalse);
-
-      final stringResult = await noOpProvider.getStringFlag('test-flag');
-      expect(stringResult, isEmpty);
-    });
-
-    test('NoOpProvider has correct metadata', () {
-      final metadata = noOpProvider.metadata;
-
-      expect(metadata.name, equals('NoOpProvider'),
-          reason: 'NoOpProvider should return correct metadata name.');
-    });
-
-    group('Flag Evaluations', () {
+    group('Flag Evaluation', () {
       setUp(() async {
-        // Initialize provider before each flag test
-        await noOpProvider.initialize();
+        await provider.initialize();
       });
 
-      test('NoOpProvider boolean flag returns default value', () async {
-        final result = await noOpProvider.getBooleanFlag('test-flag');
-        expect(result, isFalse,
-            reason:
-                'NoOpProvider should return false for boolean flags by default.');
+      test('getBooleanFlag returns FlagEvaluationResult with default value',
+          () async {
+        final result = await provider.getBooleanFlag('test-flag', true);
+        expect(result, isA<FlagEvaluationResult<bool>>());
+        expect(result.value, isTrue);
+        expect(result.flagKey, equals('test-flag'));
+        expect(result.reason, equals('DEFAULT'));
+        expect(result.evaluatorId, equals('NoOpProvider'));
       });
 
-      test('NoOpProvider string flag returns default value', () async {
-        final result = await noOpProvider.getStringFlag('test-flag');
-        expect(result, equals(''),
-            reason: 'NoOpProvider should return an empty string by default.');
+      test('getStringFlag returns FlagEvaluationResult with default value',
+          () async {
+        final result = await provider.getStringFlag('test-flag', 'default');
+        expect(result.value, equals('default'));
       });
 
-      test('NoOpProvider integer flag returns default value', () async {
-        final result = await noOpProvider.getIntegerFlag('test-flag');
-        expect(result, equals(0),
-            reason:
-                'NoOpProvider should return 0 for integer flags by default.');
+      test('getIntegerFlag returns FlagEvaluationResult with default value',
+          () async {
+        final result = await provider.getIntegerFlag('test-flag', 42);
+        expect(result.value, equals(42));
       });
 
-      test('NoOpProvider double flag returns default value', () async {
-        final result = await noOpProvider.getDoubleFlag('test-flag');
-        expect(result, equals(0.0),
-            reason:
-                'NoOpProvider should return 0.0 for double flags by default.');
+      test('getDoubleFlag returns FlagEvaluationResult with default value',
+          () async {
+        final result = await provider.getDoubleFlag('test-flag', 3.14);
+        expect(result.value, equals(3.14));
       });
 
-      test('NoOpProvider object flag returns default value', () async {
-        final result = await noOpProvider.getObjectFlag('test-flag');
-        expect(result, isNull,
-            reason:
-                'NoOpProvider should return null for object flags by default.');
+      test('getObjectFlag returns FlagEvaluationResult with default value',
+          () async {
+        final defaultValue = {'key': 'value'};
+        final result = await provider.getObjectFlag('test-flag', defaultValue);
+        expect(result.value, equals(defaultValue));
+      });
+
+      test('throws ProviderException when not in READY state', () async {
+        await provider.shutdown();
+        expect(
+          () => provider.getBooleanFlag('test-flag', false),
+          throwsA(isA<ProviderException>().having(
+            (e) => e.code,
+            'error code',
+            equals('PROVIDER_NOT_READY'),
+          )),
+        );
+      });
+    });
+
+    group('Metrics Tracking', () {
+      setUp(() async {
+        await provider.initialize();
+      });
+
+      test('metrics are updated after flag evaluations', () async {
+        await provider.getBooleanFlag('test-flag', false);
+        await provider.getStringFlag('test-flag', '');
+
+        final metrics = provider.getMetrics();
+        expect(metrics.totalRequests, equals(2));
+        expect(metrics.successfulRequests, equals(2));
+        expect(metrics.failedRequests, equals(0));
+      });
+
+      test('cache metrics are tracked', () async {
+        final metrics = provider.getMetrics();
+        expect(metrics.cacheHits, equals(0));
+        expect(metrics.cacheMisses, equals(0));
+      });
+    });
+
+    group('Plugin Management', () {
+      late PluginConfig testPlugin;
+
+      setUp(() async {
+        await provider.initialize();
+        testPlugin = PluginConfig(
+          pluginId: 'test-plugin',
+          version: '1.0.0',
+          settings: {'key': 'value'},
+        );
+      });
+
+      test('can register and retrieve plugin', () async {
+        await provider.registerPlugin('test-plugin', testPlugin);
+        expect(provider.getRegisteredPlugins(), contains('test-plugin'));
+        expect(provider.getPluginConfig('test-plugin'), equals(testPlugin));
+      });
+
+      test('can unregister plugin', () async {
+        await provider.registerPlugin('test-plugin', testPlugin);
+        await provider.unregisterPlugin('test-plugin');
+        expect(provider.getRegisteredPlugins(), isEmpty);
+        expect(provider.getPluginConfig('test-plugin'), isNull);
+      });
+
+      test('throws when registering plugin with plugins disabled', () async {
+        final providerWithPluginsDisabled = NoOpProvider(
+          ProviderConfig(enablePlugins: false),
+        );
+        await providerWithPluginsDisabled.initialize();
+
+        expect(
+          () => providerWithPluginsDisabled.registerPlugin(
+              'test-plugin', testPlugin),
+          throwsA(isA<ProviderException>()),
+        );
+      });
+
+      test('throws when starting nonexistent plugin', () async {
+        expect(
+          () => provider.startPlugin('nonexistent'),
+          throwsA(isA<ProviderException>()),
+        );
+      });
+    });
+
+    group('Cache Management', () {
+      setUp(() async {
+        await provider.initialize();
+      });
+
+      test('clearCache clears the cache', () async {
+        // First evaluation potentially caches the result
+        await provider.getBooleanFlag('test-flag', true);
+        await provider.clearCache();
+
+        final metrics = provider.getMetrics();
+        expect(metrics.cacheHits, equals(0));
+      });
+    });
+
+    group('Authentication', () {
+      test('authenticate succeeds even with no-op implementation', () async {
+        await provider.initialize();
+        final auth = ProviderAuth(
+          type: 'test',
+          credentials: {'key': 'value'},
+        );
+
+        // Should complete without throwing
+        await expectLater(
+          provider.authenticate(auth),
+          completes,
+        );
+      });
+    });
+
+    group('Configuration', () {
+      test('custom config is respected', () {
+        final customConfig = ProviderConfig(
+          maxRetries: 5,
+          enableCache: false,
+          maxConcurrentRequests: 50,
+        );
+
+        final customProvider = NoOpProvider(customConfig);
+        expect(customProvider.config, equals(customConfig));
       });
     });
   });

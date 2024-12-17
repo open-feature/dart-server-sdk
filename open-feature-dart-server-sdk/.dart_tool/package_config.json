@@ -3,31 +3,36 @@
   "packages": [
     {
       "name": "_fe_analyzer_shared",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/_fe_analyzer_shared-76.0.0",
+
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/_fe_analyzer_shared-73.0.0",
+
+
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
     {
       "name": "_macros",
-      "rootUri": "file:///C:/tools/dart-sdk/pkg/_macros",
+      "rootUri": "file:///C:/Users/HP/Documents/dartsdk-windows-x64-release/dart-sdk/pkg/_macros",
       "packageUri": "lib/",
       "languageVersion": "3.4"
     },
     {
       "name": "analyzer",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/analyzer-6.11.0",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/analyzer-6.8.0",
+
+
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
     {
       "name": "args",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/args-2.6.0",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/args-2.6.0",
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
     {
       "name": "async",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/async-2.12.0",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/async-2.12.0",
       "packageUri": "lib/",
       "languageVersion": "3.4"
     },
@@ -303,55 +308,55 @@
     },
     {
       "name": "test_core",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/test_core-0.6.8",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/test_core-0.6.6",
       "packageUri": "lib/",
       "languageVersion": "3.5"
     },
     {
       "name": "typed_data",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/typed_data-1.4.0",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/typed_data-1.4.0",
       "packageUri": "lib/",
       "languageVersion": "3.5"
     },
     {
       "name": "vm_service",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/vm_service-15.0.0",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/vm_service-14.3.1",
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
     {
       "name": "watcher",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/watcher-1.1.1",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/watcher-1.1.0",
       "packageUri": "lib/",
-      "languageVersion": "3.1"
+      "languageVersion": "3.0"
     },
     {
       "name": "web",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/web-1.1.0",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/web-1.1.0",
       "packageUri": "lib/",
       "languageVersion": "3.4"
     },
     {
       "name": "web_socket",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/web_socket-0.1.6",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/web_socket-0.1.6",
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
     {
       "name": "web_socket_channel",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/web_socket_channel-3.0.1",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/web_socket_channel-3.0.1",
       "packageUri": "lib/",
       "languageVersion": "3.3"
     },
     {
       "name": "webkit_inspection_protocol",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/webkit_inspection_protocol-1.2.1",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/webkit_inspection_protocol-1.2.1",
       "packageUri": "lib/",
       "languageVersion": "3.0"
     },
     {
       "name": "yaml",
-      "rootUri": "file:///C:/Users/preth/AppData/Local/Pub/Cache/hosted/pub.dev/yaml-3.1.2",
+      "rootUri": "file:///C:/Users/HP/AppData/Local/Pub/Cache/hosted/pub.dev/yaml-3.1.2",
       "packageUri": "lib/",
       "languageVersion": "2.19"
     },
