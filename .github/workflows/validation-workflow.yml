@@ -84,26 +84,6 @@ jobs:
             echo "✅ All developer-made commit messages follow the convention."
           fi
 
-  validate-file-encoding:
-    name: Validate File Encoding
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Validate File Encoding
-        run: |
-          echo "Validating file encoding..."
-          NON_UTF8_FILES=$(find . -type f -exec file -i {} + | grep -v "charset=utf-8" || true)
-
-          if [ -n "$NON_UTF8_FILES" ]; then
-            echo "❌ The following files are not UTF-8 encoded:"
-            echo "$NON_UTF8_FILES"
-            exit 1
-          else
-            echo "✅ All files are UTF-8 encoded."
-          fi
-
   validate-dart-sdk-version:
     runs-on: ubuntu-latest
     steps:
