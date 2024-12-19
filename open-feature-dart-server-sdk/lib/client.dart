@@ -102,7 +102,7 @@ class FeatureClient {
         HookStage.ERROR,
         flagKey,
         currentContext,
-        error: error,
+        error: error, 
       );
       return defaultValue;
     } finally {

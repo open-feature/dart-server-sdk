@@ -1,119 +1,128 @@
+import 'package:open_feature_dart_server_sdk/transaction_context.dart';
 import 'package:test/test.dart';
 import '../lib/open_feature_api.dart';
-import 'helpers/open_feature_api_test_helpers.dart';
+
+import 'package:mockito/mockito.dart';
+import 'package:logging/logging.dart';
+
+// Mock classes
+class MockFeatureProvider extends Mock implements OpenFeatureProvider {}
+
+class MockOpenFeatureHook extends Mock implements OpenFeatureHook {}
+
+class MockTransactionContext extends Mock implements TransactionContext {}
 
 void main() {
-  group('OpenFeatureAPI Tests', () {
+  group('OpenFeatureAPI', () {
     late OpenFeatureAPI api;
+    late MockFeatureProvider mockProvider;
+    late MockOpenFeatureHook mockHook;
+    late MockTransactionContext mockTransactionContext;
 
     setUp(() {
-      // Ensure a fresh singleton instance before each test
-      OpenFeatureAPILocator.instance = OpenFeatureAPI();
-      api = OpenFeatureAPILocator.instance;
+      // Initialize logging
+      Logger.root.level = Level.ALL;
+      Logger.root.onRecord.listen((record) {
+        print(
+            '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}');
+      });
+
+      // Create mock instances
+      mockProvider = MockFeatureProvider();
+      mockHook = MockOpenFeatureHook();
+      mockTransactionContext = MockTransactionContext();
+
+      // Initialize the API with a mock provider
+      api = OpenFeatureAPI();
+      api.setProvider(mockProvider);
     });
 
     tearDown(() {
-      // Clean up resources
-      api.dispose();
+      // Clean up after each test
+      OpenFeatureAPI.resetInstance();
     });
 
-    test('Singleton behavior: always returns the same instance', () {
-      final instance1 = OpenFeatureAPI();
-      final instance2 = OpenFeatureAPI();
-
-      expect(instance1, same(instance2),
-          reason: 'OpenFeatureAPI should be a singleton.');
+    test('set and get provider', () {
+      expect(api.provider, equals(mockProvider));
     });
 
-    test('Default provider is OpenFeatureNoOpProvider', () {
-      expect(api.provider.name, equals('OpenFeatureNoOpProvider'),
-          reason: 'Default provider should be OpenFeatureNoOpProvider.');
-    });
-
-    test('Set and get provider updates correctly', () async {
-      final customProvider = _MockProvider();
-      api.setProvider(customProvider);
-
-      expect(api.provider, equals(customProvider),
-          reason: 'Provider should update to the new instance.');
-    });
-
-    test('Stream notifies on provider change', () async {
-      final customProvider = _MockProvider();
-      final stream = api.providerUpdates;
-
-      final future = expectLater(stream, emits(customProvider));
-      api.setProvider(customProvider);
-
-      await future;
-    });
-
-    test('Global context is set and retrieved correctly', () {
-      final context = OpenFeatureEvaluationContext({'user': 'test-user'});
+    test('set and get global context', () {
+      final context = OpenFeatureEvaluationContext({'key': 'value'});
       api.setGlobalContext(context);
 
-      expect(api.globalContext, equals(context),
-          reason: 'Global context should match the one set.');
+      expect(api.globalContext, equals(context));
     });
 
-    test('Add and retrieve global hooks', () {
-      final hook1 = _MockHook();
-      final hook2 = _MockHook();
+    test('add and run hooks', () {
+      api.addHooks([mockHook]);
 
-      api.addHooks([hook1, hook2]);
+      final flagKey = 'testFlag';
+      final context = {'key': 'value'};
+      final result = true;
 
-      expect(api.hooks, containsAll([hook1, hook2]),
-          reason: 'Hooks should include all added hooks.');
+      api.evaluateBooleanFlag(flagKey, 'testClient', context: context);
+
+      verify(mockHook.beforeEvaluation(flagKey, context)).called(1);
+      verify(mockHook.afterEvaluation(flagKey, result, context)).called(1);
     });
 
-    test('Boolean flag evaluation returns false when no provider', () async {
-      final result = await api.evaluateBooleanFlag('flag-key', 'client-1');
+    test('evaluate boolean flag with hooks and emit events', () async {
+      when(mockProvider.getFlag('testFlag', context: anyNamed('context')))
+          .thenAnswer((_) async => true);
 
-      expect(result, isFalse,
-          reason: 'Boolean flag should return false with no provider.');
+      final flagKey = 'testFlag';
+      final clientId = 'testClient';
+      final context = {'key': 'value'};
+
+      final result =
+          await api.evaluateBooleanFlag(flagKey, clientId, context: context);
+
+      expect(result, equals(true));
+
+      await expectLater(api.events, emits(isA<OpenFeatureEvent>()));
+      verify(mockProvider.getFlag(flagKey, context: context)).called(1);
     });
 
-    test('Provider evaluation triggers hooks', () async {
-      final hook = _MockHook();
-      api.addHooks([hook]);
-      final customProvider = _MockProvider();
-      api.setProvider(customProvider);
+    test('handle error during flag evaluation', () async {
+      when(mockProvider.getFlag('testFlag', context: anyNamed('context')))
+          .thenThrow(Exception('Error'));
 
-      await api.evaluateBooleanFlag('flag-key', 'client-1');
+      final flagKey = 'testFlag';
+      final clientId = 'testClient';
+      final context = {'key': 'value'};
 
-      expect(hook.beforeEvaluationCalled, isTrue,
-          reason: 'beforeEvaluation hook should be triggered.');
-      expect(hook.afterEvaluationCalled, isTrue,
-          reason: 'afterEvaluation hook should be triggered.');
+      final result =
+          await api.evaluateBooleanFlag(flagKey, clientId, context: context);
+
+      expect(result, equals(false));
+
+      await expectLater(api.events, emits(isA<OpenFeatureEvent>()));
+      verify(mockProvider.getFlag(flagKey, context: context)).called(1);
+    });
+
+    test('manage transaction contexts', () {
+      api.pushTransactionContext(mockTransactionContext);
+      expect(api.currentTransactionContext, equals(mockTransactionContext));
+
+      final poppedContext = api.popTransactionContext();
+      expect(poppedContext, equals(mockTransactionContext));
+      expect(api.currentTransactionContext, isNull);
+    });
+
+    test('register and unregister extensions', () async {
+      final extensionId = 'testExtension';
+      final config = ExtensionConfig(id: extensionId);
+
+      await api.registerExtension(extensionId, config);
+      expect(api.getRegisteredExtensions(), contains(extensionId));
+
+      await api.unregisterExtension(extensionId);
+      expect(api.getRegisteredExtensions(), isNot(contains(extensionId)));
+    });
+
+    test('shutdown API', () async {
+      await api.shutdown();
+      verify(mockProvider.shutdown()).called(1);
     });
   });
-}
-
-// Mock provider for testing
-class _MockProvider implements OpenFeatureProvider {
-  @override
-  String get name => 'MockProvider';
-
-  @override
-  Future<dynamic> getFlag(String flagKey,
-      {Map<String, dynamic>? context}) async {
-    return true; // Example mock return value
-  }
-}
-
-// Mock hook for testing
-class _MockHook implements OpenFeatureHook {
-  bool beforeEvaluationCalled = false;
-  bool afterEvaluationCalled = false;
-
-  @override
-  void beforeEvaluation(String flagKey, Map<String, dynamic>? context) {
-    beforeEvaluationCalled = true;
-  }
-
-  @override
-  void afterEvaluation(
-      String flagKey, dynamic result, Map<String, dynamic>? context) {
-    afterEvaluationCalled = true;
-  }
 }
