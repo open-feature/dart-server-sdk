@@ -20,4 +20,3 @@ jobs:
         uses: SimonScholz/google-chat-action@main
         with:
           webhookUrl: '${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}'
-
