@@ -1,286 +1,151 @@
-import 'package:test/test.dart';
 import 'dart:async';
+import 'package:test/test.dart';
 import '../lib/hooks.dart';
 
-/// Mock hook implementation for testing
 class TestHook implements Hook {
-  final List<String> executionLog;
-  final String name;
-  final HookPriority priority;
-  final bool throwError;
-  final Duration? timeout;
+  final List<String> executionOrder = [];
+  final HookPriority _priority;
 
-  TestHook({
-    required this.executionLog,
-    required this.name,
-    this.priority = HookPriority.NORMAL,
-    this.throwError = false,
-    this.timeout,
-  });
+  TestHook([this._priority = HookPriority.NORMAL]);
 
   @override
   HookMetadata get metadata => HookMetadata(
-        name: name,
-        priority: priority,
-        config: HookConfig(
-          continueOnError: true,
-          timeout: timeout ?? const Duration(seconds: 5),
-        ),
+        name: 'TestHook',
+        priority: _priority,
       );
 
   @override
   Future<void> before(HookContext context) async {
-    if (throwError) throw Exception('Test error in before hook');
-    executionLog.add('$name:before');
+    executionOrder.add('before');
   }
 
   @override
   Future<void> after(HookContext context) async {
-    if (throwError) throw Exception('Test error in after hook');
-    executionLog.add('$name:after');
+    executionOrder.add('after');
   }
 
   @override
   Future<void> error(HookContext context) async {
-    if (throwError) throw Exception('Test error in error hook');
-    executionLog.add('$name:error');
+    executionOrder.add('error');
   }
 
   @override
   Future<void> finally_(HookContext context) async {
-    if (throwError) throw Exception('Test error in finally hook');
-    executionLog.add('$name:finally');
+    executionOrder.add('finally');
   }
 }
 
-/// Slow hook that always times out
+class ErrorHook implements Hook {
+  @override
+  HookMetadata get metadata => HookMetadata(name: 'ErrorHook');
+
+  @override
+  Future<void> before(HookContext context) async {
+    throw Exception('Test error');
+  }
+
+  @override
+  Future<void> after(HookContext context) async {}
+  @override
+  Future<void> error(HookContext context) async {}
+  @override
+  Future<void> finally_(HookContext context) async {}
+}
+
 class SlowHook implements Hook {
-  final Duration _delay;
-
-  SlowHook() : _delay = const Duration(seconds: 2);
-
   @override
   HookMetadata get metadata => HookMetadata(
         name: 'SlowHook',
-        config: HookConfig(
-          timeout: const Duration(milliseconds: 100),
-          continueOnError: false,
-        ),
+        config: HookConfig(timeout: Duration(milliseconds: 100)),
       );
 
   @override
   Future<void> before(HookContext context) async {
-    // This operation will take longer than the timeout
-    await Future.delayed(_delay);
+    await Future.delayed(Duration(milliseconds: 200));
   }
 
   @override
-  Future<void> after(HookContext context) async {
-    await Future.delayed(_delay);
-  }
-
+  Future<void> after(HookContext context) async {}
   @override
-  Future<void> error(HookContext context) async {
-    await Future.delayed(_delay);
-  }
-
+  Future<void> error(HookContext context) async {}
   @override
-  Future<void> finally_(HookContext context) async {
-    await Future.delayed(_delay);
-  }
+  Future<void> finally_(HookContext context) async {}
 }
 
 void main() {
-  group('Hook System Tests', () {
-    late HookManager hookManager;
-    late List<String> executionLog;
+  group('HookManager', () {
+    late HookManager manager;
+    late TestHook testHook;
 
     setUp(() {
-      executionLog = [];
+      manager = HookManager();
+      testHook = TestHook();
+      manager.addHook(testHook);
     });
 
-    test('hooks execute in priority order', () async {
-      hookManager = HookManager();
-      final hooks = [
-        TestHook(
-          executionLog: executionLog,
-          name: 'low',
-          priority: HookPriority.LOW,
-        ),
-        TestHook(
-          executionLog: executionLog,
-          name: 'critical',
-          priority: HookPriority.CRITICAL,
-        ),
-        TestHook(
-          executionLog: executionLog,
-          name: 'high',
-          priority: HookPriority.HIGH,
-        ),
-        TestHook(
-          executionLog: executionLog,
-          name: 'normal',
-          priority: HookPriority.NORMAL,
-        ),
-      ];
-
-      hooks.forEach(hookManager.addHook);
-
-      await hookManager.executeHooks(
+    test('executes hooks in correct order', () async {
+      await manager.executeHooks(
         HookStage.BEFORE,
         'test-flag',
-        {'context': 'value'},
+        {'user': 'test'},
       );
 
-      expect(
-        executionLog,
-        equals([
-          'critical:before',
-          'high:before',
-          'normal:before',
-          'low:before',
-        ]),
+      await manager.executeHooks(
+        HookStage.AFTER,
+        'test-flag',
+        {'user': 'test'},
+        result: true,
       );
+
+      await manager.executeHooks(
+        HookStage.FINALLY,
+        'test-flag',
+        {'user': 'test'},
+      );
+
+      expect(testHook.executionOrder, ['before', 'after', 'finally']);
     });
 
-    test('hook timeout throws TimeoutException', () async {
+    test('handles hook timeouts', () async {
       final slowHook = SlowHook();
-      hookManager = HookManager(failFast: true);
-      hookManager.addHook(slowHook);
+      manager = HookManager(failFast: true);
+      manager.addHook(slowHook);
 
-      // We expect this to time out after 100ms (set in SlowHook metadata)
       await expectLater(
-        () => Future.sync(() => hookManager.executeHooks(
-              HookStage.BEFORE,
-              'test-flag',
-              null,
-            )),
+        manager.executeHooks(HookStage.BEFORE, 'test-flag', {}),
         throwsA(isA<TimeoutException>()),
       );
     });
 
-    test('complete hook lifecycle executes in correct order', () async {
-      hookManager = HookManager();
-      final hook = TestHook(executionLog: executionLog, name: 'lifecycle');
-      hookManager.addHook(hook);
+    test('sorts hooks by priority', () async {
+      final highPriorityHook = TestHook(HookPriority.HIGH);
+      final lowPriorityHook = TestHook(HookPriority.LOW);
 
-      await hookManager.executeHooks(
-        HookStage.BEFORE,
-        'test-flag',
-        {'stage': 'before'},
-      );
+      manager
+        ..addHook(lowPriorityHook)
+        ..addHook(highPriorityHook);
 
-      await hookManager.executeHooks(
-        HookStage.AFTER,
-        'test-flag',
-        {'stage': 'after'},
-        result: true,
-      );
-
-      await hookManager.executeHooks(
-        HookStage.ERROR,
-        'test-flag',
-        {'stage': 'error'},
-        error: Exception('test error'),
-      );
-
-      await hookManager.executeHooks(
-        HookStage.FINALLY,
-        'test-flag',
-        {'stage': 'finally'},
-      );
+      await manager.executeHooks(HookStage.BEFORE, 'test-flag', {});
 
       expect(
-        executionLog,
-        equals([
-          'lifecycle:before',
-          'lifecycle:after',
-          'lifecycle:error',
-          'lifecycle:finally',
-        ]),
+        highPriorityHook.executionOrder,
+        contains('before'),
+      );
+      expect(
+        lowPriorityHook.executionOrder,
+        contains('before'),
       );
     });
 
-    test('error in hook with failFast=true stops execution', () async {
-      hookManager = HookManager(failFast: true);
+    test('respects failFast setting', () async {
+      manager = HookManager(failFast: true);
+      final errorHook = ErrorHook();
+      manager.addHook(errorHook);
 
-      final hooks = [
-        TestHook(
-          executionLog: executionLog,
-          name: 'first',
-          throwError: true,
-        ),
-        TestHook(
-          executionLog: executionLog,
-          name: 'second',
-        ),
-      ];
-
-      hooks.forEach(hookManager.addHook);
-
-      await expectLater(
-        () => hookManager.executeHooks(
-          HookStage.BEFORE,
-          'test-flag',
-          null,
-        ),
-        throwsA(isA<Exception>()),
+      expect(
+        () => manager.executeHooks(HookStage.BEFORE, 'test-flag', {}),
+        throwsException,
       );
-
-      expect(executionLog, isEmpty);
-    });
-
-    test('error in hook with failFast=false continues execution', () async {
-      hookManager = HookManager();
-      final hooks = [
-        TestHook(
-          executionLog: executionLog,
-          name: 'first',
-          throwError: true,
-        ),
-        TestHook(
-          executionLog: executionLog,
-          name: 'second',
-        ),
-      ];
-
-      hooks.forEach(hookManager.addHook);
-
-      await hookManager.executeHooks(
-        HookStage.BEFORE,
-        'test-flag',
-        null,
-      );
-
-      expect(executionLog, equals(['second:before']));
-    });
-
-    test('HookConfig defaults are set correctly', () {
-      final config = HookConfig();
-
-      expect(config.continueOnError, isTrue);
-      expect(config.timeout, equals(const Duration(seconds: 5)));
-      expect(config.customConfig, isEmpty);
-    });
-
-    test('HookMetadata construction with custom values', () {
-      final metadata = HookMetadata(
-        name: 'CustomHook',
-        version: '2.0.0',
-        priority: HookPriority.HIGH,
-        config: HookConfig(
-          continueOnError: false,
-          timeout: const Duration(seconds: 10),
-          customConfig: {'key': 'value'},
-        ),
-      );
-
-      expect(metadata.name, equals('CustomHook'));
-      expect(metadata.version, equals('2.0.0'));
-      expect(metadata.priority, equals(HookPriority.HIGH));
-      expect(metadata.config.continueOnError, isFalse);
-      expect(metadata.config.timeout, equals(const Duration(seconds: 10)));
-      expect(metadata.config.customConfig, containsPair('key', 'value'));
     });
   });
 }

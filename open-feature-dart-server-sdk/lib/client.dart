@@ -1,20 +1,27 @@
-// Core client interacting with the API.
-// Implementation of the feature flag client interface
-// Provides the main interaction point for users of the SDK
-
+import 'dart:async';
+import 'package:logging/logging.dart';
 import 'evaluation_context.dart';
 import 'hooks.dart';
 import 'feature_provider.dart';
+import 'transaction_context.dart';
 
-/// Metadata about the client instance
+class CacheEntry<T> {
+  final T value;
+  final DateTime expiresAt;
+  final String contextHash;
+
+  CacheEntry({
+    required this.value,
+    required Duration ttl,
+    required this.contextHash,
+  }) : expiresAt = DateTime.now().add(ttl);
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
+}
+
 class ClientMetadata {
-  /// Name of the client instance
   final String name;
-
-  /// Version of the client
   final String version;
-
-  /// Additional attributes for the client
   final Map<String, String> attributes;
 
   ClientMetadata({
@@ -24,285 +31,212 @@ class ClientMetadata {
   });
 }
 
-/// Main client interface for interacting with feature flags
+class ClientMetrics {
+  int flagEvaluations = 0;
+  int cacheHits = 0;
+  int cacheMisses = 0;
+  List<Duration> responseTimes = [];
+  Map<String, int> errorCounts = {};
+
+  Duration get averageResponseTime {
+    if (responseTimes.isEmpty) return Duration.zero;
+    final total = responseTimes.fold<int>(
+        0, (sum, duration) => sum + duration.inMilliseconds);
+    return Duration(milliseconds: total ~/ responseTimes.length);
+  }
+
+  Map<String, dynamic> toJson() => {
+        'flagEvaluations': flagEvaluations,
+        'cacheHits': cacheHits,
+        'cacheMisses': cacheMisses,
+        'averageResponseTime': averageResponseTime.inMilliseconds,
+        'errorCounts': errorCounts,
+      };
+}
+
 class FeatureClient {
-  /// Client metadata for identification
+  final Logger _logger = Logger('FeatureClient');
   final ClientMetadata metadata;
-
-  /// Hook manager for handling lifecycle events
   final HookManager _hookManager;
-
-  /// Default context used when none is provided
   final EvaluationContext _defaultContext;
-
-  /// Provider for feature flag evaluations
   final FeatureProvider _provider;
+  final TransactionContextManager _transactionManager;
+  final ClientMetrics _metrics = ClientMetrics();
+
+  final Duration _cacheTtl;
+  final int _maxCacheSize;
+  final Map<String, CacheEntry<dynamic>> _cache = {};
 
   FeatureClient({
     required this.metadata,
     required HookManager hookManager,
     required EvaluationContext defaultContext,
     FeatureProvider? provider,
+    TransactionContextManager? transactionManager,
+    Duration cacheTtl = const Duration(minutes: 5),
+    int maxCacheSize = 1000,
   })  : _hookManager = hookManager,
         _defaultContext = defaultContext,
-        _provider = provider ?? NoOpProvider();
+        _provider = provider ?? InMemoryProvider({}),
+        _transactionManager = transactionManager ?? TransactionContextManager(),
+        _cacheTtl = cacheTtl,
+        _maxCacheSize = maxCacheSize;
 
-  /// Create hook context for execution
-  HookContext _createHookContext(
-    String flagKey,
-    Map<String, dynamic> context, {
-    dynamic result,
-    Exception? error,
-  }) {
-    return HookContext(
-      flagKey: flagKey,
-      evaluationContext: context,
-      result: result,
-      error: error,
-      metadata: {
-        'clientName': metadata.name,
-        'clientVersion': metadata.version,
-      },
+  String _generateCacheKey(String flagKey, Map<String, dynamic>? context) {
+    final buffer = StringBuffer(flagKey);
+    if (context != null) {
+      buffer.write(context.toString());
+    }
+    return buffer.toString();
+  }
+
+  void _addToCache<T>(String key, T value, String contextHash) {
+    if (_cache.length >= _maxCacheSize) {
+      _cache.remove(_cache.keys.first);
+    }
+    _cache[key] = CacheEntry<T>(
+      value: value,
+      ttl: _cacheTtl,
+      contextHash: contextHash,
     );
   }
 
-  /// Evaluate a boolean feature flag with hook lifecycle
+  T? _getFromCache<T>(String key, String contextHash) {
+    final entry = _cache[key];
+    if (entry == null || entry.isExpired || entry.contextHash != contextHash) {
+      _metrics.cacheMisses++;
+      _cache.remove(key);
+      return null;
+    }
+    _metrics.cacheHits++;
+    return entry.value as T;
+  }
+
+  Future<T> _evaluateFlag<T>(
+    String flagKey,
+    T defaultValue,
+    Future<FlagEvaluationResult<T>> Function(Map<String, dynamic>?) evaluator, {
+    Map<String, dynamic>? context,
+  }) async {
+    final startTime = DateTime.now();
+    _metrics.flagEvaluations++;
+
+    try {
+      final effectiveContext = {
+        ..._defaultContext.attributes,
+        ...context ?? {},
+        ..._transactionManager.currentContext?.effectiveAttributes ?? {},
+      };
+
+      final cacheKey = _generateCacheKey(flagKey, effectiveContext);
+      final contextHash = effectiveContext.toString();
+
+      final cachedValue = _getFromCache<T>(cacheKey, contextHash);
+      if (cachedValue != null) {
+        return cachedValue;
+      }
+
+      await _hookManager.executeHooks(
+        HookStage.BEFORE,
+        flagKey,
+        effectiveContext,
+      );
+
+      final result = await evaluator(effectiveContext);
+
+      await _hookManager.executeHooks(
+        HookStage.AFTER,
+        flagKey,
+        effectiveContext,
+        result: result,
+      );
+
+      _addToCache(cacheKey, result.value, contextHash);
+
+      _metrics.responseTimes.add(DateTime.now().difference(startTime));
+      return result.value;
+    } catch (e) {
+      _logger.warning('Error evaluating flag $flagKey: $e');
+      _metrics.errorCounts[e.runtimeType.toString()] =
+          (_metrics.errorCounts[e.runtimeType.toString()] ?? 0) + 1;
+
+      await _hookManager.executeHooks(
+        HookStage.ERROR,
+        flagKey,
+        context,
+        error: e is Exception ? e : Exception(e.toString()),
+      );
+      return defaultValue;
+    } finally {
+      await _hookManager.executeHooks(
+        HookStage.FINALLY,
+        flagKey,
+        context,
+      );
+    }
+  }
+
   Future<bool> getBooleanFlag(
     String flagKey, {
     EvaluationContext? context,
     bool defaultValue = false,
-  }) async {
-    final evaluationContext = context ?? _defaultContext;
-    final currentContext = evaluationContext.attributes;
-
-    try {
-      await _hookManager.executeHooks(
-        HookStage.BEFORE,
-        flagKey,
-        currentContext,
-      );
-
-      final result = await _provider.getBooleanFlag(
+  }) =>
+      _evaluateFlag(
         flagKey,
         defaultValue,
-        context: currentContext,
+        (ctx) => _provider.getBooleanFlag(flagKey, defaultValue, context: ctx),
+        context: context?.attributes,
       );
 
-      await _hookManager.executeHooks(
-        HookStage.AFTER,
-        flagKey,
-        currentContext,
-        result: result,
-      );
-
-      return result.value;
-    } catch (e) {
-      final error = e is Exception ? e : Exception(e.toString());
-      await _hookManager.executeHooks(
-        HookStage.ERROR,
-        flagKey,
-        currentContext,
-        error: error,
-      );
-      return defaultValue;
-    } finally {
-      await _hookManager.executeHooks(
-        HookStage.FINALLY,
-        flagKey,
-        currentContext,
-      );
-    }
-  }
-
-  /// Evaluate a string feature flag
   Future<String> getStringFlag(
     String flagKey, {
     EvaluationContext? context,
     String defaultValue = '',
-  }) async {
-    final evaluationContext = context ?? _defaultContext;
-    final currentContext = evaluationContext.attributes;
-
-    try {
-      await _hookManager.executeHooks(
-        HookStage.BEFORE,
-        flagKey,
-        currentContext,
-      );
-
-      final result = await _provider.getStringFlag(
+  }) =>
+      _evaluateFlag(
         flagKey,
         defaultValue,
-        context: currentContext,
+        (ctx) => _provider.getStringFlag(flagKey, defaultValue, context: ctx),
+        context: context?.attributes,
       );
 
-      await _hookManager.executeHooks(
-        HookStage.AFTER,
-        flagKey,
-        currentContext,
-        result: result,
-      );
-
-      return result.value;
-    } catch (e) {
-      final error = e is Exception ? e : Exception(e.toString());
-      await _hookManager.executeHooks(
-        HookStage.ERROR,
-        flagKey,
-        currentContext,
-        error: error,
-      );
-      return defaultValue;
-    } finally {
-      await _hookManager.executeHooks(
-        HookStage.FINALLY,
-        flagKey,
-        currentContext,
-      );
-    }
-  }
-
-  /// Evaluate an integer feature flag
   Future<int> getIntegerFlag(
     String flagKey, {
     EvaluationContext? context,
     int defaultValue = 0,
-  }) async {
-    final evaluationContext = context ?? _defaultContext;
-    final currentContext = evaluationContext.attributes;
-
-    try {
-      await _hookManager.executeHooks(
-        HookStage.BEFORE,
-        flagKey,
-        currentContext,
-      );
-
-      final result = await _provider.getIntegerFlag(
+  }) =>
+      _evaluateFlag(
         flagKey,
         defaultValue,
-        context: currentContext,
+        (ctx) => _provider.getIntegerFlag(flagKey, defaultValue, context: ctx),
+        context: context?.attributes,
       );
 
-      await _hookManager.executeHooks(
-        HookStage.AFTER,
-        flagKey,
-        currentContext,
-        result: result,
-      );
-
-      return result.value;
-    } catch (e) {
-      final error = e is Exception ? e : Exception(e.toString());
-      await _hookManager.executeHooks(
-        HookStage.ERROR,
-        flagKey,
-        currentContext,
-        error: error,
-      );
-      return defaultValue;
-    } finally {
-      await _hookManager.executeHooks(
-        HookStage.FINALLY,
-        flagKey,
-        currentContext,
-      );
-    }
-  }
-
-  /// Evaluate a double feature flag
   Future<double> getDoubleFlag(
     String flagKey, {
     EvaluationContext? context,
     double defaultValue = 0.0,
-  }) async {
-    final evaluationContext = context ?? _defaultContext;
-    final currentContext = evaluationContext.attributes;
-
-    try {
-      await _hookManager.executeHooks(
-        HookStage.BEFORE,
-        flagKey,
-        currentContext,
-      );
-
-      final result = await _provider.getDoubleFlag(
+  }) =>
+      _evaluateFlag(
         flagKey,
         defaultValue,
-        context: currentContext,
+        (ctx) => _provider.getDoubleFlag(flagKey, defaultValue, context: ctx),
+        context: context?.attributes,
       );
 
-      await _hookManager.executeHooks(
-        HookStage.AFTER,
-        flagKey,
-        currentContext,
-        result: result,
-      );
-
-      return result.value;
-    } catch (e) {
-      final error = e is Exception ? e : Exception(e.toString());
-      await _hookManager.executeHooks(
-        HookStage.ERROR,
-        flagKey,
-        currentContext,
-        error: error,
-      );
-      return defaultValue;
-    } finally {
-      await _hookManager.executeHooks(
-        HookStage.FINALLY,
-        flagKey,
-        currentContext,
-      );
-    }
-  }
-
-  /// Evaluate an object feature flag
   Future<Map<String, dynamic>> getObjectFlag(
     String flagKey, {
     EvaluationContext? context,
     Map<String, dynamic> defaultValue = const {},
-  }) async {
-    final evaluationContext = context ?? _defaultContext;
-    final currentContext = evaluationContext.attributes;
-
-    try {
-      await _hookManager.executeHooks(
-        HookStage.BEFORE,
-        flagKey,
-        currentContext,
-      );
-
-      final result = await _provider.getObjectFlag(
+  }) =>
+      _evaluateFlag(
         flagKey,
         defaultValue,
-        context: currentContext,
+        (ctx) => _provider.getObjectFlag(flagKey, defaultValue, context: ctx),
+        context: context?.attributes,
       );
 
-      await _hookManager.executeHooks(
-        HookStage.AFTER,
-        flagKey,
-        currentContext,
-        result: result,
-      );
+  ClientMetrics getMetrics() => _metrics;
 
-      return result.value;
-    } catch (e) {
-      final error = e is Exception ? e : Exception(e.toString());
-      await _hookManager.executeHooks(
-        HookStage.ERROR,
-        flagKey,
-        currentContext,
-        error: error,
-      );
-      return defaultValue;
-    } finally {
-      await _hookManager.executeHooks(
-        HookStage.FINALLY,
-        flagKey,
-        currentContext,
-      );
-    }
-  }
+  void clearCache() => _cache.clear();
 }
