@@ -5,8 +5,8 @@ on:
   push:
     branches:
      - main
-     - beta
      - qa
+     - development
 
 jobs:
   notify:

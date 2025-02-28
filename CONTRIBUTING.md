@@ -168,7 +168,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org) to ensure 
 To maintain consistency and ensure stability, we enforce the following **branch protection rules**:
 
 #### **Protected Branches**
-- **Branches**: `main`, `qa`, `beta`
+- **Branches**: `main`, `qa`, `development`
 - **Rules**:
   - Direct **pushes** are not allowed.
   - Changes must go through a **pull request** and pass all required checks before merging.
@@ -185,7 +185,7 @@ To maintain consistency and ensure stability, we enforce the following **branch 
 #### **Branch Lifecycle**
 - **Feature, Fix, Hotfix, Test Branches**:
   - Created by developers for specific tasks.
-  - Merged into `main`, `qa`, or `beta` branches through pull requests.
+  - Merged into `main`, `qa`, or `development` branches through pull requests.
   - Deleted after merging.
 
 ---
@@ -197,7 +197,7 @@ To maintain consistency and ensure stability, we enforce the following **branch 
    - Pushes to these branches are allowed without restrictions.
 
 2. **Pull Requests into Protected Branches**:
-   - Protected branches (`main`, `qa`, `beta`) require pull requests.
+   - Protected branches (`main`, `qa`, `development`) require pull requests.
    - Pull requests trigger workflows for testing and validation.
 
 3. **Validation on Push and Pull Requests**:
