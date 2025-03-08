@@ -103,9 +103,23 @@ class OpenFeatureAPI {
   }
 
   Future<void> dispose() async {
-    await _providerStreamController.close();
-    await _eventStreamController.close();
-    await _domainUpdatesController.close();
+    try {
+      await _providerStreamController.close();
+    } catch (e) {
+      _logger.warning('Error closing provider stream: $e');
+    }
+
+    try {
+      await _eventStreamController.close();
+    } catch (e) {
+      _logger.warning('Error closing event stream: $e');
+    }
+
+    try {
+      await _domainUpdatesController.close();
+    } catch (e) {
+      _logger.warning('Error closing domain updates stream: $e');
+    }
   }
 
   void bindClientToProvider(String clientId, String providerId) {
