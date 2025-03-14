@@ -44,11 +44,7 @@ jobs:
 #      github.event_name == 'push' &&
 #      needs.determine-workflow.outputs.branch_name != 'main' &&
 #      needs.determine-workflow.outputs.branch_name != 'qa' &&
-<<<<<<< HEAD
-#      needs.determine-workflow.outputs.branch_name != 'development'
-=======
 #      needs.determine-workflow.outputs.branch_name != 'beta'
->>>>>>> main
 #    uses: ./.github/workflows/contributor-workflow.yml
 #    with:
 #      branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
