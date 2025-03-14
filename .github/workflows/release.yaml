@@ -33,9 +33,7 @@ jobs:
       release_tag_name: ${{ steps.release.outputs.tag_name }}
       upload_url: ${{ steps.release.outputs.upload_url }}
 
-<<<<<<< HEAD
 # Publishing is handled in publish.yaml
-=======
   dart-release:
     needs: release-please
     if: ${{ fromJSON(needs.release-please.outputs.release_created || false) }}
@@ -51,4 +49,5 @@ jobs:
         run: dart pub get
       - name: Publish
         run: dart pub publish --force
->>>>>>> 0e8109a (ci: wire up the release process)
+
+# Publishing is handled in publish.yaml
