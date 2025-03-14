@@ -9,10 +9,10 @@
 
 # Package names are alphabetized
 
-name: open_feature_dart_server_sdk
-description: A server-side Dart implementation of the OpenFeature SDK.
+name: openfeature_dart_server_sdk
+description: Official server-side Dart OpenFeature SDK.
 version: 0.0.3
-homepage: https://github.com/your-repo/open-feature-dart-server-sdk
+homepage: https://github.com/open-feature/dart-server-sdk
 environment:
   sdk: ^3.6.0
 
