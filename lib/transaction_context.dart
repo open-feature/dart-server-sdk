@@ -35,12 +35,21 @@ class TransactionContext {
 /// Transaction context manager
 class TransactionContextManager {
   static final TransactionContextManager _instance =
+<<<<<<< HEAD
       TransactionContextManager._internal(Duration(minutes: 5));
+=======
+      TransactionContextManager._internal();
+>>>>>>> ba2a59e (chore: move code into the root directory (#32))
   final _contexts = <String, TransactionContext>{};
   final _contextStack = <String>[];
   final Duration _defaultTimeout;
 
+<<<<<<< HEAD
   TransactionContextManager._internal(this._defaultTimeout);
+=======
+  TransactionContextManager._internal(
+      [this._defaultTimeout = const Duration(minutes: 30)]);
+>>>>>>> ba2a59e (chore: move code into the root directory (#32))
 
   factory TransactionContextManager() => _instance;
 
