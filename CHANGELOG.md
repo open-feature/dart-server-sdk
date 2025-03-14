@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4](https://github.com/open-feature/dart-server-sdk/compare/open_feature_dart_server_sdk-v0.0.3...open_feature_dart_server_sdk-v0.0.4) (2025-03-14)
+
+
+### 🧹 Chore
+
+* add license file ([88d6f2b](https://github.com/open-feature/dart-server-sdk/commit/88d6f2b94d57130b36a1ed164cadfef86bc6526e))
+
 ## [0.0.3](https://github.com/open-feature/dart-server-sdk/compare/open_feature_dart_server_sdk-v0.0.2...open_feature_dart_server_sdk-v0.0.3) (2025-03-14)
 
 
