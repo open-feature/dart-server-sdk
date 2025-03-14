@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.5](https://github.com/open-feature/dart-server-sdk/compare/v0.0.4...v0.0.5) (2025-03-14)
+
+
+### 🧹 Chore
+
+* update the dart publishing logic ([c66b9b7](https://github.com/open-feature/dart-server-sdk/commit/c66b9b735940a2ccc3d1ada0391f8f266a3812c0))
+
 ## [0.0.4](https://github.com/open-feature/dart-server-sdk/compare/v0.0.3...v0.0.4) (2025-03-14)
 
 
