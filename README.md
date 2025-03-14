@@ -16,8 +16,13 @@
     <img alt="Specification" src="https://img.shields.io/static/v1?label=specification&message=v0.8.0&color=yellow&style=for-the-badge" />
   </a>
   <!-- x-release-please-start-version -->
+<<<<<<< HEAD
   <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.7">
     <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.7&color=blue&style=for-the-badge" />
+=======
+  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.5">
+    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.5&color=blue&style=for-the-badge" />
+>>>>>>> 195c747 (chore(main): release 0.0.5 (#40))
   </a>
   <a href="https://dart.dev/">
     <img alt="Built with Dart" src="https://img.shields.io/badge/Built%20with-Dart-blue.svg?style=for-the-badge" />
