@@ -24,21 +24,13 @@ jobs:
           BRANCH_NAME="${{ inputs.branch_name }}"
           echo "Branch name: $BRANCH_NAME"
 
-<<<<<<< HEAD
           if [[ "$BRANCH_NAME" =~ ^(qa|development|main|release-please--branches--main--components--openfeature_dart_server_sdk)$ ]]; then
-=======
-          if [[ "$BRANCH_NAME" =~ ^(qa|development|main)$ ]]; then
->>>>>>> 9729726 (chore: update dartsdk minimum to latest version 3.7.2 (#44))
             echo "✅ Branch name '$BRANCH_NAME' is valid for protected branches (qa, development, main)."
           elif [[ "$BRANCH_NAME" =~ ^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9_-]+$ ]]; then
             echo "✅ Branch name '$BRANCH_NAME' follows the naming convention."
           else
             echo "❌ Branch name '$BRANCH_NAME' does not follow the naming convention: <type>/<branch-name>"
-<<<<<<< HEAD
             echo "Valid types: feat, fix, hotfix, chore, test, refactor, release, qa, main, development"
-=======
-            echo "Valid types: feat, fix, hotfix, chore, test, refactor, release, development, qa, main"
->>>>>>> 9729726 (chore: update dartsdk minimum to latest version 3.7.2 (#44))
             exit 1
           fi
 
