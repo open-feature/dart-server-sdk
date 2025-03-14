@@ -3,6 +3,7 @@
 ![Status](https://img.shields.io/badge/status-experimental-red?style=flat&logo=warning)
 
 :warning: This repository is a work in progress repository for an implementation of the `dart-server-sdk`.
+
 <!-- markdownlint-disable MD033 -->
 <!-- x-hide-in-docs-start -->
 <p align="center">
@@ -38,9 +39,6 @@
   <a href="https://github.com/open-feature/dart-server-sdk/actions/workflows/ci.yml">
     <img alt="GitHub CI Status" src="https://github.com/open-feature/dart-server-sdk/actions/workflows/ci.yml/badge.svg?style=for-the-badge" />
   </a>
-  <a href="https://bestpractices.coreinfrastructure.org/projects/6601">
-    <img alt="CII Best Practices" src="https://bestpractices.coreinfrastructure.org/projects/6601/badge?style=for-the-badge" />
-  </a>
   <a href="https://dart.dev/">
     <img alt="Built with Dart" src="https://img.shields.io/badge/Built%20with-Dart-blue.svg?style=for-the-badge" />
   </a>
@@ -70,17 +68,17 @@ See [TBD](TBD) for the complete API documentation.
 
 ## 🌟 Features
 
-| Status | Features                        | Description                                                                                                                       |
-| ------ |---------------------------------| --------------------------------------------------------------------------------------------------------------------------------- |
-| ❌      | [Providers](#providers)         | Integrate with a commercial, open source, or in-house feature management tool.                                                    |
-| ❌      | [Targeting](#targeting)         | Contextually-aware flag evaluation using [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context). |
-| ❌      | [Hooks](#hooks)                 | Add functionality to various stages of the flag evaluation life-cycle.                                                            |
-| ❌      | [Logging](#logging)             | Integrate with popular logging packages.                                                                                          |
-| ❌      | [Domains](#domains)             | Logically bind clients with providers.|
-| ❌      | [Eventing](#eventing)           | React to state changes in the provider or flag management system.                                                                 |
-| ❌      | [Shutdown](#shutdown)           | Gracefully clean up a provider during application shutdown.                                                                       |
-| ❌      | [Transaction Context Propagation](#transaction-context-propagation) | Set a specific [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context) for a transaction (e.g. an HTTP request or a thread) |
-| ❌      | [Extending](#extending)         | Extend OpenFeature with custom providers and hooks.                                                                               |
+| Status | Features                                                            | Description                                                                                                                                                  |
+| ------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ❌     | [Providers](#providers)                                             | Integrate with a commercial, open source, or in-house feature management tool.                                                                               |
+| ❌     | [Targeting](#targeting)                                             | Contextually-aware flag evaluation using [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context).                           |
+| ❌     | [Hooks](#hooks)                                                     | Add functionality to various stages of the flag evaluation life-cycle.                                                                                       |
+| ❌     | [Logging](#logging)                                                 | Integrate with popular logging packages.                                                                                                                     |
+| ❌     | [Domains](#domains)                                                 | Logically bind clients with providers.                                                                                                                       |
+| ❌     | [Eventing](#eventing)                                               | React to state changes in the provider or flag management system.                                                                                            |
+| ❌     | [Shutdown](#shutdown)                                               | Gracefully clean up a provider during application shutdown.                                                                                                  |
+| ❌     | [Transaction Context Propagation](#transaction-context-propagation) | Set a specific [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context) for a transaction (e.g. an HTTP request or a thread) |
+| ❌     | [Extending](#extending)                                             | Extend OpenFeature with custom providers and hooks.                                                                                                          |
 
 <sub>Implemented: ✅ | In-progress: ⚠️ | Not implemented yet: ❌</sub>
 
@@ -92,14 +90,11 @@ If the provider you're looking for hasn't been created yet, see the [develop a p
 
 Once you've added a provider as a dependency, it can be registered with OpenFeature like this:
 
-
-
 ### Targeting
 
 Sometimes, the value of a flag must consider some dynamic criteria about the application or user, such as the user's location, IP, email address, or the server's location.
 In OpenFeature, we refer to this as [targeting](https://openfeature.dev/specification/glossary#targeting).
 If the flag management system you're using supports targeting, you can provide the input data using the [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context).
-
 
 ### Hooks
 
@@ -115,7 +110,6 @@ The [tracking API](https://openfeature.dev/specification/sections/tracking/) all
 This is essential for robust experimentation powered by feature flags.
 For example, a flag enhancing the appearance of a UI component might drive user engagement to a new feature; to test this hypothesis, telemetry collected by a [hook](#hooks) or [provider](#providers) can be associated with telemetry reported in the client's `track` function.
 
-
 Note that some providers may not support tracking; check the documentation for your provider for more information.
 
 ### Logging
@@ -129,11 +123,10 @@ This hook can be particularly helpful for troubleshooting and debugging; simply 
 
 ##### Usage example
 
-
 ###### Output
 
 ```sh
-{"time":"2024-10-23T13:33:09.8870867+03:00","level":"DEBUG","msg":"Before stage","domain":"test-client","provider_name":"InMemoryProvider","flag_key":"not-exist","default_value":true}  
+{"time":"2024-10-23T13:33:09.8870867+03:00","level":"DEBUG","msg":"Before stage","domain":"test-client","provider_name":"InMemoryProvider","flag_key":"not-exist","default_value":true}
 {"time":"2024-10-23T13:33:09.8968242+03:00","level":"ERROR","msg":"Error stage","domain":"test-client","provider_name":"InMemoryProvider","flag_key":"not-exist","default_value":true,"error_message":"error code: FLAG_NOT_FOUND: flag for key not-exist not found"}
 ```
 
@@ -143,7 +136,6 @@ See [hooks](#hooks) for more information on configuring hooks.
 
 Clients can be assigned to a domain. A domain is a logical identifier that can be used to associate clients with a particular provider. If a domain has no associated provider, the default provider is used.
 
-
 ### Eventing
 
 Events allow you to react to state changes in the provider or underlying flag management system, such as flag definition changes, provider readiness, or error conditions.
@@ -152,15 +144,12 @@ Some providers support additional events, such as `PROVIDER_CONFIGURATION_CHANGE
 
 Please refer to the documentation of the provider you're using to see what events are supported.
 
-
 ### Shutdown
-
 
 ### Transaction Context Propagation
 
 Transaction context is a container for transaction-specific evaluation context (e.g. user id, user agent, IP).
 Transaction context can be set where specific data is available (e.g. an auth service or request handler), and by using the transaction context propagator, it will automatically be applied to all flag evaluations within a transaction (e.g. a request or thread).
-
 
 ## Extending
 
@@ -170,29 +159,22 @@ To develop a provider, you need to create a new project and include the OpenFeat
 This can be a new repository or included in [the existing contrib repository](https://github.com/open-feature/dart-server-sdk-contrib) available under the OpenFeature organization.
 You’ll then need to write the provider by implementing the `FeatureProvider` interface exported by the OpenFeature SDK.
 
-
 > Built a new provider? [Let us know](https://github.com/open-feature/openfeature.dev/issues/new?assignees=&labels=provider&projects=&template=document-provider.yaml&title=%5BProvider%5D%3A+) so we can add it to the docs!
 
 ### Develop a hook
 
 To develop a hook, you need to create a new project and include the OpenFeature SDK as a dependency.
 This can be a new repository or included in [the existing contrib repository](https://github.com/open-feature/dart-server-sdk-contrib) available under the OpenFeature organization.
-Implement your own hook by conforming to the [Hook interface](./pkg/openfeature/hooks.dart).
+Implement your own hook by conforming to the [Hook interface](./lib/hooks.dart).
 To satisfy the interface, all methods (`Before`/`After`/`Finally`/`Error`) need to be defined.
 To avoid defining empty functions make use of the `UnimplementedHook` struct (which already implements all the empty functions).
-
 
 > Built a new hook? [Let us know](https://github.com/open-feature/openfeature.dev/issues/new?assignees=&labels=hook&projects=&template=document-hook.yaml&title=%5BHook%5D%3A+) so we can add it to the docs!
 
 ## Testing
 
-The SDK provides a `NewTestProvider` which allows you to set flags for the scope of a test.
-The `TestProvider` is thread-safe and can be used in tests that run in parallel.
-
-Call `testProvider.UsingFlags(t, tt.flags)` to set flags for a test, and clean them up with `testProvider.Cleanup()`
-
-
 <!-- x-hide-in-docs-start -->
+
 ## ⭐️ Support the project
 
 - Give this repo a ⭐️!
@@ -213,4 +195,5 @@ Interested in contributing? Great, we'd love your help! To get started, take a l
 </a>
 
 Made with [contrib.rocks](https://contrib.rocks).
+
 <!-- x-hide-in-docs-end -->

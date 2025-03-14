@@ -255,10 +255,4 @@ abstract class CommercialProvider implements FeatureProvider {
 
   @override
   ProviderState get state => _state;
-
-  // HTTP request implementation template
-  Future<dynamic> _makeRequest(String path,
-      {Map<String, dynamic>? params}) async {
-    throw UnimplementedError('_makeRequest must be implemented by child class');
-  }
 }
