@@ -1,8 +1,3 @@
-# dart-server-sdk
-
-![Status](https://img.shields.io/badge/status-experimental-red?style=flat&logo=warning)
-
-:warning: This repository is a work in progress repository for an implementation of the `dart-server-sdk`.
 <!-- markdownlint-disable MD033 -->
 <!-- x-hide-in-docs-start -->
 <p align="center">
@@ -20,10 +15,14 @@
   <a href="https://github.com/open-feature/spec/releases/tag/v0.8.0">
     <img alt="Specification" src="https://img.shields.io/static/v1?label=specification&message=v0.8.0&color=yellow&style=for-the-badge" />
   </a>
-  <!-- Release Badge -->
+  <!-- x-release-please-start-version -->
   <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.2">
     <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.2&color=blue&style=for-the-badge" />
   </a>
+  <a href="https://dart.dev/">
+    <img alt="Built with Dart" src="https://img.shields.io/badge/Built%20with-Dart-blue.svg?style=for-the-badge" />
+  </a>
+  <!-- x-release-please-end -->
   <br/>
   <!-- Dart-Specific Badges -->
   <a href="https://pub.dev/packages/open_feature">
@@ -38,14 +37,10 @@
   <a href="https://github.com/open-feature/dart-server-sdk/actions/workflows/ci.yml">
     <img alt="GitHub CI Status" src="https://github.com/open-feature/dart-server-sdk/actions/workflows/ci.yml/badge.svg?style=for-the-badge" />
   </a>
-  <a href="https://bestpractices.coreinfrastructure.org/projects/6601">
-    <img alt="CII Best Practices" src="https://bestpractices.coreinfrastructure.org/projects/6601/badge?style=for-the-badge" />
-  </a>
-  <a href="https://dart.dev/">
-    <img alt="Built with Dart" src="https://img.shields.io/badge/Built%20with-Dart-blue.svg?style=for-the-badge" />
-  </a>
 </p>
 <!-- x-hide-in-docs-start -->
+
+:warning: This repository is a work in progress repository for an implementation of the `dart-server-sdk`.
 
 [OpenFeature](https://openfeature.dev) is an open specification that provides a vendor-agnostic, community-driven API for feature flagging that works with your favorite feature flag management tool.
 
