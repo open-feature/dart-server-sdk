@@ -21,8 +21,8 @@
     <img alt="Specification" src="https://img.shields.io/static/v1?label=specification&message=v0.8.0&color=yellow&style=for-the-badge" />
   </a>
   <!-- Release Badge -->
-  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.1-pre">
-    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.1-pre&color=blue&style=for-the-badge" />
+  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.2">
+    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.2&color=blue&style=for-the-badge" />
   </a>
   <br/>
   <!-- Dart-Specific Badges -->
