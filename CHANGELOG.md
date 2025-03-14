@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.6](https://github.com/open-feature/dart-server-sdk/compare/v0.0.5...v0.0.6) (2025-03-14)
+
+
+### 🧹 Chore
+
+* move publishing step to a separate workflow ([#41](https://github.com/open-feature/dart-server-sdk/issues/41)) ([9606219](https://github.com/open-feature/dart-server-sdk/commit/96062192c23094a75cb027c384366cde7af03395))
+
 ## [0.0.5](https://github.com/open-feature/dart-server-sdk/compare/v0.0.4...v0.0.5) (2025-03-14)
 
 
