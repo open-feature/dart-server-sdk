@@ -1,0 +1,78 @@
+# This workflow is for testing the beta branch with a Dart matrix.
+# Direct pushes to beta are blocked, only pull requests are allowed.
+
+name: Beta Workflow
+
+on:
+  workflow_call: # Makes the workflow reusable
+    inputs:
+      branch_name:
+        required: true
+        type: string
+      event_name:
+        required: true
+        type: string
+
+jobs:
+  beta-tests:
+    name: Test Beta Branch with Dart Matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dart-version: [stable, beta, dev]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          dart-version: ${{ matrix.dart-version }}
+
+      - name: Install Dependencies
+        run: |
+          echo "Installing dependencies for Dart ${{ matrix.dart-version }}..."
+          if ! dart pub get; then
+            echo "❌ Failed to install dependencies for Dart ${{ matrix.dart-version }}. Exiting..."
+            exit 1
+          fi
+
+      - name: Run Static Analysis
+        run: |
+          echo "Running static analysis for Dart ${{ matrix.dart-version }}..."
+          if ! dart analyze > analysis_report.txt 2> error_log.txt; then
+            echo "❌ Static analysis failed for Dart ${{ matrix.dart-version }}."
+            cat error_log.txt
+            exit 1
+          else
+            echo "✅ Static analysis passed for Dart ${{ matrix.dart-version }}."
+          fi
+
+      - name: Upload Analysis Report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: analysis-report-${{ matrix.dart-version }}
+          path: |
+            analysis_report.txt
+            error_log.txt
+          retention-days: 7
+
+      - name: Run Unit Tests
+        run: |
+          echo "Running unit tests for Dart ${{ matrix.dart-version }}..."
+          if ! dart test --reporter expanded; then
+            echo "❌ Unit tests failed for Dart ${{ matrix.dart-version }}. Exiting..."
+            exit 1
+          else
+            echo "✅ Unit tests passed for Dart ${{ matrix.dart-version }}."
+          fi
+
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.dart-version }}
+          path: .dart_tool/test/generated_reports
+          retention-days: 7
