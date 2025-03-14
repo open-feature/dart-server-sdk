@@ -1,0 +1,136 @@
+# This workflow valides that branch and commit names are standardized for better workflow.
+
+name: Validation Workflow
+
+on:
+  workflow_call: # Makes the workflow reusable
+    inputs:
+      branch_name:
+        required: true
+        type: string
+      event_name:
+        required: true
+        type: string
+
+jobs:
+  validate-branch-name:
+    name: Validate Branch Name
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Branch Name
+        run: |
+          set -euo pipefail
+          echo "Validating branch name..."
+          BRANCH_NAME="${{ inputs.branch_name }}"
+          echo "Branch name: $BRANCH_NAME"
+
+          if [[ "$BRANCH_NAME" =~ ^(qa|beta|main)$ ]]; then
+            echo "✅ Branch name '$BRANCH_NAME' is valid for protected branches (qa, beta, main)."
+          elif [[ "$BRANCH_NAME" =~ ^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9_-]+$ ]]; then
+            echo "✅ Branch name '$BRANCH_NAME' follows the naming convention."
+          else
+            echo "❌ Branch name '$BRANCH_NAME' does not follow the naming convention: <type>/<branch-name>"
+            echo "Valid types: feat, fix, hotfix, chore, test, refactor, release, qa, beta, main"
+            exit 1
+          fi
+
+  validate-commit-messages:
+    name: Validate Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate Commit Messages
+        run: |
+          set -euo pipefail
+          echo "Validating commit messages..."
+
+          # Define the regex for conventional commit format
+          REGEX="^(feat|fix|hotfix|chore|test|refactor|release|ci)(\([a-z0-9_-]+\))?: .{1,72}$"
+
+          # Fetch the base branch dynamically (fallback to 'main' if not in a pull request)
+          BASE_BRANCH=${{ github.event.pull_request.base.ref || 'main' }}
+          echo "Base branch: $BASE_BRANCH"
+
+          # Fetch all commits between the base branch and the current branch
+          git fetch origin $BASE_BRANCH
+
+          # Extract all commit messages excluding auto-generated ones
+          INVALID_COMMITS=$(git log origin/$BASE_BRANCH..HEAD --pretty=format:"%s" \
+            | grep -vE "^(Merge pull request|Initial commit)" \
+            | grep -vE "^(Merge remote-tracking branch|Merge pull request)" \
+            | grep -vE "^(Merge branch|DCO Remediation|Signed-off-by)" \
+            | grep -vE "$REGEX" || true)
+
+          # Check for overly long summaries
+          LONG_SUMMARIES=$(git log origin/$BASE_BRANCH..HEAD --pretty=format:"%s" \
+            | awk 'length($0) > 72')
+
+          # Check if there are invalid commit messages
+          if [[ -n "$INVALID_COMMITS" ]]; then
+            echo "❌ The following commit messages do not follow the convention:"
+            echo "$INVALID_COMMITS"
+            echo ""
+            echo "Commit message format must follow:"
+            echo "<type>(<scope>): <short summary>"
+            echo "Examples:"
+            echo "  feat(auth): add OAuth 2.0 support"
+            echo "  fix(payment): resolve rounding error in total calculation"
+            exit 1
+          else
+            echo "✅ All developer-made commit messages follow the convention."
+          fi
+
+  validate-dart-sdk-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Dart SDK versions in all pubspec.yaml files
+        run: |
+          echo "Validating Dart SDK versions in all pubspec.yaml files..."
+
+          # Find all pubspec.yaml files (recursively)
+          PUBSPEC_FILES=$(find . -name "pubspec.yaml")
+          echo "Found the following pubspec.yaml files:"
+          echo "$PUBSPEC_FILES"
+
+          # Define the minimum required Dart SDK version
+          MINIMUM_VERSION="3.6.0"
+          ALL_VALID="true"
+
+          # Iterate over each pubspec.yaml file
+          for PUBSPEC in $PUBSPEC_FILES; do
+            echo "Checking $PUBSPEC..."
+
+            # Extract the Dart SDK version in the ^<version> format
+            SDK_VERSION=$(grep -Po '(?<=sdk:\s\^)[0-9]+\.[0-9]+\.[0-9]+' "$PUBSPEC" || echo "not_found")
+            echo "Extracted Dart SDK version from $PUBSPEC: $SDK_VERSION"
+
+            # Validate the extracted version
+            if [ "$SDK_VERSION" = "not_found" ]; then
+              echo "❌ Failed to extract Dart SDK version from $PUBSPEC. Ensure the file contains a valid 'sdk: ^<version>' entry."
+              ALL_VALID="false"
+              continue
+            fi
+
+            # Compare the version
+            if [[ $(echo -e "${SDK_VERSION}\n${MINIMUM_VERSION}" | sort -V | head -n1) != "$MINIMUM_VERSION" ]]; then
+              echo "❌ Dart SDK version in $PUBSPEC must be at least $MINIMUM_VERSION, found $SDK_VERSION"
+              ALL_VALID="false"
+            else
+              echo "✅ Dart SDK version in $PUBSPEC is satisfactory: $SDK_VERSION"
+            fi
+          done
+
+          # Exit with failure if any pubspec.yaml file has an invalid version
+          if [ "$ALL_VALID" != "true" ]; then
+            echo "❌ One or more pubspec.yaml files have an invalid Dart SDK version."
+            exit 1
+          else
+            echo "✅ All pubspec.yaml files have a valid Dart SDK version."
+          fi
