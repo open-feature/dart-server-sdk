@@ -44,9 +44,6 @@ jobs:
 #      github.event_name == 'push' &&
 #      needs.determine-workflow.outputs.branch_name != 'main' &&
 #      needs.determine-workflow.outputs.branch_name != 'qa' &&
-<<<<<<< HEAD
-#      needs.determine-workflow.outputs.branch_name != 'development'
-=======
 #      needs.determine-workflow.outputs.branch_name != 'beta'
 >>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
 #    uses: ./.github/workflows/contributor-workflow.yml
