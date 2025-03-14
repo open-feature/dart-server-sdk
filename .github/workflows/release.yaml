@@ -33,7 +33,7 @@ jobs:
       release_tag_name: ${{ steps.release.outputs.tag_name }}
       upload_url: ${{ steps.release.outputs.upload_url }}
 
-  go-release:
+  dart-release:
     needs: release-please
     if: ${{ fromJSON(needs.release-please.outputs.release_created || false) }}
     runs-on: ubuntu-latest
