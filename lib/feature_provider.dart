@@ -11,11 +11,7 @@ enum ProviderState {
   DEGRADED,
   RECONNECTING,
   PLUGIN_ERROR,
-<<<<<<< HEAD
   MAINTENANCE,
-=======
-  MAINTENANCE
->>>>>>> ba2a59e (chore: move code into the root directory (#32))
 }
 
 /// Provider configuration
@@ -122,11 +118,7 @@ class InMemoryProvider implements FeatureProvider {
   final ProviderConfig _config;
 
   InMemoryProvider(this._flags, [ProviderConfig? config])
-<<<<<<< HEAD
     : _config = config ?? const ProviderConfig();
-=======
-      : _config = config ?? const ProviderConfig();
->>>>>>> ba2a59e (chore: move code into the root directory (#32))
 
   @override
   String get name => 'InMemoryProvider';
@@ -265,11 +257,4 @@ abstract class CommercialProvider implements FeatureProvider {
   ProviderState get state => _state;
 
   // HTTP request implementation template
-<<<<<<< HEAD
-=======
-  Future<dynamic> _makeRequest(String path,
-      {Map<String, dynamic>? params}) async {
-    throw UnimplementedError('_makeRequest must be implemented by child class');
-  }
->>>>>>> ba2a59e (chore: move code into the root directory (#32))
 }
