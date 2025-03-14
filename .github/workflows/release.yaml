@@ -43,10 +43,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ needs.release-please.outputs.release_tag_name }}
-
       - uses: dart-lang/setup-dart@v1
       - name: Install dependencies
         run: dart pub get
