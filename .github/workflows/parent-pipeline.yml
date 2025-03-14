@@ -60,6 +60,7 @@ jobs:
 #    with:
 #      branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
 #      event_name: ${{ needs.determine-workflow.outputs.event_name }}
+<<<<<<< HEAD
 #  trigger-development-workflow:
 #    name: Trigger Development Workflow
 #    needs: trigger-validation
@@ -67,6 +68,9 @@ jobs:
 #      github.event_name == 'pull_request' &&
 #      github.base_ref == 'development'
 #    uses: ./.github/workflows/development-workflow.yml
+=======
+
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
 #  trigger-beta-workflow:
 #    name: Trigger Beta Workflow
 #    needs: trigger-validation

@@ -7,6 +7,10 @@ Thank you for contributing to this project. We value your input, and any issues 
 Please read and follow our [Code of Conduct](https://github.com/open-feature/.github/blob/main/CODE_OF_CONDUCT.md).  
 **TL;DR**: Be respectful and professional.
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
 ## **Vendor Specific Details**
 
 Vendor specific details are intentionally not included in this module in order to be lightweight and agnostic.

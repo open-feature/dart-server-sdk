@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # This workflow valides that branch and commit names are standardized.
+=======
+# This workflow valides that branch and commit names are standardized for better workflow.
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
 
 name: Validation Workflow
 
@@ -24,13 +28,22 @@ jobs:
           BRANCH_NAME="${{ inputs.branch_name }}"
           echo "Branch name: $BRANCH_NAME"
 
+<<<<<<< HEAD
           if [[ "$BRANCH_NAME" =~ ^(qa|development|main|release-please--branches--main--components--openfeature_dart_server_sdk)$ ]]; then
             echo "✅ Branch name '$BRANCH_NAME' is valid for protected branches (qa, development, main)."
+=======
+          if [[ "$BRANCH_NAME" =~ ^(qa|beta|main)$ ]]; then
+            echo "✅ Branch name '$BRANCH_NAME' is valid for protected branches (qa, beta, main)."
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
           elif [[ "$BRANCH_NAME" =~ ^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9_-]+$ ]]; then
             echo "✅ Branch name '$BRANCH_NAME' follows the naming convention."
           else
             echo "❌ Branch name '$BRANCH_NAME' does not follow the naming convention: <type>/<branch-name>"
+<<<<<<< HEAD
             echo "Valid types: feat, fix, hotfix, chore, test, refactor, release, qa, main, development"
+=======
+            echo "Valid types: feat, fix, hotfix, chore, test, refactor, release, qa, beta, main"
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
             exit 1
           fi
 
@@ -100,7 +113,11 @@ jobs:
           echo "$PUBSPEC_FILES"
 
           # Define the minimum required Dart SDK version
+<<<<<<< HEAD
           MINIMUM_VERSION="3.7.2"
+=======
+          MINIMUM_VERSION="3.6.0"
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
           ALL_VALID="true"
 
           # Iterate over each pubspec.yaml file
@@ -133,4 +150,8 @@ jobs:
             exit 1
           else
             echo "✅ All pubspec.yaml files have a valid Dart SDK version."
+<<<<<<< HEAD
           fi
+=======
+          fi
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
