@@ -33,4 +33,26 @@ jobs:
       release_tag_name: ${{ steps.release.outputs.tag_name }}
       upload_url: ${{ steps.release.outputs.upload_url }}
 
+<<<<<<< HEAD
 # Publishing is handled in publish.yaml
+=======
+  dart-release:
+    needs: release-please
+    if: ${{ fromJSON(needs.release-please.outputs.release_created || false) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write # Required for authentication using OIDC
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.release-please.outputs.release_tag_name }}
+
+      - uses: dart-lang/setup-dart@v1
+      - name: Install dependencies
+        run: dart pub get
+      - name: Publish
+        run: dart pub publish --force
+>>>>>>> 0e8109a (ci: wire up the release process)
