@@ -14,21 +14,33 @@ void main(List<String> args) {
 
   print('Branch name: $branchName');
 
+<<<<<<< HEAD
   final validBranches = RegExp(r'^(qa|development|main)$');
   final validFeatureBranch = RegExp(
     r'^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9_-]+$',
   );
+=======
+  final validBranches = RegExp(r'^(qa|beta|main)$');
+  final validFeatureBranch =
+      RegExp(r'^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9_-]+$');
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
 
   if (validBranches.hasMatch(branchName) ||
       validFeatureBranch.hasMatch(branchName)) {
     print('✅ Branch name is valid.');
   } else {
     print(
+<<<<<<< HEAD
       '❌ Branch name does not follow the required convention: <type>/<branch-name>',
     );
     print(
       'Valid types: feat, fix, hotfix, chore, test, refactor, release, qa, development, main',
     );
+=======
+        '❌ Branch name does not follow the required convention: <type>/<branch-name>');
+    print(
+        'Valid types: feat, fix, hotfix, chore, test, refactor, release, qa, beta, main');
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
     exit(1);
   }
 }

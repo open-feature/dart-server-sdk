@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # This workflow analyzes the Dart Server SDK and an example project
+=======
+# This workflow analyzes the Dart Server SDK and a Go-feature-integration example project
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
 # to identify issues and commits for resolution.
 
 name: Contributor Workflow

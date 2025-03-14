@@ -471,4 +471,8 @@ packages:
     source: hosted
     version: "3.1.2"
 sdks:
+<<<<<<< HEAD
   dart: ">=3.7.1 <4.0.0"
+=======
+  dart: ">=3.6.0 <4.0.0"
+>>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
