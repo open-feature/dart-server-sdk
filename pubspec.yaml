@@ -11,7 +11,7 @@
 
 name: open_feature_dart_server_sdk
 description: A server-side Dart implementation of the OpenFeature SDK.
-version: 0.0.2+-pre
+version: 0.0.3+-pre
 homepage: https://github.com/your-repo/open-feature-dart-server-sdk
 environment:
   sdk: ^3.6.0
