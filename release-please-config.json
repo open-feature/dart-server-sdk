@@ -1,12 +1,11 @@
 {
   "signoff": "OpenFeature Bot <109696520+openfeaturebot@users.noreply.github.com>",
   "packages": {
-    ".": {
-      "release-type": "simple",
+    "open-feature-dart-server-sdk": {
+      "release-type": "dart",
       "prerelease": false,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
-      "extra-files": ["README.md"],
       "changelog-sections": [
         {
           "type": "fix",

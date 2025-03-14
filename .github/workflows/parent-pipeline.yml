@@ -44,7 +44,11 @@ jobs:
 #      github.event_name == 'push' &&
 #      needs.determine-workflow.outputs.branch_name != 'main' &&
 #      needs.determine-workflow.outputs.branch_name != 'qa' &&
+<<<<<<< HEAD
 #      needs.determine-workflow.outputs.branch_name != 'development'
+=======
+#      needs.determine-workflow.outputs.branch_name != 'beta'
+>>>>>>> main
 #    uses: ./.github/workflows/contributor-workflow.yml
 #    with:
 #      branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
@@ -61,13 +65,13 @@ jobs:
 #      branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
 #      event_name: ${{ needs.determine-workflow.outputs.event_name }}
 
-#  trigger-development-workflow:
-#    name: Trigger Development Workflow
+#  trigger-beta-workflow:
+#    name: Trigger Beta Workflow
 #    needs: trigger-validation
 #    if: |
 #      github.event_name == 'pull_request' &&
-#      github.base_ref == 'development'
-#    uses: ./.github/workflows/development-workflow.yml
+#      github.base_ref == 'beta'
+#    uses: ./.github/workflows/beta-workflow.yml
 #    with:
 #      branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
 #      event_name: ${{ needs.determine-workflow.outputs.event_name }}
