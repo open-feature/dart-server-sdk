@@ -30,7 +30,7 @@ jobs:
             echo "✅ Branch name '$BRANCH_NAME' follows the naming convention."
           else
             echo "❌ Branch name '$BRANCH_NAME' does not follow the naming convention: <type>/<branch-name>"
-            echo "Valid types: feat, fix, hotfix, chore, test, refactor, release, qa, beta, main"
+            echo "Valid types: feat, fix, hotfix, chore, test, refactor, release, development, qa, main"
             exit 1
           fi
 
@@ -100,7 +100,7 @@ jobs:
           echo "$PUBSPEC_FILES"
 
           # Define the minimum required Dart SDK version
-          MINIMUM_VERSION="3.6.0"
+          MINIMUM_VERSION="3.7.2"
           ALL_VALID="true"
 
           # Iterate over each pubspec.yaml file

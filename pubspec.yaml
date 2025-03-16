@@ -14,7 +14,7 @@ description: Official server-side Dart OpenFeature SDK.
 version: 0.0.6
 homepage: https://github.com/open-feature/dart-server-sdk
 environment:
-  sdk: ^3.6.0
+  sdk: ^3.7.2
 
 dependencies:
   # Core dependencies
