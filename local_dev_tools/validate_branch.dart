@@ -21,15 +21,22 @@ void main(List<String> args) {
   );
 =======
   final validBranches = RegExp(r'^(qa|beta|main)$');
+<<<<<<< HEAD
   final validFeatureBranch =
       RegExp(r'^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9_-]+$');
 >>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
+=======
+  final validFeatureBranch = RegExp(
+    r'^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9_-]+$',
+  );
+>>>>>>> 5eb4a58 (chore: update validation workflow)
 
   if (validBranches.hasMatch(branchName) ||
       validFeatureBranch.hasMatch(branchName)) {
     print('✅ Branch name is valid.');
   } else {
     print(
+<<<<<<< HEAD
 <<<<<<< HEAD
       '❌ Branch name does not follow the required convention: <type>/<branch-name>',
     );
@@ -41,6 +48,13 @@ void main(List<String> args) {
     print(
         'Valid types: feat, fix, hotfix, chore, test, refactor, release, qa, beta, main');
 >>>>>>> 83b6438 (feat: release v.0.0.1-pre+1 (#25))
+=======
+      '❌ Branch name does not follow the required convention: <type>/<branch-name>',
+    );
+    print(
+      'Valid types: feat, fix, hotfix, chore, test, refactor, release, development, qa, main',
+    );
+>>>>>>> 5eb4a58 (chore: update validation workflow)
     exit(1);
   }
 }
