@@ -11,7 +11,7 @@ enum ProviderState {
   DEGRADED,
   RECONNECTING,
   PLUGIN_ERROR,
-  MAINTENANCE
+  MAINTENANCE,
 }
 
 /// Provider configuration
@@ -118,7 +118,7 @@ class InMemoryProvider implements FeatureProvider {
   final ProviderConfig _config;
 
   InMemoryProvider(this._flags, [ProviderConfig? config])
-      : _config = config ?? const ProviderConfig();
+    : _config = config ?? const ProviderConfig();
 
   @override
   String get name => 'InMemoryProvider';
@@ -257,8 +257,4 @@ abstract class CommercialProvider implements FeatureProvider {
   ProviderState get state => _state;
 
   // HTTP request implementation template
-  Future<dynamic> _makeRequest(String path,
-      {Map<String, dynamic>? params}) async {
-    throw UnimplementedError('_makeRequest must be implemented by child class');
-  }
 }
