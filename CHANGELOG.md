@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.7](https://github.com/open-feature/dart-server-sdk/compare/v0.0.6...v0.0.7) (2025-03-17)
+
+
+### 🧹 Chore
+
+* update dartsdk minimum to latest version 3.7.2 ([#44](https://github.com/open-feature/dart-server-sdk/issues/44)) ([9729726](https://github.com/open-feature/dart-server-sdk/commit/9729726080e49ad86656c22778c723c724c08a96))
+
 ## [0.0.6](https://github.com/open-feature/dart-server-sdk/compare/v0.0.5...v0.0.6) (2025-03-14)
 
 
