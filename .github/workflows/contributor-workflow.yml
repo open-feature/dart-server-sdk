@@ -1,5 +1,6 @@
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 # This workflow analyzes the Dart Server SDK and an example project
 =======
 # This workflow analyzes the Dart Server SDK and a Go-feature-integration example project
@@ -7,6 +8,9 @@
 =======
 # This workflow analyzes the Dart Server SDK integration example project
 >>>>>>> f634db7 (chore: add release please branch name for Validation check)
+=======
+# This workflow analyzes the Dart Server SDK and a Go-feature-integration example project
+>>>>>>> main
 # to identify issues and commits for resolution.
 
 name: Contributor Workflow
