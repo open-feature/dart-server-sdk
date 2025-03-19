@@ -1,5 +1,4 @@
-# This workflow analyzes the Dart Server SDK and a Go-feature-integration example project
-# to identify issues and commits for resolution.
+# This workflow analyzes the Dart Server SDK and an example project
 
 name: Contributor Workflow
 

@@ -14,7 +14,7 @@ void main(List<String> args) {
 
   print('Branch name: $branchName');
 
-  final validBranches = RegExp(r'^(qa|beta|main)$');
+  final validBranches = RegExp(r'^(qa|development|main)$');
   final validFeatureBranch = RegExp(
     r'^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9_-]+$',
   );
@@ -27,7 +27,7 @@ void main(List<String> args) {
       '❌ Branch name does not follow the required convention: <type>/<branch-name>',
     );
     print(
-      'Valid types: feat, fix, hotfix, chore, test, refactor, release, development, qa, main',
+      'Valid types: feat, fix, hotfix, chore, test, refactor, release, qa, development, main',
     );
     exit(1);
   }
