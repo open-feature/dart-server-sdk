@@ -18,7 +18,6 @@
   <!-- x-release-please-start-version -->
   <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.7">
     <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.7&color=blue&style=for-the-badge" />
-
   </a>
   <a href="https://dart.dev/">
     <img alt="Built with Dart" src="https://img.shields.io/badge/Built%20with-Dart-blue.svg?style=for-the-badge" />
