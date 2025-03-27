@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.8](https://github.com/open-feature/dart-server-sdk/compare/v0.0.7...v0.0.8) (2025-03-27)
+
+
+### 🧹 Chore
+
+* workflow cleanup ([#48](https://github.com/open-feature/dart-server-sdk/issues/48)) ([d81281b](https://github.com/open-feature/dart-server-sdk/commit/d81281bd43ffc3b903517e97d4308eebef1c43c8))
+
 ## [0.0.7](https://github.com/open-feature/dart-server-sdk/compare/v0.0.6...v0.0.7) (2025-03-17)
 
 
