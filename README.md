@@ -18,6 +18,7 @@
   <!-- x-release-please-start-version -->
   <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.7">
     <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.7&color=blue&style=for-the-badge" />
+<<<<<<< HEAD
 
   <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.5">
     <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.5&color=blue&style=for-the-badge" />
@@ -25,6 +26,8 @@
   <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.6">
     <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.6&color=blue&style=for-the-badge" />
 
+=======
+>>>>>>> main
   </a>
   <a href="https://dart.dev/">
     <img alt="Built with Dart" src="https://img.shields.io/badge/Built%20with-Dart-blue.svg?style=for-the-badge" />
@@ -94,6 +97,11 @@ If the provider you're looking for hasn't been created yet, see the [develop a p
 
 Once you've added a provider as a dependency, it can be registered with OpenFeature like this:
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> main
 ### Targeting
 
 Sometimes, the value of a flag must consider some dynamic criteria about the application or user, such as the user's location, IP, email address, or the server's location.
