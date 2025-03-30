@@ -27,7 +27,7 @@
   <br/>
   <!-- Dart-Specific Badges -->
   <a href="https://pub.dev/packages/openfeature_dart_server_sdk">
-    <img alt="Pub Version" src="https://img.shields.io/pub/v/open_feature.svg?style=for-the-badge" />
+    <img alt="Pub Version" src="https://img.shields.io/pub/v/openfeature_dart_server_sdk.svg?style=for-the-badge" />
   </a>
   <a href="https://openfeature.dev/docs/reference/intro">
     <img alt="API Reference" src="https://img.shields.io/badge/API-reference-blue.svg?style=for-the-badge" />
