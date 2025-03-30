@@ -68,15 +68,15 @@ See [TBD](TBD) for the complete API documentation.
 
 | Status | Features                        | Description                                                                                                                       |
 | ------ |---------------------------------| --------------------------------------------------------------------------------------------------------------------------------- |
-| ❌      | [Providers](#providers)         | Integrate with a commercial, open source, or in-house feature management tool.                                                    |
-| ❌      | [Targeting](#targeting)         | Contextually-aware flag evaluation using [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context). |
-| ❌      | [Hooks](#hooks)                 | Add functionality to various stages of the flag evaluation life-cycle.                                                            |
-| ❌      | [Logging](#logging)             | Integrate with popular logging packages.                                                                                          |
-| ❌      | [Domains](#domains)             | Logically bind clients with providers.|
-| ❌      | [Eventing](#eventing)           | React to state changes in the provider or flag management system.                                                                 |
-| ❌      | [Shutdown](#shutdown)           | Gracefully clean up a provider during application shutdown.                                                                       |
-| ❌      | [Transaction Context Propagation](#transaction-context-propagation) | Set a specific [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context) for a transaction (e.g. an HTTP request or a thread) |
-| ❌      | [Extending](#extending)         | Extend OpenFeature with custom providers and hooks.                                                                               |
+| ✅      | [Providers](#providers)         | Integrate with a commercial, open source, or in-house feature management tool.                                                    |
+| ✅      | [Targeting](#targeting)         | Contextually-aware flag evaluation using [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context). |
+| ✅      | [Hooks](#hooks)                 | Add functionality to various stages of the flag evaluation life-cycle.                                                            |
+| ✅      | [Logging](#logging)             | Integrate with popular logging packages.                                                                                          |
+| ✅      | [Domains](#domains)             | Logically bind clients with providers.|
+| ✅      | [Eventing](#eventing)           | React to state changes in the provider or flag management system.                                                                 |
+| ✅      | [Shutdown](#shutdown)           | Gracefully clean up a provider during application shutdown.                                                                       |
+| ✅      | [Transaction Context Propagation](#transaction-context-propagation) | Set a specific [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context) for a transaction (e.g. an HTTP request or a thread) |
+| ✅      | [Extending](#extending)         | Extend OpenFeature with custom providers and hooks.                                                                               |
 
 <sub>Implemented: ✅ | In-progress: ⚠️ | Not implemented yet: ❌</sub>
 
