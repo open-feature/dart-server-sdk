@@ -36,7 +36,7 @@
     <img alt="Code Coverage" src="https://codecov.io/gh/open-feature/dart-server-sdk/branch/main/graph/badge.svg?token=FZ17BHNSU5" />
   </a>
   <a href="https://github.com/open-feature/dart-server-sdk/actions/workflows/validation-workflow.yml">
-    <img alt="GitHub CI Status" src="https://github.com/open-feature/dart-server-sdk/actions/workflows/ci.yml/badge.svg?style=for-the-badge" />
+    <img alt="GitHub CI Status" src="https://github.com/open-feature/dart-server-sdk/actions/workflows/validation-workflow.yml/badge.svg?style=for-the-badge" />
   </a>
 </p>
 <!-- x-hide-in-docs-start -->
