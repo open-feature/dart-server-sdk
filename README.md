@@ -26,17 +26,17 @@
   <!-- x-release-please-end -->
   <br/>
   <!-- Dart-Specific Badges -->
-  <a href="https://pub.dev/packages/open_feature">
-    <img alt="Pub Version" src="https://img.shields.io/pub/v/open_feature.svg?style=for-the-badge" />
+  <a href="https://pub.dev/packages/openfeature_dart_server_sdk">
+    <img alt="Pub Version" src="https://img.shields.io/pub/v/openfeature_dart_server_sdk.svg?style=for-the-badge" />
   </a>
-  <a href="https://pub.dev/documentation/open_feature/latest/">
+  <a href="https://openfeature.dev/docs/reference/intro">
     <img alt="API Reference" src="https://img.shields.io/badge/API-reference-blue.svg?style=for-the-badge" />
   </a>
   <a href="https://codecov.io/gh/open-feature/dart-server-sdk">
     <img alt="Code Coverage" src="https://codecov.io/gh/open-feature/dart-server-sdk/branch/main/graph/badge.svg?token=FZ17BHNSU5" />
   </a>
-  <a href="https://github.com/open-feature/dart-server-sdk/actions/workflows/ci.yml">
-    <img alt="GitHub CI Status" src="https://github.com/open-feature/dart-server-sdk/actions/workflows/ci.yml/badge.svg?style=for-the-badge" />
+  <a href="https://github.com/open-feature/dart-server-sdk/actions/workflows/validation-workflow.yml">
+    <img alt="GitHub CI Status" src="https://github.com/open-feature/dart-server-sdk/actions/workflows/validation-workflow.yml/badge.svg?style=for-the-badge" />
   </a>
 </p>
 <!-- x-hide-in-docs-start -->
@@ -68,15 +68,15 @@ See [TBD](TBD) for the complete API documentation.
 
 | Status | Features                        | Description                                                                                                                       |
 | ------ |---------------------------------| --------------------------------------------------------------------------------------------------------------------------------- |
-| ❌      | [Providers](#providers)         | Integrate with a commercial, open source, or in-house feature management tool.                                                    |
-| ❌      | [Targeting](#targeting)         | Contextually-aware flag evaluation using [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context). |
-| ❌      | [Hooks](#hooks)                 | Add functionality to various stages of the flag evaluation life-cycle.                                                            |
-| ❌      | [Logging](#logging)             | Integrate with popular logging packages.                                                                                          |
-| ❌      | [Domains](#domains)             | Logically bind clients with providers.|
-| ❌      | [Eventing](#eventing)           | React to state changes in the provider or flag management system.                                                                 |
-| ❌      | [Shutdown](#shutdown)           | Gracefully clean up a provider during application shutdown.                                                                       |
-| ❌      | [Transaction Context Propagation](#transaction-context-propagation) | Set a specific [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context) for a transaction (e.g. an HTTP request or a thread) |
-| ❌      | [Extending](#extending)         | Extend OpenFeature with custom providers and hooks.                                                                               |
+| ✅      | [Providers](#providers)         | Integrate with a commercial, open source, or in-house feature management tool.                                                    |
+| ✅      | [Targeting](#targeting)         | Contextually-aware flag evaluation using [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context). |
+| ✅      | [Hooks](#hooks)                 | Add functionality to various stages of the flag evaluation life-cycle.                                                            |
+| ✅      | [Logging](#logging)             | Integrate with popular logging packages.                                                                                          |
+| ✅      | [Domains](#domains)             | Logically bind clients with providers.|
+| ✅      | [Eventing](#eventing)           | React to state changes in the provider or flag management system.                                                                 |
+| ✅      | [Shutdown](#shutdown)           | Gracefully clean up a provider during application shutdown.                                                                       |
+| ✅      | [Transaction Context Propagation](#transaction-context-propagation) | Set a specific [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context) for a transaction (e.g. an HTTP request or a thread) |
+| ✅      | [Extending](#extending)         | Extend OpenFeature with custom providers and hooks.                                                                               |
 
 <sub>Implemented: ✅ | In-progress: ⚠️ | Not implemented yet: ❌</sub>
 
