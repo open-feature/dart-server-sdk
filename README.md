@@ -61,8 +61,11 @@ Dart language version: [3.7.2](https://dart.dev/get-dart/archive)
 ```yaml
 dependencies:
   openfeature_dart_server_sdk: ^0.0.6
+```
 
+```
 Then run:
+
 dart pub get
 ```
 
