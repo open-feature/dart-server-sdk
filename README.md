@@ -63,9 +63,9 @@ dependencies:
   openfeature_dart_server_sdk: ^0.0.6
 ```
 
-```
-Then run:
+### Then run:
 
+```
 dart pub get
 ```
 
