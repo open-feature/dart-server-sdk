@@ -1,2 +1,10 @@
-.dart_tool/
+# Global Repo Rules
+
+# Ignore all IDE settings
+**/.idea/
+**/.vscode/
+
+# Ignore Dart local build tools
+**/.dart_tool/
 **/pubspec.lock
+coverage/
