@@ -1,5 +1,3 @@
-# This workflow valides that branch and commit names are standardized for better workflow.
-
 name: Coverage Workflow
 
 on:
@@ -13,6 +11,32 @@ on:
         type: string
 
 jobs:
+  test-and-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Run tests with coverage
+        run: dart test --coverage=coverage
+
+      - name: Generate LCOV report
+        run: |
+          dart run coverage:format_coverage \
+            --packages=.packages \
+            --report-on=lib \
+            --lcov \
+            -i coverage \
+            --out=coverage/lcov.info
+
   upload-coverage:
     runs-on: ubuntu-latest
     needs: test-and-upload
