@@ -31,7 +31,6 @@ jobs:
       - name: Generate LCOV report
         run: |
           dart run coverage:format_coverage \
-            --packages=.packages \
             --report-on=lib \
             --lcov \
             -i coverage \
