@@ -4,6 +4,7 @@
 **/.idea/
 **/.vscode/
 
-# Ignore Dart clocal build tools
+# Ignore Dart local build tools
 **/.dart_tool/
 **/pubspec.lock
+coverage/
