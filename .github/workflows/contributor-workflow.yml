@@ -28,7 +28,6 @@ jobs:
       - name: Install Dependencies
         run: |
           echo "Installing dependencies for core SDK..."
-          cd dart-server-sdk-openfeature
           if ! dart pub get; then
             echo "❌ Failed to install dependencies for the core SDK. Exiting..."
             exit 1
@@ -37,13 +36,11 @@ jobs:
       - name: Check for Outdated Dependencies
         run: |
           echo "Checking for outdated dependencies..."
-          cd dart-server-sdk-openfeature
           dart pub outdated || true
 
       - name: Run Static Analysis
         run: |
           echo "Running static analysis for core SDK..."
-          cd dart-server-sdk-openfeature
           if ! dart analyze lib/ > analysis_report.txt 2> error_log.txt; then
             echo "❌ Static analysis failed with errors. See details below:"
             cat error_log.txt
@@ -55,7 +52,7 @@ jobs:
       - name: Categorize and Count Analysis Results
         run: |
           echo "Categorizing analysis results..."
-          cd dart-server-sdk-openfeature
+          
           grep -i "info" analysis_report.txt > info_report.txt || echo "No informational messages found."
           grep -i "warning" analysis_report.txt > warning_report.txt || echo "No warnings found."
           grep -i "error" analysis_report.txt > error_report.txt || echo "No errors found."
@@ -89,7 +86,7 @@ jobs:
       - name: Identify Specific Commits for Issues
         run: |
           echo "Identifying specific commits for issues in the core SDK..."
-          cd dart-server-sdk-openfeature
+          
           while IFS= read -r line; do
             file=$(echo $line | awk -F ':' '{print $1}')
             if [[ -n "$file" ]]; then
