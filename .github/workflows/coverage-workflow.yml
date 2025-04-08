@@ -30,11 +30,15 @@ jobs:
 
       - name: Generate LCOV report
         run: |
+          dart pub global activate coverage
           dart run coverage:format_coverage \
             --report-on=lib \
             --lcov \
             -i coverage \
             --out=coverage/lcov.info
+
+      - name: List coverage files
+        run: ls -al coverage
 
   upload-coverage:
     runs-on: ubuntu-latest
