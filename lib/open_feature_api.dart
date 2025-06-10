@@ -9,7 +9,7 @@ enum OpenFeatureEventType {
   contextUpdated,
   error,
   shutdown,
-  domainUpdated
+  domainUpdated,
 }
 
 class OpenFeatureEvent {
@@ -33,7 +33,10 @@ class OpenFeatureEvaluationContext {
 abstract class OpenFeatureHook {
   void beforeEvaluation(String flagKey, Map<String, dynamic>? context);
   void afterEvaluation(
-      String flagKey, dynamic result, Map<String, dynamic>? context);
+    String flagKey,
+    dynamic result,
+    Map<String, dynamic>? context,
+  );
 }
 
 class OpenFeatureAPI {
@@ -51,13 +54,14 @@ class OpenFeatureAPI {
   final StreamController<Map<String, String>> _domainUpdatesController;
 
   OpenFeatureAPI._internal()
-      : _provider = InMemoryProvider({}),
-        _providerStreamController =
-            StreamController<FeatureProvider>.broadcast(),
-        _eventStreamController = StreamController<OpenFeatureEvent>.broadcast(),
-        _domainUpdatesController =
-            StreamController<Map<String, String>>.broadcast() {
+    : _provider = InMemoryProvider({}),
+      _providerStreamController = StreamController<FeatureProvider>.broadcast(),
+      _eventStreamController = StreamController<OpenFeatureEvent>.broadcast(),
+      _domainUpdatesController =
+          StreamController<Map<String, String>>.broadcast() {
     _configureLogging();
+    // Initialize the default provider
+    _provider.initialize();
   }
 
   factory OpenFeatureAPI() {
@@ -69,16 +73,25 @@ class OpenFeatureAPI {
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((record) {
       print(
-          '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}');
+        '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
+      );
     });
   }
 
-  void setProvider(FeatureProvider provider) {
+  Future<void> setProvider(FeatureProvider provider) async {
     _logger.info('Setting provider: ${provider.name}');
+
+    // Ensure provider is initialized
+    if (provider.state == ProviderState.NOT_READY) {
+      await provider.initialize();
+    }
+
     _provider = provider;
     _providerStreamController.add(provider);
-    _emitEvent(OpenFeatureEventType.providerChanged,
-        'Provider changed to ${provider.name}');
+    _emitEvent(
+      OpenFeatureEventType.providerChanged,
+      'Provider changed to ${provider.name}',
+    );
   }
 
   FeatureProvider get provider => _provider;
@@ -110,12 +123,17 @@ class OpenFeatureAPI {
 
   void bindClientToProvider(String clientId, String providerId) {
     _domainManager.bindClientToProvider(clientId, providerId);
-    _emitEvent(OpenFeatureEventType.domainUpdated,
-        'Client $clientId bound to provider $providerId');
+    _emitEvent(
+      OpenFeatureEventType.domainUpdated,
+      'Client $clientId bound to provider $providerId',
+    );
   }
 
-  Future<bool> evaluateBooleanFlag(String flagKey, String clientId,
-      {Map<String, dynamic>? context}) async {
+  Future<bool> evaluateBooleanFlag(
+    String flagKey,
+    String clientId, {
+    Map<String, dynamic>? context,
+  }) async {
     final providerId = _domainManager.getProviderForClient(clientId);
     if (providerId == null) {
       _logger.warning('No provider found for client $clientId');
@@ -124,25 +142,53 @@ class OpenFeatureAPI {
 
     try {
       _runBeforeEvaluationHooks(flagKey, context);
-      final result =
-          await _provider.getBooleanFlag(flagKey, false, context: context);
+      final result = await _provider.getBooleanFlag(
+        flagKey,
+        false,
+        context: context,
+      );
 
-      _emitEvent(OpenFeatureEventType.flagEvaluated,
-          'Flag $flagKey evaluated for client $clientId',
-          data: {'result': result.value, 'context': context});
+      _emitEvent(
+        OpenFeatureEventType.flagEvaluated,
+        'Flag $flagKey evaluated for client $clientId',
+        data: {
+          'result': result.value,
+          'context': context,
+          'errorCode': result.errorCode?.name,
+        },
+      );
 
       _runAfterEvaluationHooks(flagKey, result.value, context);
+
+      // Log errors but still return the value (which is the default if error occurred)
+      if (result.errorCode != null) {
+        _logger.warning('Flag evaluation error: ${result.errorMessage}');
+        _emitEvent(
+          OpenFeatureEventType.error,
+          'Error evaluating flag $flagKey',
+          data: {
+            'errorCode': result.errorCode?.name,
+            'errorMessage': result.errorMessage,
+          },
+        );
+      }
+
       return result.value;
     } catch (error) {
       _logger.warning('Error evaluating flag $flagKey: $error');
-      _emitEvent(OpenFeatureEventType.error, 'Error evaluating flag $flagKey',
-          data: error);
+      _emitEvent(
+        OpenFeatureEventType.error,
+        'Error evaluating flag $flagKey',
+        data: error,
+      );
       return false;
     }
   }
 
   void _runBeforeEvaluationHooks(
-      String flagKey, Map<String, dynamic>? context) {
+    String flagKey,
+    Map<String, dynamic>? context,
+  ) {
     for (var hook in _hooks) {
       try {
         hook.beforeEvaluation(flagKey, context);
@@ -153,7 +199,10 @@ class OpenFeatureAPI {
   }
 
   void _runAfterEvaluationHooks(
-      String flagKey, dynamic result, Map<String, dynamic>? context) {
+    String flagKey,
+    dynamic result,
+    Map<String, dynamic>? context,
+  ) {
     for (var hook in _hooks) {
       try {
         hook.afterEvaluation(flagKey, result, context);
