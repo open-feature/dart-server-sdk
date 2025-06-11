@@ -6,24 +6,34 @@ import 'helpers/open_feature_api_test_helpers.dart';
 
 class TestProvider implements FeatureProvider {
   bool booleanValue = true;
+  ProviderState _state = ProviderState.NOT_READY;
 
   @override
   String get name => 'TestProvider';
 
   @override
-  ProviderState get state => ProviderState.READY;
+  ProviderState get state => _state;
 
   @override
   ProviderConfig get config => ProviderConfig();
 
   @override
-  Future<void> initialize([Map<String, dynamic>? config]) async {}
+  ProviderMetadata get metadata => ProviderMetadata(name: 'TestProvider');
 
   @override
-  Future<void> connect() async {}
+  Future<void> initialize([Map<String, dynamic>? config]) async {
+    _state = ProviderState.READY;
+  }
 
   @override
-  Future<void> shutdown() async {}
+  Future<void> connect() async {
+    _state = ProviderState.READY;
+  }
+
+  @override
+  Future<void> shutdown() async {
+    _state = ProviderState.SHUTDOWN;
+  }
 
   @override
   Future<FlagEvaluationResult<bool>> getBooleanFlag(
@@ -31,10 +41,22 @@ class TestProvider implements FeatureProvider {
     bool defaultValue, {
     Map<String, dynamic>? context,
   }) async {
+    if (_state != ProviderState.READY) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.PROVIDER_NOT_READY,
+        'Provider not ready',
+        evaluatorId: name,
+      );
+    }
+
     return FlagEvaluationResult(
       flagKey: flagKey,
       value: booleanValue,
+      reason: 'STATIC',
       evaluatedAt: DateTime.now(),
+      evaluatorId: name,
     );
   }
 
@@ -85,7 +107,10 @@ class TestHook implements OpenFeatureHook {
 
   @override
   void afterEvaluation(
-      String flagKey, dynamic result, Map<String, dynamic>? context) {
+    String flagKey,
+    dynamic result,
+    Map<String, dynamic>? context,
+  ) {
     callLog.add('after:$flagKey:$result');
   }
 }
@@ -109,14 +134,15 @@ void main() {
       expect(identical(instance1, instance2), isTrue);
     });
 
-    test('sets and gets provider', () {
-      api.setProvider(provider);
+    test('sets and gets provider', () async {
+      await api.setProvider(provider);
       expect(api.provider, equals(provider));
+      expect(provider.state, equals(ProviderState.READY));
     });
 
-    test('sets and gets global context', () {
+    test('sets and gets global context', () async {
       final context = OpenFeatureEvaluationContext({'key': 'value'});
-      api.setProvider(provider);
+      await api.setProvider(provider);
       api.setGlobalContext(context);
       expect(api.globalContext?.attributes['key'], equals('value'));
     });
@@ -131,7 +157,7 @@ void main() {
     });
 
     test('evaluates boolean flag with hooks', () async {
-      api.setProvider(provider);
+      await api.setProvider(provider);
       api.addHooks([hook]);
       api.bindClientToProvider('test-client', provider.name);
 
@@ -142,8 +168,19 @@ void main() {
       expect(hook.callLog, contains('after:test-flag:true'));
     });
 
+    test('handles provider not ready gracefully', () async {
+      provider._state = ProviderState.NOT_READY;
+      await api.setProvider(provider);
+      api.bindClientToProvider('test-client', provider.name);
+
+      final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
+
+      // Should return default value when provider has error
+      expect(result, isFalse);
+    });
+
     test('binds client to provider', () async {
-      api.setProvider(provider);
+      await api.setProvider(provider);
 
       final eventCompleter = Completer<OpenFeatureEvent>();
       final subscription = api.events.listen((event) {
@@ -169,7 +206,7 @@ void main() {
         }
       });
 
-      api.setProvider(provider);
+      await api.setProvider(provider);
 
       final event = await eventCompleter.future;
       expect(event.message, contains(provider.name));
@@ -177,8 +214,30 @@ void main() {
       await subscription.cancel();
     });
 
+    test('emits error events for flag evaluation issues', () async {
+      provider.booleanValue = false;
+      provider._state = ProviderState.ERROR;
+      await api.setProvider(provider);
+      api.bindClientToProvider('test-client', provider.name);
+
+      final errorEvents = <OpenFeatureEvent>[];
+      final subscription = api.events.listen((event) {
+        if (event.type == OpenFeatureEventType.error) {
+          errorEvents.add(event);
+        }
+      });
+
+      await api.evaluateBooleanFlag('error-flag', 'test-client');
+
+      // Wait for events to be processed
+      await Future.delayed(Duration(milliseconds: 10));
+
+      await subscription.cancel();
+      expect(errorEvents.isNotEmpty, isTrue);
+    });
+
     test('handles evaluation errors gracefully', () async {
-      api.setProvider(provider);
+      await api.setProvider(provider);
       provider.booleanValue = false;
       api.bindClientToProvider('test-client', provider.name);
 
@@ -188,15 +247,27 @@ void main() {
 
     test('streams provider updates', () async {
       final completer = Completer<FeatureProvider>();
-      final subscription =
-          api.providerUpdates.listen((p) => completer.complete(p));
+      final subscription = api.providerUpdates.listen(
+        (p) => completer.complete(p),
+      );
 
-      api.setProvider(provider);
+      await api.setProvider(provider);
 
       final emittedProvider = await completer.future;
       expect(emittedProvider, equals(provider));
 
       await subscription.cancel();
+    });
+
+    test('initializes default provider', () {
+      // The API should have a default InMemoryProvider that's ready
+      expect(api.provider, isA<InMemoryProvider>());
+      expect(api.provider.state, equals(ProviderState.READY));
+    });
+
+    test('provider metadata is accessible', () async {
+      await api.setProvider(provider);
+      expect(api.provider.metadata.name, equals('TestProvider'));
     });
   });
 }
