@@ -41,17 +41,19 @@ class ClientMetrics {
   Duration get averageResponseTime {
     if (responseTimes.isEmpty) return Duration.zero;
     final total = responseTimes.fold<int>(
-        0, (sum, duration) => sum + duration.inMilliseconds);
+      0,
+      (sum, duration) => sum + duration.inMilliseconds,
+    );
     return Duration(milliseconds: total ~/ responseTimes.length);
   }
 
   Map<String, dynamic> toJson() => {
-        'flagEvaluations': flagEvaluations,
-        'cacheHits': cacheHits,
-        'cacheMisses': cacheMisses,
-        'averageResponseTime': averageResponseTime.inMilliseconds,
-        'errorCounts': errorCounts,
-      };
+    'flagEvaluations': flagEvaluations,
+    'cacheHits': cacheHits,
+    'cacheMisses': cacheMisses,
+    'averageResponseTime': averageResponseTime.inMilliseconds,
+    'errorCounts': errorCounts,
+  };
 }
 
 class FeatureClient {
@@ -75,12 +77,17 @@ class FeatureClient {
     TransactionContextManager? transactionManager,
     Duration cacheTtl = const Duration(minutes: 5),
     int maxCacheSize = 1000,
-  })  : _hookManager = hookManager,
-        _defaultContext = defaultContext,
-        _provider = provider ?? InMemoryProvider({}),
-        _transactionManager = transactionManager ?? TransactionContextManager(),
-        _cacheTtl = cacheTtl,
-        _maxCacheSize = maxCacheSize;
+  }) : _hookManager = hookManager,
+       _defaultContext = defaultContext,
+       _provider = provider ?? InMemoryProvider({}),
+       _transactionManager = transactionManager ?? TransactionContextManager(),
+       _cacheTtl = cacheTtl,
+       _maxCacheSize = maxCacheSize {
+    // Ensure provider is initialized
+    if (_provider.state == ProviderState.NOT_READY) {
+      _provider.initialize();
+    }
+  }
 
   String _generateCacheKey(String flagKey, Map<String, dynamic>? context) {
     final buffer = StringBuffer(flagKey);
@@ -153,6 +160,15 @@ class FeatureClient {
 
       _addToCache(cacheKey, result.value, contextHash);
 
+      // Handle errors from the provider
+      if (result.errorCode != null) {
+        _logger.warning(
+          'Flag evaluation error for $flagKey: ${result.errorMessage}',
+        );
+        _metrics.errorCounts[result.errorCode!.name] =
+            (_metrics.errorCounts[result.errorCode!.name] ?? 0) + 1;
+      }
+
       _metrics.responseTimes.add(DateTime.now().difference(startTime));
       return result.value;
     } catch (e) {
@@ -168,11 +184,7 @@ class FeatureClient {
       );
       return defaultValue;
     } finally {
-      await _hookManager.executeHooks(
-        HookStage.FINALLY,
-        flagKey,
-        context,
-      );
+      await _hookManager.executeHooks(HookStage.FINALLY, flagKey, context);
     }
   }
 
@@ -180,61 +192,56 @@ class FeatureClient {
     String flagKey, {
     EvaluationContext? context,
     bool defaultValue = false,
-  }) =>
-      _evaluateFlag(
-        flagKey,
-        defaultValue,
-        (ctx) => _provider.getBooleanFlag(flagKey, defaultValue, context: ctx),
-        context: context?.attributes,
-      );
+  }) => _evaluateFlag(
+    flagKey,
+    defaultValue,
+    (ctx) => _provider.getBooleanFlag(flagKey, defaultValue, context: ctx),
+    context: context?.attributes,
+  );
 
   Future<String> getStringFlag(
     String flagKey, {
     EvaluationContext? context,
     String defaultValue = '',
-  }) =>
-      _evaluateFlag(
-        flagKey,
-        defaultValue,
-        (ctx) => _provider.getStringFlag(flagKey, defaultValue, context: ctx),
-        context: context?.attributes,
-      );
+  }) => _evaluateFlag(
+    flagKey,
+    defaultValue,
+    (ctx) => _provider.getStringFlag(flagKey, defaultValue, context: ctx),
+    context: context?.attributes,
+  );
 
   Future<int> getIntegerFlag(
     String flagKey, {
     EvaluationContext? context,
     int defaultValue = 0,
-  }) =>
-      _evaluateFlag(
-        flagKey,
-        defaultValue,
-        (ctx) => _provider.getIntegerFlag(flagKey, defaultValue, context: ctx),
-        context: context?.attributes,
-      );
+  }) => _evaluateFlag(
+    flagKey,
+    defaultValue,
+    (ctx) => _provider.getIntegerFlag(flagKey, defaultValue, context: ctx),
+    context: context?.attributes,
+  );
 
   Future<double> getDoubleFlag(
     String flagKey, {
     EvaluationContext? context,
     double defaultValue = 0.0,
-  }) =>
-      _evaluateFlag(
-        flagKey,
-        defaultValue,
-        (ctx) => _provider.getDoubleFlag(flagKey, defaultValue, context: ctx),
-        context: context?.attributes,
-      );
+  }) => _evaluateFlag(
+    flagKey,
+    defaultValue,
+    (ctx) => _provider.getDoubleFlag(flagKey, defaultValue, context: ctx),
+    context: context?.attributes,
+  );
 
   Future<Map<String, dynamic>> getObjectFlag(
     String flagKey, {
     EvaluationContext? context,
     Map<String, dynamic> defaultValue = const {},
-  }) =>
-      _evaluateFlag(
-        flagKey,
-        defaultValue,
-        (ctx) => _provider.getObjectFlag(flagKey, defaultValue, context: ctx),
-        context: context?.attributes,
-      );
+  }) => _evaluateFlag(
+    flagKey,
+    defaultValue,
+    (ctx) => _provider.getObjectFlag(flagKey, defaultValue, context: ctx),
+    context: context?.attributes,
+  );
 
   ClientMetrics getMetrics() => _metrics;
 
