@@ -10,6 +10,7 @@ enum OpenFeatureEventType {
   error,
   shutdown,
   domainUpdated,
+  domainUpdated,
 }
 
 class OpenFeatureEvent {

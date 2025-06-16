@@ -205,6 +205,9 @@ abstract class CachedFeatureProvider implements FeatureProvider {
   ProviderMetadata get metadata => _metadata;
 
   @override
+  ProviderMetadata get metadata => _metadata;
+
+  @override
   String get name => _metadata.name;
 
   /// Set provider state
@@ -460,7 +463,6 @@ class InMemoryProvider extends CachedFeatureProvider {
         metadata: const ProviderMetadata(name: 'InMemoryProvider'),
         config: config,
       );
-
   @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
     if (state == ProviderState.SHUTDOWN) {
@@ -478,6 +480,23 @@ class InMemoryProvider extends CachedFeatureProvider {
       setState(ProviderState.READY);
     } catch (e) {
       setState(ProviderState.ERROR);
+      rethrow;
+    }
+    if (_state == ProviderState.SHUTDOWN) {
+      throw ProviderException(
+        'Cannot initialize a shutdown provider',
+        code: ErrorCode.PROVIDER_NOT_READY,
+      );
+    }
+
+    _state = ProviderState.CONNECTING;
+
+    try {
+      // Simulate initialization work
+      await Future.delayed(Duration(milliseconds: 10));
+      _state = ProviderState.READY;
+    } catch (e) {
+      _state = ProviderState.ERROR;
       rethrow;
     }
   }

@@ -98,7 +98,7 @@ class IsolatedDefaultProvider implements FeatureProvider {
   String get name => 'InMemoryProvider';
 
   @override
-  ProviderState get state => ProviderState.READY;
+  ProviderState get state => _state;
 
   @override
   ProviderConfig get config => ProviderConfig();
@@ -107,13 +107,25 @@ class IsolatedDefaultProvider implements FeatureProvider {
   ProviderMetadata get metadata => ProviderMetadata(name: 'InMemoryProvider');
 
   @override
-  Future<void> initialize([Map<String, dynamic>? config]) async {}
+  ProviderMetadata get metadata => ProviderMetadata(name: 'InMemoryProvider');
 
   @override
-  Future<void> connect() async {}
+  ProviderMetadata get metadata => ProviderMetadata(name: 'TestProvider');
 
   @override
-  Future<void> shutdown() async {}
+  Future<void> initialize([Map<String, dynamic>? config]) async {
+    _state = ProviderState.READY;
+  }
+
+  @override
+  Future<void> connect() async {
+    _state = ProviderState.READY;
+  }
+
+  @override
+  Future<void> shutdown() async {
+    _state = ProviderState.SHUTDOWN;
+  }
 
   @override
   Future<FlagEvaluationResult<bool>> getBooleanFlag(
@@ -180,16 +192,7 @@ class IsolatedTestProvider implements FeatureProvider {
   ProviderConfig get config => ProviderConfig();
 
   @override
-  ProviderMetadata get metadata => ProviderMetadata(name: 'TestProvider');
-
-  @override
-  Future<void> initialize([Map<String, dynamic>? config]) async {
-    if (_shouldFailInitialization) {
-      _state = ProviderState.ERROR;
-      throw Exception('Initialization failed');
-    }
-    _state = ProviderState.READY;
-  }
+Future<void> initialize([Map<String, dynamic>? config]) async {}
 
   @override
   Future<void> connect() async {
@@ -331,6 +334,14 @@ void main() {
       expect(hook.calls, contains('after:test-flag:true'));
     });
 
+
+
+      final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
+
+    // Should return default value when provider has error
+      expect(result, isFalse);
+    });
+
     test('handles provider not ready gracefully', () async {
       final provider = IsolatedTestProvider(
         {'test-flag': true},
@@ -369,6 +380,28 @@ void main() {
       expect(true, isTrue);
     });
 
+    test('emits error events for flag evaluation issues', () async {
+      provider.booleanValue = false;
+      provider._state = ProviderState.ERROR;
+      await api.setProvider(provider);
+      api.bindClientToProvider('test-client', provider.name);
+
+      final errorEvents = <OpenFeatureEvent>[];
+      final subscription = api.events.listen((event) {
+        if (event.type == OpenFeatureEventType.error) {
+          errorEvents.add(event);
+        }
+      });
+
+      await api.evaluateBooleanFlag('error-flag', 'test-client');
+
+      //Wait for events to be processed
+      await Future.delayed(Duration(milliseconds: 10));
+
+      await subscription.cancel();
+      expect(errorEvents.isNotEmpty, isTrue);
+    });
+
     test('handles evaluation errors gracefully', () async {
       final provider = IsolatedTestProvider({'string-flag': 'not-boolean'});
 
@@ -398,6 +431,17 @@ void main() {
 
     test('provider metadata is accessible', () async {
       final provider = IsolatedTestProvider({'test': true});
+      await api.setProvider(provider);
+      expect(api.provider.metadata.name, equals('TestProvider'));
+    });
+
+    test('initializes default provider', () {
+      // The API should have a default InMemoryProvider that's ready
+      expect(api.provider, isA<InMemoryProvider>());
+      expect(api.provider.state, equals(ProviderState.READY));
+    });
+
+    test('provider metadata is accessible', () async {
       await api.setProvider(provider);
       expect(api.provider.metadata.name, equals('TestProvider'));
     });
