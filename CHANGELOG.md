@@ -1,6 +1,5 @@
 # Changelog
 
-
 ## [0.0.9](https://github.com/open-feature/dart-server-sdk/compare/v0.0.8...v0.0.9) (2025-04-08)
 
 
@@ -8,6 +7,7 @@
 
 * merge Development main ([#56](https://github.com/open-feature/dart-server-sdk/issues/56)) ([8c2c222](https://github.com/open-feature/dart-server-sdk/commit/8c2c22247e6347903c529783cd0477739fff1ecb))
 
+## [0.0.8](https://github.com/open-feature/dart-server-sdk/compare/v0.0.7...v0.0.8) (2025-04-01)
 
 
 
