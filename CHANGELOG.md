@@ -10,6 +10,7 @@
 ## [0.0.8](https://github.com/open-feature/dart-server-sdk/compare/v0.0.7...v0.0.8) (2025-04-01)
 
 
+
 ### 🧹 Chore
 
 * merge development to main ([#52](https://github.com/open-feature/dart-server-sdk/issues/52)) ([6b945f3](https://github.com/open-feature/dart-server-sdk/commit/6b945f3877e26714760f1cb7347b48e4aa8ab338))
