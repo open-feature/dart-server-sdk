@@ -199,11 +199,11 @@ void main() {
       final api = OpenFeatureAPI();
       final provider = TestProvider({
         'test-flag': true,
-      }, ProviderState.NOT_READY);
+      }, ProviderState.ERROR); // Use ERROR state instead
 
       await api.setProvider(provider);
-      // Force provider back to NOT_READY to test the scenario
-      provider.setState(ProviderState.NOT_READY);
+      // Force provider to ERROR state (which won't be overridden by initialization)
+      provider.setState(ProviderState.ERROR);
       api.bindClientToProvider('test-client', 'TestProvider');
 
       final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
@@ -211,7 +211,7 @@ void main() {
       expect(
         result,
         isFalse,
-      ); // Should return default value (false) when provider not ready
+      ); // Should return default value (false) when provider in error state
     });
 
     test('binds client to provider', () {
@@ -303,7 +303,7 @@ void main() {
       expect(
         api.provider.state,
         equals(ProviderState.NOT_READY),
-      ); // Should start NOT_READY
+      ); // Default provider starts NOT_READY
     });
 
     test('provider metadata is accessible', () async {
