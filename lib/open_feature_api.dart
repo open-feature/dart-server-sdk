@@ -78,8 +78,11 @@ class OpenFeatureAPI {
   }
 
   void _initializeDefaultProvider() {
+    // Create default provider that bypasses initialization
     _provider = InMemoryProvider({});
+
     // Per OpenFeature spec: default provider should be immediately READY
+    // Set state directly without calling initialize() to avoid CONNECTING state
     if (_provider is CachedFeatureProvider) {
       (_provider as CachedFeatureProvider).setState(ProviderState.READY);
     }
@@ -174,7 +177,7 @@ class OpenFeatureAPI {
         'Flag evaluation attempted on non-ready provider',
         data: {'flagKey': flagKey, 'providerState': _provider.state.name},
       );
-      return false; // Return default value
+      return false; // Return default value per OpenFeature spec
     }
 
     try {
