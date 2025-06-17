@@ -213,7 +213,11 @@ void main() {
         true,
       );
 
+      // setProvider should not throw even if initialization fails
       await api.setProvider(provider);
+      // Provider should be in ERROR state after failed initialization
+      expect(api.provider.state, equals(ProviderState.ERROR));
+
       api.bindClientToProvider('test-client', 'TestProvider');
 
       final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
@@ -310,11 +314,8 @@ void main() {
 
       expect(api.provider, isNotNull);
       expect(api.provider.name, equals('InMemoryProvider'));
-      // Default provider can be in NOT_READY or CONNECTING state initially
-      expect([
-        ProviderState.NOT_READY,
-        ProviderState.CONNECTING,
-      ], contains(api.provider.state));
+      // Default provider should be READY after initialization
+      expect(api.provider.state, equals(ProviderState.READY));
     });
 
     test('provider metadata is accessible', () async {

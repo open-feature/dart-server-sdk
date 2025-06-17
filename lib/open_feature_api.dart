@@ -79,29 +79,43 @@ class OpenFeatureAPI {
 
   void _initializeDefaultProvider() {
     _provider = InMemoryProvider({});
-    // DON'T force READY state - let provider initialize naturally
+    // For default empty provider, set READY state directly to avoid async race condition
+    if (_provider is CachedFeatureProvider) {
+      (_provider as CachedFeatureProvider).setState(ProviderState.READY);
+    }
     _logger.info('Default provider created (NOT_READY state)');
   }
 
   Future<void> setProvider(FeatureProvider provider) async {
     _logger.info('Setting provider: ${provider.name}');
 
-    // Ensure provider is initialized properly
-    if (provider.state == ProviderState.NOT_READY) {
-      try {
+    try {
+      // Ensure provider is initialized
+      if (provider.state == ProviderState.NOT_READY) {
         await provider.initialize();
-      } catch (e) {
-        _logger.severe('Failed to initialize provider: $e');
-        // Provider remains in error state, which is correct
       }
-    }
 
-    _provider = provider;
-    _providerStreamController.add(provider);
-    _emitEvent(
-      OpenFeatureEventType.providerChanged,
-      'Provider changed to ${provider.name}',
-    );
+      _provider = provider;
+      _providerStreamController.add(provider);
+      _emitEvent(
+        OpenFeatureEventType.providerChanged,
+        'Provider changed to ${provider.name}',
+      );
+    } catch (error) {
+      _logger.severe('Failed to initialize provider: $error');
+
+      // Set the provider even if initialization failed so it can be used
+      // This allows the provider to be in ERROR state and return appropriate errors
+      _provider = provider;
+      _providerStreamController.add(provider);
+      _emitEvent(
+        OpenFeatureEventType.error,
+        'Provider initialization failed: ${provider.name}',
+        data: error,
+      );
+
+      // Don't rethrow - let the provider remain in ERROR state
+    }
   }
 
   FeatureProvider get provider => _provider;
