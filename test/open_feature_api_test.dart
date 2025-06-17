@@ -220,6 +220,7 @@ void main() {
 
       api.bindClientToProvider('test-client', 'TestProvider');
 
+      // Per OpenFeature spec: evaluation should be short-circuited and return default
       final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
 
       expect(
@@ -314,7 +315,7 @@ void main() {
 
       expect(api.provider, isNotNull);
       expect(api.provider.name, equals('InMemoryProvider'));
-      // Default provider should be READY after initialization
+      // Per OpenFeature spec: default provider should be immediately READY
       expect(api.provider.state, equals(ProviderState.READY));
     });
 

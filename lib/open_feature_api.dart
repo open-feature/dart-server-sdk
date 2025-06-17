@@ -79,18 +79,18 @@ class OpenFeatureAPI {
 
   void _initializeDefaultProvider() {
     _provider = InMemoryProvider({});
-    // For default empty provider, set READY state directly to avoid async race condition
+    // Per OpenFeature spec: default provider should be immediately READY
     if (_provider is CachedFeatureProvider) {
       (_provider as CachedFeatureProvider).setState(ProviderState.READY);
     }
-    _logger.info('Default provider created (NOT_READY state)');
+    _logger.info('Default provider initialized and ready');
   }
 
   Future<void> setProvider(FeatureProvider provider) async {
     _logger.info('Setting provider: ${provider.name}');
 
     try {
-      // Ensure provider is initialized
+      // Per OpenFeature spec: attempt initialization if provider is NOT_READY
       if (provider.state == ProviderState.NOT_READY) {
         await provider.initialize();
       }
@@ -104,8 +104,8 @@ class OpenFeatureAPI {
     } catch (error) {
       _logger.severe('Failed to initialize provider: $error');
 
-      // Set the provider even if initialization failed so it can be used
-      // This allows the provider to be in ERROR state and return appropriate errors
+      // Per OpenFeature spec: failed providers should remain accessible in ERROR state
+      // This allows the provider to be used but flag evaluations will be short-circuited
       _provider = provider;
       _providerStreamController.add(provider);
       _emitEvent(
@@ -114,7 +114,7 @@ class OpenFeatureAPI {
         data: error,
       );
 
-      // Don't rethrow - let the provider remain in ERROR state
+      // Don't rethrow - let the provider remain in ERROR state per spec
     }
   }
 
@@ -162,6 +162,19 @@ class OpenFeatureAPI {
     if (providerId == null) {
       _logger.warning('No provider found for client $clientId');
       return false;
+    }
+
+    // Per OpenFeature spec: short-circuit if provider not in READY state
+    if (_provider.state != ProviderState.READY) {
+      _logger.warning(
+        'Provider not ready for evaluation (state: ${_provider.state})',
+      );
+      _emitEvent(
+        OpenFeatureEventType.error,
+        'Flag evaluation attempted on non-ready provider',
+        data: {'flagKey': flagKey, 'providerState': _provider.state.name},
+      );
+      return false; // Return default value
     }
 
     try {
