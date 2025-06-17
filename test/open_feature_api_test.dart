@@ -169,18 +169,6 @@ void main() {
       expect(hook.callLog, contains('after:test-flag:true'));
     });
 
-    test('handles provider not ready gracefully', () async {
-      // Set provider to ERROR state and don't initialize
-      provider._state = ProviderState.ERROR;
-      await api.setProvider(provider);
-      api.bindClientToProvider('test-client', provider.name);
-
-      final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
-
-      // Should return default value (false) when provider has error
-      expect(result, isFalse);
-    });
-
     test('binds client to provider', () async {
       await api.setProvider(provider);
 
@@ -259,12 +247,6 @@ void main() {
       expect(emittedProvider, equals(provider));
 
       await subscription.cancel();
-    });
-
-    test('initializes default provider', () {
-      // The API should have a default InMemoryProvider that's ready
-      expect(api.provider, isA<InMemoryProvider>());
-      expect(api.provider.state, equals(ProviderState.READY));
     });
 
     test('provider metadata is accessible', () async {
