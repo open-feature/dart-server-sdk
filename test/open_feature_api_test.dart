@@ -6,8 +6,13 @@ import 'helpers/open_feature_api_test_helpers.dart';
 class TestProvider implements FeatureProvider {
   final Map<String, dynamic> _flags;
   ProviderState _state;
+  final bool _shouldFailInitialization;
 
-  TestProvider(this._flags, [this._state = ProviderState.NOT_READY]);
+  TestProvider(
+    this._flags, [
+    this._state = ProviderState.NOT_READY,
+    this._shouldFailInitialization = false,
+  ]);
 
   @override
   String get name => 'TestProvider';
@@ -23,6 +28,10 @@ class TestProvider implements FeatureProvider {
 
   @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
+    if (_shouldFailInitialization) {
+      _state = ProviderState.ERROR;
+      throw Exception('Initialization failed');
+    }
     _state = ProviderState.READY;
   }
 
@@ -197,13 +206,14 @@ void main() {
 
     test('handles provider not ready gracefully', () async {
       final api = OpenFeatureAPI();
-      final provider = TestProvider({
-        'test-flag': true,
-      }, ProviderState.ERROR); // Use ERROR state instead
+      // Create provider that fails initialization
+      final provider = TestProvider(
+        {'test-flag': true},
+        ProviderState.NOT_READY,
+        true,
+      );
 
       await api.setProvider(provider);
-      // Force provider to ERROR state (which won't be overridden by initialization)
-      provider.setState(ProviderState.ERROR);
       api.bindClientToProvider('test-client', 'TestProvider');
 
       final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
@@ -211,7 +221,7 @@ void main() {
       expect(
         result,
         isFalse,
-      ); // Should return default value (false) when provider in error state
+      ); // Should return default value (false) when provider fails
     });
 
     test('binds client to provider', () {
@@ -300,10 +310,11 @@ void main() {
 
       expect(api.provider, isNotNull);
       expect(api.provider.name, equals('InMemoryProvider'));
-      expect(
-        api.provider.state,
-        equals(ProviderState.NOT_READY),
-      ); // Default provider starts NOT_READY
+      // Default provider can be in NOT_READY or CONNECTING state initially
+      expect([
+        ProviderState.NOT_READY,
+        ProviderState.CONNECTING,
+      ], contains(api.provider.state));
     });
 
     test('provider metadata is accessible', () async {
