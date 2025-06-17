@@ -35,12 +35,11 @@ class TransactionContext {
 /// Transaction context manager
 class TransactionContextManager {
   static final TransactionContextManager _instance =
-      TransactionContextManager._internal(Duration(minutes: 5));
+      TransactionContextManager._internal();
   final _contexts = <String, TransactionContext>{};
   final _contextStack = <String>[];
-  final Duration _defaultTimeout;
 
-  TransactionContextManager._internal(this._defaultTimeout);
+  TransactionContextManager._internal();
 
   factory TransactionContextManager() => _instance;
 
@@ -52,7 +51,7 @@ class TransactionContextManager {
   void pushContext(TransactionContext context, {Duration? timeout}) {
     _contexts[context.transactionId] = context;
     _contextStack.add(context.transactionId);
-    context.scheduleCleanup(timeout ?? _defaultTimeout);
+    context.scheduleCleanup(timeout ?? const Duration(minutes: 5));
   }
 
   TransactionContext? popContext() {

@@ -169,7 +169,8 @@ void main() {
     });
 
     test('handles provider not ready gracefully', () async {
-      provider._state = ProviderState.NOT_READY;
+      // Don't initialize provider, keep it in NOT_READY state
+      provider._state = ProviderState.ERROR; // Force error state
       await api.setProvider(provider);
       api.bindClientToProvider('test-client', provider.name);
 

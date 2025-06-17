@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 /// Provider states for lifecycle management
 enum ProviderState {
@@ -46,6 +47,7 @@ class ProviderConfig {
   final Duration retryDelay;
   final bool enableCache;
   final Duration cacheTTL;
+  final int maxCacheSize;
   final Map<String, dynamic> customConfig;
 
   const ProviderConfig({
@@ -55,8 +57,24 @@ class ProviderConfig {
     this.retryDelay = const Duration(seconds: 1),
     this.enableCache = true,
     this.cacheTTL = const Duration(minutes: 5),
+    this.maxCacheSize = 1000,
     this.customConfig = const {},
   });
+}
+
+/// Cache entry for provider-level caching
+class _ProviderCacheEntry<T> {
+  final T value;
+  final DateTime expiresAt;
+  final String contextHash;
+
+  _ProviderCacheEntry({
+    required this.value,
+    required Duration ttl,
+    required this.contextHash,
+  }) : expiresAt = DateTime.now().add(ttl);
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
 }
 
 /// Result of feature flag evaluation
@@ -161,19 +179,21 @@ abstract class FeatureProvider {
   });
 }
 
-/// In-memory provider implementation
-class InMemoryProvider implements FeatureProvider {
-  final Map<String, dynamic> _flags;
-  ProviderState _state = ProviderState.NOT_READY;
+/// Base provider with caching capabilities
+abstract class CachedFeatureProvider implements FeatureProvider {
   final ProviderConfig _config;
   final ProviderMetadata _metadata;
+  ProviderState _state = ProviderState.NOT_READY;
 
-  InMemoryProvider(this._flags, [ProviderConfig? config])
-    : _config = config ?? const ProviderConfig(),
-      _metadata = const ProviderMetadata(name: 'InMemoryProvider');
+  // Provider-level cache
+  final LinkedHashMap<String, _ProviderCacheEntry<dynamic>> _cache =
+      LinkedHashMap<String, _ProviderCacheEntry<dynamic>>();
 
-  @override
-  String get name => 'InMemoryProvider';
+  CachedFeatureProvider({
+    required ProviderMetadata metadata,
+    ProviderConfig? config,
+  }) : _metadata = metadata,
+       _config = config ?? const ProviderConfig();
 
   @override
   ProviderState get state => _state;
@@ -185,63 +205,321 @@ class InMemoryProvider implements FeatureProvider {
   ProviderMetadata get metadata => _metadata;
 
   @override
+  String get name => _metadata.name;
+
+  /// Set provider state
+  void setState(ProviderState newState) {
+    _state = newState;
+  }
+
+  /// Generate cache key
+  String _generateCacheKey(String flagKey, Map<String, dynamic>? context) {
+    final buffer = StringBuffer(flagKey);
+    if (context != null) {
+      final sortedKeys = context.keys.toList()..sort();
+      for (final key in sortedKeys) {
+        buffer.write('$key:${context[key]}');
+      }
+    }
+    return buffer.toString();
+  }
+
+  /// Add to cache
+  void _addToCache<T>(String key, T value) {
+    if (!_config.enableCache) return;
+
+    // Remove oldest entries if cache is full
+    while (_cache.length >= _config.maxCacheSize) {
+      _cache.remove(_cache.keys.first);
+    }
+
+    _cache[key] = _ProviderCacheEntry<T>(
+      value: value,
+      ttl: _config.cacheTTL,
+      contextHash: key,
+    );
+  }
+
+  /// Get cache entry with reason
+  _ProviderCacheEntry<T>? _getCacheEntry<T>(String key) {
+    if (!_config.enableCache) return null;
+
+    final entry = _cache[key];
+    if (entry == null || entry.isExpired) {
+      _cache.remove(key);
+      return null;
+    }
+    return entry as _ProviderCacheEntry<T>?;
+  }
+
+  /// Clear cache
+  void clearCache() {
+    _cache.clear();
+  }
+
+  /// Abstract methods for actual flag resolution
+  Future<FlagEvaluationResult<bool>> resolveBooleanFlag(
+    String flagKey,
+    bool defaultValue, {
+    Map<String, dynamic>? context,
+  });
+
+  Future<FlagEvaluationResult<String>> resolveStringFlag(
+    String flagKey,
+    String defaultValue, {
+    Map<String, dynamic>? context,
+  });
+
+  Future<FlagEvaluationResult<int>> resolveIntegerFlag(
+    String flagKey,
+    int defaultValue, {
+    Map<String, dynamic>? context,
+  });
+
+  Future<FlagEvaluationResult<double>> resolveDoubleFlag(
+    String flagKey,
+    double defaultValue, {
+    Map<String, dynamic>? context,
+  });
+
+  Future<FlagEvaluationResult<Map<String, dynamic>>> resolveObjectFlag(
+    String flagKey,
+    Map<String, dynamic> defaultValue, {
+    Map<String, dynamic>? context,
+  });
+
+  /// Cached evaluation implementations
+  @override
+  Future<FlagEvaluationResult<bool>> getBooleanFlag(
+    String flagKey,
+    bool defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    final cacheKey = _generateCacheKey(flagKey, context);
+    final cachedEntry = _getCacheEntry<bool>(cacheKey);
+
+    if (cachedEntry != null) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: cachedEntry.value,
+        reason: 'CACHED',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    final result = await resolveBooleanFlag(
+      flagKey,
+      defaultValue,
+      context: context,
+    );
+
+    // Cache successful evaluations
+    if (result.errorCode == null) {
+      _addToCache(cacheKey, result.value);
+    }
+
+    return result;
+  }
+
+  @override
+  Future<FlagEvaluationResult<String>> getStringFlag(
+    String flagKey,
+    String defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    final cacheKey = _generateCacheKey(flagKey, context);
+    final cachedEntry = _getCacheEntry<String>(cacheKey);
+
+    if (cachedEntry != null) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: cachedEntry.value,
+        reason: 'CACHED',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    final result = await resolveStringFlag(
+      flagKey,
+      defaultValue,
+      context: context,
+    );
+
+    if (result.errorCode == null) {
+      _addToCache(cacheKey, result.value);
+    }
+
+    return result;
+  }
+
+  @override
+  Future<FlagEvaluationResult<int>> getIntegerFlag(
+    String flagKey,
+    int defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    final cacheKey = _generateCacheKey(flagKey, context);
+    final cachedEntry = _getCacheEntry<int>(cacheKey);
+
+    if (cachedEntry != null) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: cachedEntry.value,
+        reason: 'CACHED',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    final result = await resolveIntegerFlag(
+      flagKey,
+      defaultValue,
+      context: context,
+    );
+
+    if (result.errorCode == null) {
+      _addToCache(cacheKey, result.value);
+    }
+
+    return result;
+  }
+
+  @override
+  Future<FlagEvaluationResult<double>> getDoubleFlag(
+    String flagKey,
+    double defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    final cacheKey = _generateCacheKey(flagKey, context);
+    final cachedEntry = _getCacheEntry<double>(cacheKey);
+
+    if (cachedEntry != null) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: cachedEntry.value,
+        reason: 'CACHED',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    final result = await resolveDoubleFlag(
+      flagKey,
+      defaultValue,
+      context: context,
+    );
+
+    if (result.errorCode == null) {
+      _addToCache(cacheKey, result.value);
+    }
+
+    return result;
+  }
+
+  @override
+  Future<FlagEvaluationResult<Map<String, dynamic>>> getObjectFlag(
+    String flagKey,
+    Map<String, dynamic> defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    final cacheKey = _generateCacheKey(flagKey, context);
+    final cachedEntry = _getCacheEntry<Map<String, dynamic>>(cacheKey);
+
+    if (cachedEntry != null) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: cachedEntry.value,
+        reason: 'CACHED',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    final result = await resolveObjectFlag(
+      flagKey,
+      defaultValue,
+      context: context,
+    );
+
+    if (result.errorCode == null) {
+      _addToCache(cacheKey, result.value);
+    }
+
+    return result;
+  }
+}
+
+/// In-memory provider implementation with caching
+class InMemoryProvider extends CachedFeatureProvider {
+  final Map<String, dynamic> _flags;
+
+  InMemoryProvider(this._flags, [ProviderConfig? config])
+    : super(
+        metadata: const ProviderMetadata(name: 'InMemoryProvider'),
+        config: config,
+      );
+
+  @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
-    if (_state == ProviderState.SHUTDOWN) {
+    if (state == ProviderState.SHUTDOWN) {
       throw ProviderException(
         'Cannot initialize a shutdown provider',
         code: ErrorCode.PROVIDER_NOT_READY,
       );
     }
 
-    _state = ProviderState.CONNECTING;
+    setState(ProviderState.CONNECTING);
 
     try {
       // Simulate initialization work
       await Future.delayed(Duration(milliseconds: 10));
-      _state = ProviderState.READY;
+      setState(ProviderState.READY);
     } catch (e) {
-      _state = ProviderState.ERROR;
+      setState(ProviderState.ERROR);
       rethrow;
     }
   }
 
   @override
   Future<void> connect() async {
-    if (_state == ProviderState.SHUTDOWN) {
+    if (state == ProviderState.SHUTDOWN) {
       throw ProviderException(
         'Cannot connect a shutdown provider',
         code: ErrorCode.PROVIDER_NOT_READY,
       );
     }
 
-    _state = ProviderState.CONNECTING;
+    setState(ProviderState.CONNECTING);
 
     try {
       await Future.delayed(Duration(milliseconds: 10));
-      _state = ProviderState.READY;
+      setState(ProviderState.READY);
     } catch (e) {
-      _state = ProviderState.ERROR;
+      setState(ProviderState.ERROR);
       rethrow;
     }
   }
 
   @override
   Future<void> shutdown() async {
-    _state = ProviderState.SHUTDOWN;
+    clearCache();
+    setState(ProviderState.SHUTDOWN);
   }
 
   void _checkState() {
-    if (_state != ProviderState.READY) {
+    if (state != ProviderState.READY) {
       throw ProviderException(
-        'Provider not in READY state: ${_state.name}',
+        'Provider not in READY state: ${state.name}',
         code: ErrorCode.PROVIDER_NOT_READY,
-        details: {'currentState': _state.name},
+        details: {'currentState': state.name},
       );
     }
   }
 
   @override
-  Future<FlagEvaluationResult<bool>> getBooleanFlag(
+  Future<FlagEvaluationResult<bool>> resolveBooleanFlag(
     String flagKey,
     bool defaultValue, {
     Map<String, dynamic>? context,
@@ -279,7 +557,7 @@ class InMemoryProvider implements FeatureProvider {
   }
 
   @override
-  Future<FlagEvaluationResult<String>> getStringFlag(
+  Future<FlagEvaluationResult<String>> resolveStringFlag(
     String flagKey,
     String defaultValue, {
     Map<String, dynamic>? context,
@@ -317,7 +595,7 @@ class InMemoryProvider implements FeatureProvider {
   }
 
   @override
-  Future<FlagEvaluationResult<int>> getIntegerFlag(
+  Future<FlagEvaluationResult<int>> resolveIntegerFlag(
     String flagKey,
     int defaultValue, {
     Map<String, dynamic>? context,
@@ -355,7 +633,7 @@ class InMemoryProvider implements FeatureProvider {
   }
 
   @override
-  Future<FlagEvaluationResult<double>> getDoubleFlag(
+  Future<FlagEvaluationResult<double>> resolveDoubleFlag(
     String flagKey,
     double defaultValue, {
     Map<String, dynamic>? context,
@@ -393,7 +671,7 @@ class InMemoryProvider implements FeatureProvider {
   }
 
   @override
-  Future<FlagEvaluationResult<Map<String, dynamic>>> getObjectFlag(
+  Future<FlagEvaluationResult<Map<String, dynamic>>> resolveObjectFlag(
     String flagKey,
     Map<String, dynamic> defaultValue, {
     Map<String, dynamic>? context,

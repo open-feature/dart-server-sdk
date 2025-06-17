@@ -44,7 +44,7 @@ class OpenFeatureAPI {
   static OpenFeatureAPI? _instance;
 
   // Core components
-  FeatureProvider _provider;
+  late FeatureProvider _provider;
   final DomainManager _domainManager = DomainManager();
   final List<OpenFeatureHook> _hooks = [];
   OpenFeatureEvaluationContext? _globalContext;
@@ -54,14 +54,13 @@ class OpenFeatureAPI {
   final StreamController<Map<String, String>> _domainUpdatesController;
 
   OpenFeatureAPI._internal()
-    : _provider = InMemoryProvider({}),
-      _providerStreamController = StreamController<FeatureProvider>.broadcast(),
+    : _providerStreamController = StreamController<FeatureProvider>.broadcast(),
       _eventStreamController = StreamController<OpenFeatureEvent>.broadcast(),
       _domainUpdatesController =
           StreamController<Map<String, String>>.broadcast() {
     _configureLogging();
-    // Initialize the default provider
-    _provider.initialize();
+    // Initialize the default provider synchronously
+    _initializeDefaultProvider();
   }
 
   factory OpenFeatureAPI() {
@@ -76,6 +75,15 @@ class OpenFeatureAPI {
         '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
       );
     });
+  }
+
+  void _initializeDefaultProvider() {
+    _provider = InMemoryProvider({});
+    // For default empty provider, set READY state directly to avoid async race condition
+    if (_provider is InMemoryProvider) {
+      (_provider as InMemoryProvider).setState(ProviderState.READY);
+    }
+    _logger.info('Default provider initialized and ready');
   }
 
   Future<void> setProvider(FeatureProvider provider) async {
