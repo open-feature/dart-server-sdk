@@ -41,7 +41,6 @@ class TestProvider implements FeatureProvider {
     bool defaultValue, {
     Map<String, dynamic>? context,
   }) async {
-    // Return error result when provider is not ready (including ERROR state)
     if (_state != ProviderState.READY) {
       return FlagEvaluationResult.error(
         flagKey,
