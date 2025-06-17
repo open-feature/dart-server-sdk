@@ -41,6 +41,7 @@ class TestProvider implements FeatureProvider {
     bool defaultValue, {
     Map<String, dynamic>? context,
   }) async {
+    // Return error result when provider is not ready (including ERROR state)
     if (_state != ProviderState.READY) {
       return FlagEvaluationResult.error(
         flagKey,
@@ -169,14 +170,14 @@ void main() {
     });
 
     test('handles provider not ready gracefully', () async {
-      // Don't initialize provider, keep it in NOT_READY state
-      provider._state = ProviderState.ERROR; // Force error state
+      // Set provider to ERROR state and don't initialize
+      provider._state = ProviderState.ERROR;
       await api.setProvider(provider);
       api.bindClientToProvider('test-client', provider.name);
 
       final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
 
-      // Should return default value when provider has error
+      // Should return default value (false) when provider has error
       expect(result, isFalse);
     });
 

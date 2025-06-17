@@ -80,8 +80,8 @@ class OpenFeatureAPI {
   void _initializeDefaultProvider() {
     _provider = InMemoryProvider({});
     // For default empty provider, set READY state directly to avoid async race condition
-    if (_provider is InMemoryProvider) {
-      (_provider as InMemoryProvider).setState(ProviderState.READY);
+    if (_provider is CachedFeatureProvider) {
+      (_provider as CachedFeatureProvider).setState(ProviderState.READY);
     }
     _logger.info('Default provider initialized and ready');
   }
