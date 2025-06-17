@@ -55,13 +55,13 @@ class TestProvider implements FeatureProvider {
     bool defaultValue, {
     Map<String, dynamic>? context,
   }) async {
-    // Check provider state first
+    // Always check provider state first - this is critical for the test
     if (_state != ProviderState.READY) {
       return FlagEvaluationResult.error(
         flagKey,
         defaultValue,
         ErrorCode.PROVIDER_NOT_READY,
-        'Provider not ready',
+        'Provider not ready (state: $_state)',
         evaluatorId: name,
       );
     }
