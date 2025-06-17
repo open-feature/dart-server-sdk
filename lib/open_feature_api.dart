@@ -79,19 +79,21 @@ class OpenFeatureAPI {
 
   void _initializeDefaultProvider() {
     _provider = InMemoryProvider({});
-    // For default empty provider, set READY state directly to avoid async race condition
-    if (_provider is CachedFeatureProvider) {
-      (_provider as CachedFeatureProvider).setState(ProviderState.READY);
-    }
-    _logger.info('Default provider initialized and ready');
+    // DON'T force READY state - let provider initialize naturally
+    _logger.info('Default provider created (NOT_READY state)');
   }
 
   Future<void> setProvider(FeatureProvider provider) async {
     _logger.info('Setting provider: ${provider.name}');
 
-    // Ensure provider is initialized
+    // Ensure provider is initialized properly
     if (provider.state == ProviderState.NOT_READY) {
-      await provider.initialize();
+      try {
+        await provider.initialize();
+      } catch (e) {
+        _logger.severe('Failed to initialize provider: $e');
+        // Provider remains in error state, which is correct
+      }
     }
 
     _provider = provider;
