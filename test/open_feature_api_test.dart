@@ -139,12 +139,15 @@ class TestHook extends OpenFeatureHook {
 
 void main() {
   group('OpenFeatureAPI', () {
-    setUp(() {
+    setUp(() async {
       OpenFeatureAPI.resetInstance();
+      // Small delay to ensure cleanup is complete
+      await Future.delayed(Duration(milliseconds: 1));
     });
 
-    tearDown(() {
+    tearDown(() async {
       OpenFeatureAPI.resetInstance();
+      await Future.delayed(Duration(milliseconds: 1));
     });
 
     test('singleton instance', () {
@@ -207,6 +210,8 @@ void main() {
       );
 
       await api.setProvider(provider);
+      // Debug output
+      print('Provider state after setProvider: ${api.provider.state}');
       expect(api.provider.state, equals(ProviderState.ERROR));
 
       api.bindClientToProvider('test-client', 'TestProvider');
