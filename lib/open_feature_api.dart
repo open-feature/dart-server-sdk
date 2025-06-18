@@ -40,164 +40,19 @@ abstract class OpenFeatureHook {
 }
 
 /// Default provider that's immediately ready per OpenFeature spec
-class _ReadyInMemoryProvider implements FeatureProvider {
-  final Map<String, dynamic> _flags = {};
-
-  @override
-  String get name => 'InMemoryProvider';
+class _ReadyInMemoryProvider extends InMemoryProvider {
+  _ReadyInMemoryProvider() : super({}) {
+    setState(ProviderState.READY);
+  }
 
   @override
   ProviderState get state => ProviderState.READY;
 
   @override
-  ProviderConfig get config => ProviderConfig();
-
-  @override
-  ProviderMetadata get metadata => ProviderMetadata(name: 'InMemoryProvider');
-
-  @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
+    setState(ProviderState.READY);
     // No-op: already ready
-  }
-
-  @override
-  Future<void> connect() async {
-    // No-op: already ready
-  }
-
-  @override
-  Future<void> shutdown() async {
-    // No-op
-  }
-
-  @override
-  Future<FlagEvaluationResult<bool>> getBooleanFlag(
-    String flagKey,
-    bool defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    final value = _flags[flagKey];
-    if (value is bool) {
-      return FlagEvaluationResult(
-        flagKey: flagKey,
-        value: value,
-        reason: 'STATIC',
-        evaluatedAt: DateTime.now(),
-        evaluatorId: name,
-      );
-    }
-
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<String>> getStringFlag(
-    String flagKey,
-    String defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    final value = _flags[flagKey];
-    if (value is String) {
-      return FlagEvaluationResult(
-        flagKey: flagKey,
-        value: value,
-        reason: 'STATIC',
-        evaluatedAt: DateTime.now(),
-        evaluatorId: name,
-      );
-    }
-
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<int>> getIntegerFlag(
-    String flagKey,
-    int defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    final value = _flags[flagKey];
-    if (value is int) {
-      return FlagEvaluationResult(
-        flagKey: flagKey,
-        value: value,
-        reason: 'STATIC',
-        evaluatedAt: DateTime.now(),
-        evaluatorId: name,
-      );
-    }
-
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<double>> getDoubleFlag(
-    String flagKey,
-    double defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    final value = _flags[flagKey];
-    if (value is double) {
-      return FlagEvaluationResult(
-        flagKey: flagKey,
-        value: value,
-        reason: 'STATIC',
-        evaluatedAt: DateTime.now(),
-        evaluatorId: name,
-      );
-    }
-
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<Map<String, dynamic>>> getObjectFlag(
-    String flagKey,
-    Map<String, dynamic> defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    final value = _flags[flagKey];
-    if (value is Map<String, dynamic>) {
-      return FlagEvaluationResult(
-        flagKey: flagKey,
-        value: value,
-        reason: 'STATIC',
-        evaluatedAt: DateTime.now(),
-        evaluatorId: name,
-      );
-    }
-
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
+    return;
   }
 }
 
