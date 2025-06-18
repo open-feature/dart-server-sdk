@@ -186,6 +186,8 @@ void main() {
       final metrics =
           ClientMetrics()
             ..flagEvaluations = 10
+
+
             ..responseTimes.add(Duration(milliseconds: 100))
             ..errorCounts['TestError'] = 1;
 
@@ -246,6 +248,8 @@ void main() {
       expect(metrics.errorCounts['FLAG_NOT_FOUND'], equals(1));
     });
 
+
+
     test('evaluates string flags', () async {
       final result = await client.getStringFlag('string-flag');
       expect(result, equals('hello'));
@@ -253,6 +257,7 @@ void main() {
 
     test('provider metadata is accessible through client', () {
       expect(client.provider.metadata.name, equals('MockProvider'));
+
     });
   });
 }

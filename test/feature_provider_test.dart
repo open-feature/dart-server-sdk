@@ -169,6 +169,7 @@ void main() {
         final result = await provider.getObjectFlag('object-flag', {});
         expect(result.value, equals({'key': 'value'}));
         expect(result.errorCode, isNull);
+
       });
 
       group('caching behavior', () {
@@ -231,6 +232,7 @@ void main() {
           );
           expect(result2.reason, equals('STATIC'));
         });
+
       });
     });
   });

@@ -183,6 +183,7 @@ abstract class FeatureProvider {
 abstract class CachedFeatureProvider implements FeatureProvider {
   final ProviderConfig _config;
   final ProviderMetadata _metadata;
+
   ProviderState _state = ProviderState.NOT_READY;
 
   // Provider-level cache
@@ -472,12 +473,14 @@ class InMemoryProvider extends CachedFeatureProvider {
 
     setState(ProviderState.CONNECTING);
 
+
     try {
       // Simulate initialization work
       await Future.delayed(Duration(milliseconds: 10));
       setState(ProviderState.READY);
     } catch (e) {
       setState(ProviderState.ERROR);
+
       rethrow;
     }
   }
@@ -485,11 +488,13 @@ class InMemoryProvider extends CachedFeatureProvider {
   @override
   Future<void> connect() async {
     if (state == ProviderState.SHUTDOWN) {
+
       throw ProviderException(
         'Cannot connect a shutdown provider',
         code: ErrorCode.PROVIDER_NOT_READY,
       );
     }
+
 
     setState(ProviderState.CONNECTING);
 
@@ -498,6 +503,7 @@ class InMemoryProvider extends CachedFeatureProvider {
       setState(ProviderState.READY);
     } catch (e) {
       setState(ProviderState.ERROR);
+
       rethrow;
     }
   }
@@ -511,9 +517,11 @@ class InMemoryProvider extends CachedFeatureProvider {
   void _checkState() {
     if (state != ProviderState.READY) {
       throw ProviderException(
+
         'Provider not in READY state: ${state.name}',
         code: ErrorCode.PROVIDER_NOT_READY,
         details: {'currentState': state.name},
+
       );
     }
   }
@@ -708,3 +716,5 @@ class InMemoryProvider extends CachedFeatureProvider {
     );
   }
 }
+
+

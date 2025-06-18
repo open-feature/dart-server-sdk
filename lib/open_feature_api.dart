@@ -37,6 +37,7 @@ abstract class OpenFeatureHook {
     dynamic result,
     Map<String, dynamic>? context,
   );
+
 }
 
 /// Default provider that's immediately ready - completely independent
@@ -155,11 +156,14 @@ class OpenFeatureAPI {
 
   OpenFeatureAPI._internal()
     : _providerStreamController = StreamController<FeatureProvider>.broadcast(),
+
       _eventStreamController = StreamController<OpenFeatureEvent>.broadcast(),
       _domainUpdatesController =
           StreamController<Map<String, String>>.broadcast() {
     _configureLogging();
+
     _initializeDefaultProvider();
+
   }
 
   factory OpenFeatureAPI() {
@@ -207,10 +211,12 @@ class OpenFeatureAPI {
   void _initializeDefaultProvider() {
     _provider = _ImmediateReadyProvider();
     _logger.info('Default provider initialized and ready');
+
   }
 
   Future<void> setProvider(FeatureProvider provider) async {
     _logger.info('Setting provider: ${provider.name}');
+
 
     try {
       // Only initialize if provider is NOT_READY
@@ -236,6 +242,7 @@ class OpenFeatureAPI {
         data: error,
       );
     }
+
   }
 
   FeatureProvider get provider => _provider;
@@ -288,6 +295,8 @@ class OpenFeatureAPI {
 
     try {
       _runBeforeEvaluationHooks(flagKey, context);
+
+
 
       final result = await _provider.getBooleanFlag(
         flagKey,

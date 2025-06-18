@@ -35,6 +35,7 @@ class ClientMetrics {
 
   Map<String, dynamic> toJson() => {
     'flagEvaluations': flagEvaluations,
+
     'averageResponseTime': averageResponseTime.inMilliseconds,
     'errorCounts': errorCounts,
   };
@@ -111,6 +112,15 @@ class FeatureClient {
             (_metrics.errorCounts[result.errorCode!.name] ?? 0) + 1;
       }
 
+      // Handle errors from the provider
+      if (result.errorCode != null) {
+        _logger.warning(
+          'Flag evaluation error for $flagKey: ${result.errorMessage}',
+        );
+        _metrics.errorCounts[result.errorCode!.name] =
+            (_metrics.errorCounts[result.errorCode!.name] ?? 0) + 1;
+      }
+
       _metrics.responseTimes.add(DateTime.now().difference(startTime));
       return result.value;
     } catch (e) {
@@ -128,6 +138,7 @@ class FeatureClient {
       return defaultValue;
     } finally {
       // Execute finally hooks
+
       await _hookManager.executeHooks(HookStage.FINALLY, flagKey, context);
     }
   }
@@ -145,6 +156,7 @@ class FeatureClient {
   );
 
   /// Evaluate string flag
+
   Future<String> getStringFlag(
     String flagKey, {
     EvaluationContext? context,
@@ -157,6 +169,7 @@ class FeatureClient {
   );
 
   /// Evaluate integer flag
+
   Future<int> getIntegerFlag(
     String flagKey, {
     EvaluationContext? context,
@@ -167,6 +180,7 @@ class FeatureClient {
     (ctx) => _provider.getIntegerFlag(flagKey, defaultValue, context: ctx),
     context: context?.attributes,
   );
+
 
   /// Evaluate double flag
   Future<double> getDoubleFlag(
@@ -180,7 +194,9 @@ class FeatureClient {
     context: context?.attributes,
   );
 
+
   /// Evaluate object flag
+
   Future<Map<String, dynamic>> getObjectFlag(
     String flagKey, {
     EvaluationContext? context,
@@ -192,7 +208,9 @@ class FeatureClient {
     context: context?.attributes,
   );
 
+
   /// Get client metrics
+
   ClientMetrics getMetrics() => _metrics;
 
   /// Access to provider for management operations

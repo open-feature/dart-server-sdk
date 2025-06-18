@@ -32,6 +32,7 @@ dev_dependencies:
   mockito: ^5.4.6       # For mocking objects in unit tests
   test: ^1.26.2        # Dart's core testing framework
 
+
 # Optional Local Hooks for development.
 git_hooks:
   hooks:
