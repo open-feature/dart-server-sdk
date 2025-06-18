@@ -171,13 +171,19 @@ class OpenFeatureAPI {
     return OpenFeatureAPI._internal();
   }
 
+  static bool _loggingConfigured = false;
+
   void _configureLogging() {
-    Logger.root.level = Level.ALL;
-    Logger.root.onRecord.listen((record) {
-      print(
-        '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
-      );
-    });
+    // Only configure logging once globally to prevent multiple listeners
+    if (!_loggingConfigured) {
+      Logger.root.level = Level.ALL;
+      Logger.root.onRecord.listen((record) {
+        print(
+          '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
+        );
+      });
+      _loggingConfigured = true;
+    }
   }
 
   void _initializeDefaultProvider() {
