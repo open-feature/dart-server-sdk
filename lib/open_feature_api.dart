@@ -142,7 +142,6 @@ class _ImmediateReadyProvider implements FeatureProvider {
 class OpenFeatureAPI {
   static final Logger _logger = Logger('OpenFeatureAPI');
   static OpenFeatureAPI? _instance;
-  static bool _testMode = false; // Add test mode flag
 
   late FeatureProvider _provider;
   final DomainManager _domainManager = DomainManager();
@@ -163,45 +162,17 @@ class OpenFeatureAPI {
   }
 
   factory OpenFeatureAPI() {
-    // In test mode, always return new instance
-    if (_testMode) {
-      return OpenFeatureAPI._internal();
-    }
-
     _instance ??= OpenFeatureAPI._internal();
     return _instance!;
   }
 
-  // Enable test mode - disables singleton
-  static void enableTestMode() {
-    _testMode = true;
-    _instance = null;
-  }
-
-  // Disable test mode - re-enables singleton
-  static void disableTestMode() {
-    _testMode = false;
-    _instance = null;
-  }
-
-  // Public constructor for testing - bypasses singleton
-  factory OpenFeatureAPI.forTesting() {
-    return OpenFeatureAPI._internal();
-  }
-
-  static bool _loggingConfigured = false;
-
   void _configureLogging() {
-    // Only configure logging once globally to prevent multiple listeners
-    if (!_loggingConfigured) {
-      Logger.root.level = Level.ALL;
-      Logger.root.onRecord.listen((record) {
-        print(
-          '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
-        );
-      });
-      _loggingConfigured = true;
-    }
+    Logger.root.level = Level.ALL;
+    Logger.root.onRecord.listen((record) {
+      print(
+        '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
+      );
+    });
   }
 
   void _initializeDefaultProvider() {
@@ -369,18 +340,8 @@ class OpenFeatureAPI {
     await _domainUpdatesController.close();
   }
 
-  // FIXED: Proper singleton reset with complete cleanup
   static void resetInstance() {
-    if (_instance != null) {
-      try {
-        _instance!._providerStreamController.close();
-        _instance!._eventStreamController.close();
-        _instance!._domainUpdatesController.close();
-        _instance!._domainManager.dispose();
-      } catch (e) {
-        // Ignore disposal errors during reset
-      }
-    }
+    _instance?.dispose();
     _instance = null;
   }
 
