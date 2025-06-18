@@ -61,6 +61,18 @@ void main() {
       expect(config.connectionTimeout, equals(Duration(seconds: 30)));
       expect(config.maxRetries, equals(3));
       expect(config.enableCache, isTrue);
+      expect(config.maxCacheSize, equals(1000));
+    });
+
+    test('creates with custom cache configuration', () {
+      final config = ProviderConfig(
+        enableCache: false,
+        cacheTTL: Duration(minutes: 10),
+        maxCacheSize: 500,
+      );
+      expect(config.enableCache, isFalse);
+      expect(config.cacheTTL, equals(Duration(minutes: 10)));
+      expect(config.maxCacheSize, equals(500));
     });
   });
 
@@ -157,6 +169,70 @@ void main() {
         final result = await provider.getObjectFlag('object-flag', {});
         expect(result.value, equals({'key': 'value'}));
         expect(result.errorCode, isNull);
+
+      });
+
+      group('caching behavior', () {
+        test('caches successful evaluations', () async {
+          // First evaluation
+          final result1 = await provider.getBooleanFlag('bool-flag', false);
+          expect(result1.reason, equals('STATIC'));
+
+          // Second evaluation should be cached
+          final result2 = await provider.getBooleanFlag('bool-flag', false);
+          expect(result2.reason, equals('CACHED'));
+          expect(result2.value, equals(result1.value));
+        });
+
+        test('does not cache error results', () async {
+          // First evaluation (error)
+          final result1 = await provider.getBooleanFlag('missing-flag', false);
+          expect(result1.errorCode, equals(ErrorCode.FLAG_NOT_FOUND));
+
+          // Second evaluation should still be an error, not cached
+          final result2 = await provider.getBooleanFlag('missing-flag', false);
+          expect(result2.errorCode, equals(ErrorCode.FLAG_NOT_FOUND));
+          expect(result2.reason, equals('ERROR'));
+        });
+
+        test('clears cache on shutdown', () async {
+          // Cache a value
+          await provider.getBooleanFlag('bool-flag', false);
+
+          // Shutdown clears cache
+          await provider.shutdown();
+
+          // Reinitialize
+          provider = InMemoryProvider(testFlags);
+          await provider.initialize();
+
+          // Should not be cached
+          final result = await provider.getBooleanFlag('bool-flag', false);
+          expect(result.reason, equals('STATIC'));
+        });
+
+        test('respects cache configuration', () async {
+          final noCacheProvider = InMemoryProvider(
+            testFlags,
+            ProviderConfig(enableCache: false),
+          );
+          await noCacheProvider.initialize();
+
+          // First evaluation
+          final result1 = await noCacheProvider.getBooleanFlag(
+            'bool-flag',
+            false,
+          );
+          expect(result1.reason, equals('STATIC'));
+
+          // Second evaluation should not be cached
+          final result2 = await noCacheProvider.getBooleanFlag(
+            'bool-flag',
+            false,
+          );
+          expect(result2.reason, equals('STATIC'));
+        });
+
       });
     });
   });

@@ -38,19 +38,22 @@ jobs:
       event_name: ${{ needs.determine-workflow.outputs.event_name }}
 
 
-  trigger-coverage:
-    name: Trigger Coverage Workflow
-    needs: determine-workflow
-    uses: ./.github/workflows/coverage-workflow.yml
-    with:
-      branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
-      event_name: ${{ needs.determine-workflow.outputs.event_name }}
+  #commented out for now, as we are not running coverage on this repo(for testing).
 
-  
+  # trigger-coverage:
+  #   name: Trigger Coverage Workflow
+  #   needs: determine-workflow
+  #   uses: ./.github/workflows/coverage-workflow.yml
+  #   with:
+  #     branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
+  #     event_name: ${{ needs.determine-workflow.outputs.event_name }}
+
   contributor-workflow:
     name: Trigger Contributor Workflow
     needs: determine-workflow
     uses: ./.github/workflows/contributor-workflow.yml
     with:
       branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
+
       event_name: ${{ needs.determine-workflow.outputs.event_name }}
+
