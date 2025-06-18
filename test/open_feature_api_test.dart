@@ -137,21 +137,14 @@ class TestHook extends OpenFeatureHook {
   }
 }
 
-/// Test helper for singleton reset
-class OpenFeatureAPITestHelpers {
-  static void reset() {
-    OpenFeatureAPI.resetInstance();
-  }
-}
-
 void main() {
   group('OpenFeatureAPI', () {
     setUp(() {
-      OpenFeatureAPITestHelpers.reset();
+      OpenFeatureAPI.resetInstance();
     });
 
     tearDown(() {
-      OpenFeatureAPITestHelpers.reset();
+      OpenFeatureAPI.resetInstance();
     });
 
     test('singleton instance', () {
@@ -287,11 +280,6 @@ void main() {
 
     test('initializes default provider', () {
       final api = OpenFeatureAPI();
-
-      // Debug prints to help diagnose issues
-      print('Provider runtimeType: ${api.provider.runtimeType}');
-      print('Provider state: ${api.provider.state}');
-      print('Provider name: ${api.provider.name}');
 
       expect(api.provider, isNotNull);
       expect(api.provider.name, equals('InMemoryProvider'));
