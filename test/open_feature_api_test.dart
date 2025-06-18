@@ -2,16 +2,6 @@ import 'package:test/test.dart';
 import '../lib/open_feature_api.dart';
 import '../lib/feature_provider.dart';
 
-/// Robust singleton reset for clean test state
-class OpenFeatureAPITestHelpers {
-  static Future<void> reset() async {
-    try {
-      await OpenFeatureAPI().dispose();
-    } catch (_) {}
-    OpenFeatureAPI.resetInstance();
-  }
-}
-
 class TestProvider implements FeatureProvider {
   final Map<String, dynamic> _flags;
   ProviderState _state;
@@ -73,6 +63,7 @@ class TestProvider implements FeatureProvider {
         evaluatorId: name,
       );
     }
+
     if (!_flags.containsKey(flagKey)) {
       return FlagEvaluationResult.error(
         flagKey,
@@ -82,6 +73,7 @@ class TestProvider implements FeatureProvider {
         evaluatorId: name,
       );
     }
+
     final value = _flags[flagKey];
     if (value is! bool) {
       return FlagEvaluationResult.error(
@@ -92,6 +84,7 @@ class TestProvider implements FeatureProvider {
         evaluatorId: name,
       );
     }
+
     return FlagEvaluationResult(
       flagKey: flagKey,
       value: value,
@@ -144,16 +137,23 @@ class TestHook extends OpenFeatureHook {
   }
 }
 
+/// Test helper for singleton reset
+class OpenFeatureAPITestHelpers {
+  static void reset() {
+    OpenFeatureAPI.resetInstance();
+  }
+}
+
 void main() {
-  setUp(() async {
-    await OpenFeatureAPITestHelpers.reset();
-  });
-
-  tearDown(() async {
-    await OpenFeatureAPITestHelpers.reset();
-  });
-
   group('OpenFeatureAPI', () {
+    setUp(() {
+      OpenFeatureAPITestHelpers.reset();
+    });
+
+    tearDown(() {
+      OpenFeatureAPITestHelpers.reset();
+    });
+
     test('singleton instance', () {
       final api1 = OpenFeatureAPI();
       final api2 = OpenFeatureAPI();
@@ -212,17 +212,19 @@ void main() {
         ProviderState.NOT_READY,
         true, // shouldFailInitialization = true
       );
+
       await api.setProvider(provider);
       expect(api.provider.state, equals(ProviderState.ERROR));
+
       api.bindClientToProvider('test-client', 'TestProvider');
       final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
+
       expect(result, isFalse);
     });
 
     test('binds client to provider', () {
       final api = OpenFeatureAPI();
       api.bindClientToProvider('client1', 'provider1');
-      // Binding functionality is tested indirectly through flag evaluation
     });
 
     test('emits events on provider change', () async {
@@ -233,6 +235,7 @@ void main() {
       api.events.listen(events.add);
       await api.setProvider(provider);
       await Future.delayed(Duration(milliseconds: 10));
+
       expect(events.length, greaterThan(0));
       expect(
         events.any((e) => e.type == OpenFeatureEventType.providerChanged),
@@ -252,6 +255,7 @@ void main() {
 
       await api.evaluateBooleanFlag('missing-flag', 'test-client');
       await Future.delayed(Duration(milliseconds: 10));
+
       expect(events.any((e) => e.type == OpenFeatureEventType.error), isTrue);
     });
 
@@ -261,6 +265,7 @@ void main() {
 
       await api.setProvider(provider);
       api.bindClientToProvider('test-client', 'TestProvider');
+
       final result = await api.evaluateBooleanFlag(
         'string-flag',
         'test-client',
@@ -276,11 +281,18 @@ void main() {
       api.providerUpdates.listen(updates.add);
       await api.setProvider(provider);
       await Future.delayed(Duration(milliseconds: 10));
+
       expect(updates, contains(provider));
     });
 
     test('initializes default provider', () {
       final api = OpenFeatureAPI();
+
+      // Debug prints to help diagnose issues
+      print('Provider runtimeType: ${api.provider.runtimeType}');
+      print('Provider state: ${api.provider.state}');
+      print('Provider name: ${api.provider.name}');
+
       expect(api.provider, isNotNull);
       expect(api.provider.name, equals('InMemoryProvider'));
       expect(api.provider.state, equals(ProviderState.READY));
@@ -289,6 +301,7 @@ void main() {
     test('provider metadata is accessible', () async {
       final api = OpenFeatureAPI();
       final provider = TestProvider({'test': true});
+
       await api.setProvider(provider);
       expect(api.provider.metadata.name, equals('TestProvider'));
     });
