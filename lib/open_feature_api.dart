@@ -265,6 +265,9 @@ class _DefaultInMemoryProvider extends InMemoryProvider {
   }
 
   @override
+  ProviderState get state => ProviderState.READY;
+
+  @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
     // No-op for default provider - already ready
     return;
