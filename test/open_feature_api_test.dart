@@ -1,7 +1,16 @@
 import 'package:test/test.dart';
 import '../lib/open_feature_api.dart';
 import '../lib/feature_provider.dart';
-import 'helpers/open_feature_api_test_helpers.dart';
+
+/// Robust singleton reset for clean test state
+class OpenFeatureAPITestHelpers {
+  static Future<void> reset() async {
+    try {
+      await OpenFeatureAPI().dispose();
+    } catch (_) {}
+    OpenFeatureAPI.resetInstance();
+  }
+}
 
 class TestProvider implements FeatureProvider {
   final Map<String, dynamic> _flags;
@@ -55,7 +64,6 @@ class TestProvider implements FeatureProvider {
     bool defaultValue, {
     Map<String, dynamic>? context,
   }) async {
-    // Always check provider state first - this is critical for the test
     if (_state != ProviderState.READY) {
       return FlagEvaluationResult.error(
         flagKey,
@@ -65,7 +73,6 @@ class TestProvider implements FeatureProvider {
         evaluatorId: name,
       );
     }
-
     if (!_flags.containsKey(flagKey)) {
       return FlagEvaluationResult.error(
         flagKey,
@@ -75,7 +82,6 @@ class TestProvider implements FeatureProvider {
         evaluatorId: name,
       );
     }
-
     final value = _flags[flagKey];
     if (value is! bool) {
       return FlagEvaluationResult.error(
@@ -86,7 +92,6 @@ class TestProvider implements FeatureProvider {
         evaluatorId: name,
       );
     }
-
     return FlagEvaluationResult(
       flagKey: flagKey,
       value: value,
@@ -101,36 +106,28 @@ class TestProvider implements FeatureProvider {
     String flagKey,
     String defaultValue, {
     Map<String, dynamic>? context,
-  }) async {
-    throw UnimplementedError();
-  }
+  }) async => throw UnimplementedError();
 
   @override
   Future<FlagEvaluationResult<int>> getIntegerFlag(
     String flagKey,
     int defaultValue, {
     Map<String, dynamic>? context,
-  }) async {
-    throw UnimplementedError();
-  }
+  }) async => throw UnimplementedError();
 
   @override
   Future<FlagEvaluationResult<double>> getDoubleFlag(
     String flagKey,
     double defaultValue, {
     Map<String, dynamic>? context,
-  }) async {
-    throw UnimplementedError();
-  }
+  }) async => throw UnimplementedError();
 
   @override
   Future<FlagEvaluationResult<Map<String, dynamic>>> getObjectFlag(
     String flagKey,
     Map<String, dynamic> defaultValue, {
     Map<String, dynamic>? context,
-  }) async {
-    throw UnimplementedError();
-  }
+  }) async => throw UnimplementedError();
 }
 
 class TestHook extends OpenFeatureHook {
@@ -148,11 +145,15 @@ class TestHook extends OpenFeatureHook {
 }
 
 void main() {
-  group('OpenFeatureAPI', () {
-    setUp(() {
-      OpenFeatureAPITestHelpers.reset();
-    });
+  setUp(() async {
+    await OpenFeatureAPITestHelpers.reset();
+  });
 
+  tearDown(() async {
+    await OpenFeatureAPITestHelpers.reset();
+  });
+
+  group('OpenFeatureAPI', () {
     test('singleton instance', () {
       final api1 = OpenFeatureAPI();
       final api2 = OpenFeatureAPI();
@@ -206,36 +207,22 @@ void main() {
 
     test('handles provider not ready gracefully', () async {
       final api = OpenFeatureAPI();
-      // Create provider that fails initialization
       final provider = TestProvider(
         {'test-flag': true},
         ProviderState.NOT_READY,
         true, // shouldFailInitialization = true
       );
-
-      // setProvider should not throw even if initialization fails
       await api.setProvider(provider);
-      // Provider should be in ERROR state after failed initialization
       expect(api.provider.state, equals(ProviderState.ERROR));
-
       api.bindClientToProvider('test-client', 'TestProvider');
-
-      // Per OpenFeature spec: evaluation should be short-circuited and return default
       final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
-
-      expect(
-        result,
-        isFalse,
-      ); // Should return default value (false) when provider fails
+      expect(result, isFalse);
     });
 
     test('binds client to provider', () {
       final api = OpenFeatureAPI();
-
       api.bindClientToProvider('client1', 'provider1');
-
       // Binding functionality is tested indirectly through flag evaluation
-      // No direct assertion needed since _domainManager is private
     });
 
     test('emits events on provider change', () async {
@@ -243,14 +230,9 @@ void main() {
       final provider = TestProvider({'test': true});
       final events = <OpenFeatureEvent>[];
 
-      // Set up listener BEFORE triggering events
       api.events.listen(events.add);
-
       await api.setProvider(provider);
-
-      // Wait for events to be processed
       await Future.delayed(Duration(milliseconds: 10));
-
       expect(events.length, greaterThan(0));
       expect(
         events.any((e) => e.type == OpenFeatureEventType.providerChanged),
@@ -264,18 +246,12 @@ void main() {
       final events = <OpenFeatureEvent>[];
 
       await api.setProvider(provider);
-      // Force provider back to NOT_READY to simulate a non-ready provider
       provider.setState(ProviderState.NOT_READY);
       api.bindClientToProvider('test-client', 'TestProvider');
-
-      // Set up listener BEFORE triggering flag evaluation
       api.events.listen(events.add);
 
       await api.evaluateBooleanFlag('missing-flag', 'test-client');
-
-      // Wait for events to be processed
       await Future.delayed(Duration(milliseconds: 10));
-
       expect(events.any((e) => e.type == OpenFeatureEventType.error), isTrue);
     });
 
@@ -285,13 +261,11 @@ void main() {
 
       await api.setProvider(provider);
       api.bindClientToProvider('test-client', 'TestProvider');
-
       final result = await api.evaluateBooleanFlag(
         'string-flag',
         'test-client',
       );
-
-      expect(result, isFalse); // Should return default on type mismatch
+      expect(result, isFalse);
     });
 
     test('streams provider updates', () async {
@@ -299,32 +273,23 @@ void main() {
       final provider = TestProvider({'test': true});
       final updates = <FeatureProvider>[];
 
-      // Set up listener BEFORE triggering updates
       api.providerUpdates.listen(updates.add);
-
       await api.setProvider(provider);
-
-      // Wait for stream events to be processed
       await Future.delayed(Duration(milliseconds: 10));
-
       expect(updates, contains(provider));
     });
 
     test('initializes default provider', () {
       final api = OpenFeatureAPI();
-
       expect(api.provider, isNotNull);
       expect(api.provider.name, equals('InMemoryProvider'));
-      // Per OpenFeature spec: default provider should be immediately READY
       expect(api.provider.state, equals(ProviderState.READY));
     });
 
     test('provider metadata is accessible', () async {
       final api = OpenFeatureAPI();
       final provider = TestProvider({'test': true});
-
       await api.setProvider(provider);
-
       expect(api.provider.metadata.name, equals('TestProvider'));
     });
   });
