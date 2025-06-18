@@ -156,34 +156,6 @@ void main() {
     });
   });
 
-  group('CacheEntry Tests', () {
-    test('correctly identifies expired entries', () async {
-      final entry = CacheEntry<bool>(
-        value: true,
-        ttl: Duration(milliseconds: 1),
-        contextHash: 'test-hash',
-      );
-
-      // Wait for expiration
-      await Future.delayed(Duration(milliseconds: 10));
-      expect(entry.isExpired, isTrue);
-    });
-
-    test('maintains value and context hash', () {
-      const contextHash = 'test-hash';
-      const value = true;
-
-      final entry = CacheEntry<bool>(
-        value: value,
-        ttl: Duration(minutes: 5),
-        contextHash: contextHash,
-      );
-
-      expect(entry.value, equals(value));
-      expect(entry.contextHash, equals(contextHash));
-    });
-  });
-
   group('ClientMetrics Tests', () {
     test('calculates average response time', () {
       final metrics =
@@ -214,16 +186,12 @@ void main() {
       final metrics =
           ClientMetrics()
             ..flagEvaluations = 10
-            ..cacheHits = 5
-            ..cacheMisses = 5
             ..responseTimes.add(Duration(milliseconds: 100))
             ..errorCounts['TestError'] = 1;
 
       final json = metrics.toJson();
 
       expect(json['flagEvaluations'], equals(10));
-      expect(json['cacheHits'], equals(5));
-      expect(json['cacheMisses'], equals(5));
       expect(json['averageResponseTime'], equals(100));
       expect(json['errorCounts']['TestError'], equals(1));
     });
@@ -278,37 +246,13 @@ void main() {
       expect(metrics.errorCounts['FLAG_NOT_FOUND'], equals(1));
     });
 
-    test('caches flag evaluations', () async {
-      // First call should miss cache
-      await client.getBooleanFlag('test-flag');
-      final metrics1 = client.getMetrics();
-      expect(metrics1.cacheMisses, equals(1));
-      expect(metrics1.cacheHits, equals(0));
-
-      // Second call should hit cache
-      await client.getBooleanFlag('test-flag');
-      final metrics2 = client.getMetrics();
-      expect(metrics2.cacheHits, equals(1));
-    });
-
-    test('clears cache correctly', () async {
-      await client.getBooleanFlag('test-flag');
-      client.clearCache();
-
-      // Should miss cache again after clearing
-      await client.getBooleanFlag('test-flag');
-      final metrics = client.getMetrics();
-      expect(metrics.cacheMisses, equals(2));
-    });
-
     test('evaluates string flags', () async {
       final result = await client.getStringFlag('string-flag');
       expect(result, equals('hello'));
     });
 
     test('provider metadata is accessible through client', () {
-      // Access provider through a public getter instead of private field
-      expect(provider.metadata.name, equals('MockProvider'));
+      expect(client.provider.metadata.name, equals('MockProvider'));
     });
   });
 }

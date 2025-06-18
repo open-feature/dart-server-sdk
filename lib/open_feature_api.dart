@@ -39,12 +39,112 @@ abstract class OpenFeatureHook {
   );
 }
 
+/// Default provider that's immediately ready - completely independent
+class _ImmediateReadyProvider implements FeatureProvider {
+  @override
+  String get name => 'InMemoryProvider';
+
+  @override
+  ProviderState get state => ProviderState.READY;
+
+  @override
+  ProviderConfig get config => const ProviderConfig();
+
+  @override
+  ProviderMetadata get metadata =>
+      const ProviderMetadata(name: 'InMemoryProvider');
+
+  @override
+  Future<void> initialize([Map<String, dynamic>? config]) async {}
+
+  @override
+  Future<void> connect() async {}
+
+  @override
+  Future<void> shutdown() async {}
+
+  @override
+  Future<FlagEvaluationResult<bool>> getBooleanFlag(
+    String flagKey,
+    bool defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+
+  @override
+  Future<FlagEvaluationResult<String>> getStringFlag(
+    String flagKey,
+    String defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+
+  @override
+  Future<FlagEvaluationResult<int>> getIntegerFlag(
+    String flagKey,
+    int defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+
+  @override
+  Future<FlagEvaluationResult<double>> getDoubleFlag(
+    String flagKey,
+    double defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+
+  @override
+  Future<FlagEvaluationResult<Map<String, dynamic>>> getObjectFlag(
+    String flagKey,
+    Map<String, dynamic> defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+}
+
 class OpenFeatureAPI {
   static final Logger _logger = Logger('OpenFeatureAPI');
   static OpenFeatureAPI? _instance;
+  static bool _testMode = false; // Add test mode flag
 
-  // Core components
-  FeatureProvider _provider;
+  late FeatureProvider _provider;
   final DomainManager _domainManager = DomainManager();
   final List<OpenFeatureHook> _hooks = [];
   OpenFeatureEvaluationContext? _globalContext;
@@ -54,44 +154,88 @@ class OpenFeatureAPI {
   final StreamController<Map<String, String>> _domainUpdatesController;
 
   OpenFeatureAPI._internal()
-    : _provider = InMemoryProvider({}),
-      _providerStreamController = StreamController<FeatureProvider>.broadcast(),
+    : _providerStreamController = StreamController<FeatureProvider>.broadcast(),
       _eventStreamController = StreamController<OpenFeatureEvent>.broadcast(),
       _domainUpdatesController =
           StreamController<Map<String, String>>.broadcast() {
     _configureLogging();
-    // Initialize the default provider
-    _provider.initialize();
+    _initializeDefaultProvider();
   }
 
   factory OpenFeatureAPI() {
+    // In test mode, always return new instance
+    if (_testMode) {
+      return OpenFeatureAPI._internal();
+    }
+
     _instance ??= OpenFeatureAPI._internal();
     return _instance!;
   }
 
+  // Enable test mode - disables singleton
+  static void enableTestMode() {
+    _testMode = true;
+    _instance = null;
+  }
+
+  // Disable test mode - re-enables singleton
+  static void disableTestMode() {
+    _testMode = false;
+    _instance = null;
+  }
+
+  // Public constructor for testing - bypasses singleton
+  factory OpenFeatureAPI.forTesting() {
+    return OpenFeatureAPI._internal();
+  }
+
+  static bool _loggingConfigured = false;
+
   void _configureLogging() {
-    Logger.root.level = Level.ALL;
-    Logger.root.onRecord.listen((record) {
-      print(
-        '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
-      );
-    });
+    // Only configure logging once globally to prevent multiple listeners
+    if (!_loggingConfigured) {
+      Logger.root.level = Level.ALL;
+      Logger.root.onRecord.listen((record) {
+        print(
+          '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
+        );
+      });
+      _loggingConfigured = true;
+    }
+  }
+
+  void _initializeDefaultProvider() {
+    _provider = _ImmediateReadyProvider();
+    _logger.info('Default provider initialized and ready');
   }
 
   Future<void> setProvider(FeatureProvider provider) async {
     _logger.info('Setting provider: ${provider.name}');
 
-    // Ensure provider is initialized
-    if (provider.state == ProviderState.NOT_READY) {
-      await provider.initialize();
-    }
+    try {
+      // Only initialize if provider is NOT_READY
+      if (provider.state == ProviderState.NOT_READY) {
+        await provider.initialize();
+      }
 
-    _provider = provider;
-    _providerStreamController.add(provider);
-    _emitEvent(
-      OpenFeatureEventType.providerChanged,
-      'Provider changed to ${provider.name}',
-    );
+      _provider = provider;
+      _providerStreamController.add(provider);
+      _emitEvent(
+        OpenFeatureEventType.providerChanged,
+        'Provider changed to ${provider.name}',
+      );
+    } catch (error) {
+      _logger.severe('Failed to initialize provider: $error');
+
+      // Per OpenFeature spec: keep provider in ERROR state
+      _provider = provider;
+      _providerStreamController.add(provider);
+      _emitEvent(
+        OpenFeatureEventType.error,
+        'Provider initialization failed: ${provider.name}',
+        data: error,
+      );
+    }
   }
 
   FeatureProvider get provider => _provider;
@@ -109,17 +253,6 @@ class OpenFeatureAPI {
   }
 
   List<OpenFeatureHook> get hooks => List.unmodifiable(_hooks);
-
-  void _emitEvent(OpenFeatureEventType type, String message, {dynamic data}) {
-    final event = OpenFeatureEvent(type, message, data: data);
-    _eventStreamController.add(event);
-  }
-
-  Future<void> dispose() async {
-    await _providerStreamController.close();
-    await _eventStreamController.close();
-    await _domainUpdatesController.close();
-  }
 
   void bindClientToProvider(String clientId, String providerId) {
     _domainManager.bindClientToProvider(clientId, providerId);
@@ -140,8 +273,22 @@ class OpenFeatureAPI {
       return false;
     }
 
+    // Per OpenFeature spec: short-circuit if provider not READY
+    if (_provider.state != ProviderState.READY) {
+      _logger.warning(
+        'Provider not ready for evaluation (state: ${_provider.state})',
+      );
+      _emitEvent(
+        OpenFeatureEventType.error,
+        'Flag evaluation attempted on non-ready provider',
+        data: {'flagKey': flagKey, 'providerState': _provider.state.name},
+      );
+      return false;
+    }
+
     try {
       _runBeforeEvaluationHooks(flagKey, context);
+
       final result = await _provider.getBooleanFlag(
         flagKey,
         false,
@@ -160,7 +307,6 @@ class OpenFeatureAPI {
 
       _runAfterEvaluationHooks(flagKey, result.value, context);
 
-      // Log errors but still return the value (which is the default if error occurred)
       if (result.errorCode != null) {
         _logger.warning('Flag evaluation error: ${result.errorMessage}');
         _emitEvent(
@@ -212,7 +358,29 @@ class OpenFeatureAPI {
     }
   }
 
+  void _emitEvent(OpenFeatureEventType type, String message, {dynamic data}) {
+    final event = OpenFeatureEvent(type, message, data: data);
+    _eventStreamController.add(event);
+  }
+
+  Future<void> dispose() async {
+    await _providerStreamController.close();
+    await _eventStreamController.close();
+    await _domainUpdatesController.close();
+  }
+
+  // FIXED: Proper singleton reset with complete cleanup
   static void resetInstance() {
+    if (_instance != null) {
+      try {
+        _instance!._providerStreamController.close();
+        _instance!._eventStreamController.close();
+        _instance!._domainUpdatesController.close();
+        _instance!._domainManager.dispose();
+      } catch (e) {
+        // Ignore disposal errors during reset
+      }
+    }
     _instance = null;
   }
 
