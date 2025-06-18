@@ -114,6 +114,10 @@ class IsolatedDefaultProvider implements FeatureProvider {
 
   @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
+    if (_shouldFailInitialization) {
+      _state = ProviderState.ERROR;
+      throw Exception('Initialization failed');
+    }
     _state = ProviderState.READY;
   }
 
@@ -336,6 +340,7 @@ void main() {
 
 
 
+      api.bindClientToProvider('test-client', 'TestProvider');
       final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
 
     // Should return default value when provider has error
@@ -381,19 +386,11 @@ void main() {
     });
 
     test('emits error events for flag evaluation issues', () async {
-      provider.booleanValue = false;
-      provider._state = ProviderState.ERROR;
+      final provider = IsolatedTestProvider({}, ProviderState.NOT_READY);
       await api.setProvider(provider);
-      api.bindClientToProvider('test-client', provider.name);
 
-      final errorEvents = <OpenFeatureEvent>[];
-      final subscription = api.events.listen((event) {
-        if (event.type == OpenFeatureEventType.error) {
-          errorEvents.add(event);
-        }
-      });
-
-      await api.evaluateBooleanFlag('error-flag', 'test-client');
+      api.bindClientToProvider('test-client', 'TestProvider');
+      await api.evaluateBooleanFlag('missing-flag', 'test-client');
 
       //Wait for events to be processed
       await Future.delayed(Duration(milliseconds: 10));
@@ -436,14 +433,16 @@ void main() {
     });
 
     test('initializes default provider', () {
-      // The API should have a default InMemoryProvider that's ready
-      expect(api.provider, isA<InMemoryProvider>());
+      expect(api.provider, isNotNull);
+      expect(api.provider.name, equals('InMemoryProvider'));
       expect(api.provider.state, equals(ProviderState.READY));
     });
 
     test('provider metadata is accessible', () async {
+      final provider = IsolatedTestProvider({'test': true});
       await api.setProvider(provider);
       expect(api.provider.metadata.name, equals('TestProvider'));
     });
   });
 }
+

@@ -489,14 +489,15 @@ class InMemoryProvider extends CachedFeatureProvider {
       );
     }
 
-    _state = ProviderState.CONNECTING;
+    setState(ProviderState.CONNECTING);
 
     try {
       // Simulate initialization work
       await Future.delayed(Duration(milliseconds: 10));
-      _state = ProviderState.READY;
+      setState(ProviderState.READY);
     } catch (e) {
-      _state = ProviderState.ERROR;
+      setState(ProviderState.ERROR);
+
       rethrow;
     }
   }

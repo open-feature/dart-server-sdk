@@ -39,6 +39,21 @@ abstract class OpenFeatureHook {
     Map<String, dynamic>? context,
   );
 }
+  @override
+  Future<FlagEvaluationResult<Map<String, dynamic>>> getObjectFlag(
+    String flagKey,
+    Map<String, dynamic> defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+}
 
 /// Default provider that's immediately ready - completely independent
 class _ImmediateReadyProvider implements FeatureProvider {
