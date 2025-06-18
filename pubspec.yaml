@@ -11,10 +11,12 @@
 
 name: openfeature_dart_server_sdk
 description: Official server-side Dart OpenFeature SDK.
-version: 0.0.8
+
+version: 0.0.9
+
 homepage: https://github.com/open-feature/dart-server-sdk
 environment:
-  sdk: ^3.7.2
+  sdk: ^3.8.1
 
 dependencies:
 # Core dependencies
@@ -24,11 +26,11 @@ dependencies:
 
 dev_dependencies:
 # For testing
-  coverage: ^1.11.1     # For Code Coverage Reports
+  coverage: ^1.14.0     # For Code Coverage Reports
   git_hooks: ^1.0.2     # Provides hooks for locla ddevelopment
-  lints: ^5.1.1         # Recommended lints for maintaining code quality
-  mockito: ^5.4.5       # For mocking objects in unit tests
-  test: ^1.25.15        # Dart's core testing framework
+  lints: ^6.0.0         # Recommended lints for maintaining code quality
+  mockito: ^5.4.6       # For mocking objects in unit tests
+  test: ^1.26.2        # Dart's core testing framework
 
 # Optional Local Hooks for development.
 git_hooks:
