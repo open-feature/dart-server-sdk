@@ -451,7 +451,7 @@ abstract class CachedFeatureProvider implements FeatureProvider {
   }
 }
 
-/// In-memory provider implementation with caching
+/// In-memory provider implementation with caching - FIXED for synchronous default provider
 class InMemoryProvider extends CachedFeatureProvider {
   final Map<String, dynamic> _flags;
 
@@ -707,37 +707,4 @@ class InMemoryProvider extends CachedFeatureProvider {
       evaluatorId: name,
     );
   }
-}
-
-/// Abstract base class for commercial provider integrations
-abstract class CommercialProvider implements FeatureProvider {
-  final String providerName;
-  final Uri baseUrl;
-  final Map<String, String> headers;
-  final Duration timeout;
-  ProviderState _state = ProviderState.NOT_READY;
-  final ProviderMetadata _metadata;
-
-  CommercialProvider({
-    required this.providerName,
-    required this.baseUrl,
-    this.headers = const {},
-    this.timeout = const Duration(seconds: 5),
-  }) : _metadata = ProviderMetadata(name: providerName);
-
-  @override
-  String get name => providerName;
-
-  @override
-  ProviderState get state => _state;
-
-  @override
-  ProviderMetadata get metadata => _metadata;
-
-  // Subclasses must implement proper state transitions
-  void setState(ProviderState newState) {
-    _state = newState;
-  }
-
-  // HTTP request implementation template
 }
