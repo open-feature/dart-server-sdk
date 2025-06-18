@@ -210,7 +210,7 @@ void main() {
       final provider = TestProvider(
         {'test-flag': true},
         ProviderState.NOT_READY,
-        true,
+        true, // shouldFailInitialization = true
       );
 
       // setProvider should not throw even if initialization fails
@@ -264,7 +264,7 @@ void main() {
       final events = <OpenFeatureEvent>[];
 
       await api.setProvider(provider);
-      // Force provider back to NOT_READY
+      // Force provider back to NOT_READY to simulate a non-ready provider
       provider.setState(ProviderState.NOT_READY);
       api.bindClientToProvider('test-client', 'TestProvider');
 

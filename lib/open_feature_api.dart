@@ -78,14 +78,8 @@ class OpenFeatureAPI {
   }
 
   void _initializeDefaultProvider() {
-    // Create default provider that bypasses initialization
-    _provider = InMemoryProvider({});
-
-    // Per OpenFeature spec: default provider should be immediately READY
-    // Set state directly without calling initialize() to avoid CONNECTING state
-    if (_provider is CachedFeatureProvider) {
-      (_provider as CachedFeatureProvider).setState(ProviderState.READY);
-    }
+    // Create a special default provider that is immediately READY
+    _provider = _DefaultInMemoryProvider();
     _logger.info('Default provider initialized and ready');
   }
 
@@ -261,4 +255,18 @@ class OpenFeatureAPI {
   Stream<OpenFeatureEvent> get events => _eventStreamController.stream;
   Stream<Map<String, String>> get domainUpdates =>
       _domainUpdatesController.stream;
+}
+
+/// Special default provider that's immediately ready and doesn't need initialization
+class _DefaultInMemoryProvider extends InMemoryProvider {
+  _DefaultInMemoryProvider() : super({}) {
+    // Immediately set to READY without going through initialization
+    setState(ProviderState.READY);
+  }
+
+  @override
+  Future<void> initialize([Map<String, dynamic>? config]) async {
+    // No-op for default provider - already ready
+    return;
+  }
 }
