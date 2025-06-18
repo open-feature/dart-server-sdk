@@ -166,6 +166,11 @@ class OpenFeatureAPI {
     return _instance!;
   }
 
+  // Public constructor for testing - bypasses singleton
+  factory OpenFeatureAPI.forTesting() {
+    return OpenFeatureAPI._internal();
+  }
+
   void _configureLogging() {
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((record) {
@@ -340,8 +345,18 @@ class OpenFeatureAPI {
     await _domainUpdatesController.close();
   }
 
+  // FIXED: Proper singleton reset with complete cleanup
   static void resetInstance() {
-    _instance?.dispose();
+    if (_instance != null) {
+      try {
+        _instance!._providerStreamController.close();
+        _instance!._eventStreamController.close();
+        _instance!._domainUpdatesController.close();
+        _instance!._domainManager.dispose();
+      } catch (e) {
+        // Ignore disposal errors during reset
+      }
+    }
     _instance = null;
   }
 
