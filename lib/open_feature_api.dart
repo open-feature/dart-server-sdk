@@ -39,11 +39,172 @@ abstract class OpenFeatureHook {
   );
 }
 
+/// Default provider that's immediately ready per OpenFeature spec
+class _ReadyInMemoryProvider implements FeatureProvider {
+  final Map<String, dynamic> _flags = {};
+
+  @override
+  String get name => 'InMemoryProvider';
+
+  @override
+  ProviderState get state => ProviderState.READY;
+
+  @override
+  ProviderConfig get config => ProviderConfig();
+
+  @override
+  ProviderMetadata get metadata => ProviderMetadata(name: 'InMemoryProvider');
+
+  @override
+  Future<void> initialize([Map<String, dynamic>? config]) async {
+    // No-op: already ready
+  }
+
+  @override
+  Future<void> connect() async {
+    // No-op: already ready
+  }
+
+  @override
+  Future<void> shutdown() async {
+    // No-op
+  }
+
+  @override
+  Future<FlagEvaluationResult<bool>> getBooleanFlag(
+    String flagKey,
+    bool defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    final value = _flags[flagKey];
+    if (value is bool) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: value,
+        reason: 'STATIC',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+
+  @override
+  Future<FlagEvaluationResult<String>> getStringFlag(
+    String flagKey,
+    String defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    final value = _flags[flagKey];
+    if (value is String) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: value,
+        reason: 'STATIC',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+
+  @override
+  Future<FlagEvaluationResult<int>> getIntegerFlag(
+    String flagKey,
+    int defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    final value = _flags[flagKey];
+    if (value is int) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: value,
+        reason: 'STATIC',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+
+  @override
+  Future<FlagEvaluationResult<double>> getDoubleFlag(
+    String flagKey,
+    double defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    final value = _flags[flagKey];
+    if (value is double) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: value,
+        reason: 'STATIC',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+
+  @override
+  Future<FlagEvaluationResult<Map<String, dynamic>>> getObjectFlag(
+    String flagKey,
+    Map<String, dynamic> defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    final value = _flags[flagKey];
+    if (value is Map<String, dynamic>) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: value,
+        reason: 'STATIC',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    return FlagEvaluationResult.error(
+      flagKey,
+      defaultValue,
+      ErrorCode.FLAG_NOT_FOUND,
+      'Flag not found',
+      evaluatorId: name,
+    );
+  }
+}
+
 class OpenFeatureAPI {
   static final Logger _logger = Logger('OpenFeatureAPI');
   static OpenFeatureAPI? _instance;
 
-  // Core components
   late FeatureProvider _provider;
   final DomainManager _domainManager = DomainManager();
   final List<OpenFeatureHook> _hooks = [];
@@ -59,7 +220,6 @@ class OpenFeatureAPI {
       _domainUpdatesController =
           StreamController<Map<String, String>>.broadcast() {
     _configureLogging();
-    // Initialize the default provider synchronously
     _initializeDefaultProvider();
   }
 
@@ -78,8 +238,7 @@ class OpenFeatureAPI {
   }
 
   void _initializeDefaultProvider() {
-    // Create a special default provider that is immediately READY
-    _provider = _DefaultInMemoryProvider();
+    _provider = _ReadyInMemoryProvider();
     _logger.info('Default provider initialized and ready');
   }
 
@@ -87,7 +246,7 @@ class OpenFeatureAPI {
     _logger.info('Setting provider: ${provider.name}');
 
     try {
-      // Per OpenFeature spec: attempt initialization if provider is NOT_READY
+      // Only initialize if provider is NOT_READY
       if (provider.state == ProviderState.NOT_READY) {
         await provider.initialize();
       }
@@ -101,8 +260,7 @@ class OpenFeatureAPI {
     } catch (error) {
       _logger.severe('Failed to initialize provider: $error');
 
-      // Per OpenFeature spec: failed providers should remain accessible in ERROR state
-      // This allows the provider to be used but flag evaluations will be short-circuited
+      // Per OpenFeature spec: keep provider in ERROR state
       _provider = provider;
       _providerStreamController.add(provider);
       _emitEvent(
@@ -110,8 +268,6 @@ class OpenFeatureAPI {
         'Provider initialization failed: ${provider.name}',
         data: error,
       );
-
-      // Don't rethrow - let the provider remain in ERROR state per spec
     }
   }
 
@@ -130,17 +286,6 @@ class OpenFeatureAPI {
   }
 
   List<OpenFeatureHook> get hooks => List.unmodifiable(_hooks);
-
-  void _emitEvent(OpenFeatureEventType type, String message, {dynamic data}) {
-    final event = OpenFeatureEvent(type, message, data: data);
-    _eventStreamController.add(event);
-  }
-
-  Future<void> dispose() async {
-    await _providerStreamController.close();
-    await _eventStreamController.close();
-    await _domainUpdatesController.close();
-  }
 
   void bindClientToProvider(String clientId, String providerId) {
     _domainManager.bindClientToProvider(clientId, providerId);
@@ -161,7 +306,7 @@ class OpenFeatureAPI {
       return false;
     }
 
-    // Per OpenFeature spec: short-circuit if provider not in READY state
+    // Per OpenFeature spec: short-circuit if provider not READY
     if (_provider.state != ProviderState.READY) {
       _logger.warning(
         'Provider not ready for evaluation (state: ${_provider.state})',
@@ -171,11 +316,12 @@ class OpenFeatureAPI {
         'Flag evaluation attempted on non-ready provider',
         data: {'flagKey': flagKey, 'providerState': _provider.state.name},
       );
-      return false; // Return default value per OpenFeature spec
+      return false;
     }
 
     try {
       _runBeforeEvaluationHooks(flagKey, context);
+
       final result = await _provider.getBooleanFlag(
         flagKey,
         false,
@@ -194,7 +340,6 @@ class OpenFeatureAPI {
 
       _runAfterEvaluationHooks(flagKey, result.value, context);
 
-      // Log errors but still return the value (which is the default if error occurred)
       if (result.errorCode != null) {
         _logger.warning('Flag evaluation error: ${result.errorMessage}');
         _emitEvent(
@@ -246,6 +391,17 @@ class OpenFeatureAPI {
     }
   }
 
+  void _emitEvent(OpenFeatureEventType type, String message, {dynamic data}) {
+    final event = OpenFeatureEvent(type, message, data: data);
+    _eventStreamController.add(event);
+  }
+
+  Future<void> dispose() async {
+    await _providerStreamController.close();
+    await _eventStreamController.close();
+    await _domainUpdatesController.close();
+  }
+
   static void resetInstance() {
     _instance = null;
   }
@@ -255,21 +411,4 @@ class OpenFeatureAPI {
   Stream<OpenFeatureEvent> get events => _eventStreamController.stream;
   Stream<Map<String, String>> get domainUpdates =>
       _domainUpdatesController.stream;
-}
-
-/// Special default provider that's immediately ready and doesn't need initialization
-class _DefaultInMemoryProvider extends InMemoryProvider {
-  _DefaultInMemoryProvider() : super({}) {
-    // Immediately set to READY without going through initialization
-    setState(ProviderState.READY);
-  }
-
-  @override
-  ProviderState get state => ProviderState.READY;
-
-  @override
-  Future<void> initialize([Map<String, dynamic>? config]) async {
-    // No-op for default provider - already ready
-    return;
-  }
 }
