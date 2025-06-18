@@ -1,167 +1,6 @@
 import 'package:test/test.dart';
+import '../lib/open_feature_api.dart';
 import '../lib/feature_provider.dart';
-import '../lib/domain_manager.dart';
-
-// Test-only API class - no singleton, no shared state
-class TestOpenFeatureAPI {
-  late FeatureProvider _provider;
-  final DomainManager _domainManager = DomainManager();
-  final List<TestHook> _hooks = [];
-  TestEvaluationContext? _globalContext;
-
-  TestOpenFeatureAPI() {
-    _initializeDefaultProvider();
-  }
-
-  void _initializeDefaultProvider() {
-    _provider = TestImmediateProvider();
-  }
-
-  Future<void> setProvider(FeatureProvider provider) async {
-    if (provider.state == ProviderState.NOT_READY) {
-      try {
-        await provider.initialize();
-      } catch (e) {
-        // Provider stays in ERROR state
-      }
-    }
-    _provider = provider;
-  }
-
-  FeatureProvider get provider => _provider;
-
-  void setGlobalContext(TestEvaluationContext context) {
-    _globalContext = context;
-  }
-
-  TestEvaluationContext? get globalContext => _globalContext;
-
-  void addHooks(List<TestHook> hooks) {
-    _hooks.addAll(hooks);
-  }
-
-  void bindClientToProvider(String clientId, String providerId) {
-    _domainManager.bindClientToProvider(clientId, providerId);
-  }
-
-  Future<bool> evaluateBooleanFlag(String flagKey, String clientId) async {
-    if (_provider.state != ProviderState.READY) {
-      return false;
-    }
-
-    try {
-      _runBeforeHooks(flagKey);
-      final result = await _provider.getBooleanFlag(flagKey, false);
-      _runAfterHooks(flagKey, result.value);
-      return result.value;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  void _runBeforeHooks(String flagKey) {
-    for (var hook in _hooks) {
-      hook.beforeEvaluation(flagKey, null);
-    }
-  }
-
-  void _runAfterHooks(String flagKey, dynamic result) {
-    for (var hook in _hooks) {
-      hook.afterEvaluation(flagKey, result, null);
-    }
-  }
-
-  void dispose() {
-    _domainManager.dispose();
-  }
-}
-
-class TestEvaluationContext {
-  final Map<String, dynamic> attributes;
-  TestEvaluationContext(this.attributes);
-
-  TestEvaluationContext merge(TestEvaluationContext other) {
-    return TestEvaluationContext({...attributes, ...other.attributes});
-  }
-}
-
-class TestHook {
-  final List<String> calls = [];
-
-  void beforeEvaluation(String flagKey, Map<String, dynamic>? context) {
-    calls.add('before:$flagKey');
-  }
-
-  void afterEvaluation(String flagKey, result, Map<String, dynamic>? context) {
-    calls.add('after:$flagKey:$result');
-  }
-}
-
-class TestImmediateProvider implements FeatureProvider {
-  @override
-  String get name => 'InMemoryProvider';
-
-  @override
-  ProviderState get state => ProviderState.READY;
-
-  @override
-  ProviderConfig get config => ProviderConfig();
-
-  @override
-  ProviderMetadata get metadata => ProviderMetadata(name: 'InMemoryProvider');
-
-  @override
-  Future<void> initialize([Map<String, dynamic>? config]) async {}
-
-  @override
-  Future<void> connect() async {}
-
-  @override
-  Future<void> shutdown() async {}
-
-  @override
-  Future<FlagEvaluationResult<bool>> getBooleanFlag(
-    String flagKey,
-    bool defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<String>> getStringFlag(
-    String flagKey,
-    String defaultValue, {
-    Map<String, dynamic>? context,
-  }) async => throw UnimplementedError();
-
-  @override
-  Future<FlagEvaluationResult<int>> getIntegerFlag(
-    String flagKey,
-    int defaultValue, {
-    Map<String, dynamic>? context,
-  }) async => throw UnimplementedError();
-
-  @override
-  Future<FlagEvaluationResult<double>> getDoubleFlag(
-    String flagKey,
-    double defaultValue, {
-    Map<String, dynamic>? context,
-  }) async => throw UnimplementedError();
-
-  @override
-  Future<FlagEvaluationResult<Map<String, dynamic>>> getObjectFlag(
-    String flagKey,
-    Map<String, dynamic> defaultValue, {
-    Map<String, dynamic>? context,
-  }) async => throw UnimplementedError();
-}
 
 class TestProvider implements FeatureProvider {
   final Map<String, dynamic> _flags;
@@ -205,6 +44,10 @@ class TestProvider implements FeatureProvider {
     _state = ProviderState.SHUTDOWN;
   }
 
+  void setState(ProviderState newState) {
+    _state = newState;
+  }
+
   @override
   Future<FlagEvaluationResult<bool>> getBooleanFlag(
     String flagKey,
@@ -216,7 +59,7 @@ class TestProvider implements FeatureProvider {
         flagKey,
         defaultValue,
         ErrorCode.PROVIDER_NOT_READY,
-        'Provider not ready',
+        'Provider not ready (state: $_state)',
         evaluatorId: name,
       );
     }
@@ -280,16 +123,45 @@ class TestProvider implements FeatureProvider {
   }) async => throw UnimplementedError();
 }
 
+class TestHook extends OpenFeatureHook {
+  final List<String> calls = [];
+
+  @override
+  void beforeEvaluation(String flagKey, Map<String, dynamic>? context) {
+    calls.add('before:$flagKey');
+  }
+
+  @override
+  void afterEvaluation(String flagKey, result, Map<String, dynamic>? context) {
+    calls.add('after:$flagKey:$result');
+  }
+}
+
 void main() {
-  group('TestOpenFeatureAPI', () {
-    late TestOpenFeatureAPI api;
+  // Enable test mode to disable singleton behavior
+  setUpAll(() {
+    OpenFeatureAPI.enableTestMode();
+  });
+
+  tearDownAll(() {
+    OpenFeatureAPI.disableTestMode();
+  });
+
+  group('OpenFeatureAPI', () {
+    late OpenFeatureAPI api;
 
     setUp(() {
-      api = TestOpenFeatureAPI(); // Fresh instance every test
+      api = OpenFeatureAPI(); // Now returns fresh instance in test mode
     });
 
-    tearDown(() {
-      api.dispose();
+    tearDown(() async {
+      await api.dispose();
+    });
+
+    test('singleton instance', () {
+      final api1 = OpenFeatureAPI.forTesting();
+      final api2 = OpenFeatureAPI.forTesting();
+      expect(identical(api1, api2), isFalse);
     });
 
     test('sets and gets provider', () async {
@@ -297,6 +169,22 @@ void main() {
       await api.setProvider(provider);
       expect(api.provider, equals(provider));
       expect(api.provider.state, equals(ProviderState.READY));
+    });
+
+    test('sets and gets global context', () {
+      final context = OpenFeatureEvaluationContext({'key': 'value'});
+      api.setGlobalContext(context);
+      expect(api.globalContext?.attributes['key'], equals('value'));
+    });
+
+    test('merges evaluation contexts', () {
+      final globalContext = OpenFeatureEvaluationContext({'global': 'value'});
+      final localContext = OpenFeatureEvaluationContext({'local': 'value'});
+      api.setGlobalContext(globalContext);
+
+      final merged = globalContext.merge(localContext);
+      expect(merged.attributes['global'], equals('value'));
+      expect(merged.attributes['local'], equals('value'));
     });
 
     test('evaluates boolean flag with hooks', () async {
@@ -315,40 +203,95 @@ void main() {
     });
 
     test('handles provider not ready gracefully', () async {
+      // Create provider that will fail initialization and be in ERROR state
       final provider = TestProvider(
         {'test-flag': true},
         ProviderState.NOT_READY,
         true, // shouldFailInitialization = true
       );
 
-      await api.setProvider(provider);
+      // setProvider will fail but leave provider in ERROR state
+      await api.setProvider(provider); // This handles the error internally
+
+      // Verify provider is in ERROR state (not READY)
       expect(api.provider.state, equals(ProviderState.ERROR));
 
       api.bindClientToProvider('test-client', 'TestProvider');
-      final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
 
+      // Should return false because provider is in ERROR state (not READY)
+      final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
       expect(result, isFalse);
     });
 
+    test('binds client to provider', () {
+      api.bindClientToProvider('client1', 'provider1');
+    });
+
+    test('emits events on provider change', () async {
+      final provider = TestProvider({'test': true});
+      final events = <OpenFeatureEvent>[];
+
+      api.events.listen(events.add);
+      await api.setProvider(provider);
+      await Future.delayed(Duration(milliseconds: 10));
+
+      expect(events.length, greaterThan(0));
+      expect(
+        events.any((e) => e.type == OpenFeatureEventType.providerChanged),
+        isTrue,
+      );
+    });
+
+    test('emits error events for flag evaluation issues', () async {
+      final provider = TestProvider({}, ProviderState.NOT_READY);
+      final events = <OpenFeatureEvent>[];
+
+      await api.setProvider(provider);
+      provider.setState(ProviderState.NOT_READY);
+      api.bindClientToProvider('test-client', 'TestProvider');
+      api.events.listen(events.add);
+
+      await api.evaluateBooleanFlag('missing-flag', 'test-client');
+      await Future.delayed(Duration(milliseconds: 10));
+
+      expect(events.any((e) => e.type == OpenFeatureEventType.error), isTrue);
+    });
+
+    test('handles evaluation errors gracefully', () async {
+      final provider = TestProvider({'string-flag': 'not-boolean'});
+
+      await api.setProvider(provider);
+      api.bindClientToProvider('test-client', 'TestProvider');
+
+      final result = await api.evaluateBooleanFlag(
+        'string-flag',
+        'test-client',
+      );
+      expect(result, isFalse);
+    });
+
+    test('streams provider updates', () async {
+      final provider = TestProvider({'test': true});
+      final updates = <FeatureProvider>[];
+
+      api.providerUpdates.listen(updates.add);
+      await api.setProvider(provider);
+      await Future.delayed(Duration(milliseconds: 10));
+
+      expect(updates, contains(provider));
+    });
+
     test('initializes default provider', () {
+      // Fresh instance should have READY default provider
       expect(api.provider, isNotNull);
       expect(api.provider.name, equals('InMemoryProvider'));
       expect(api.provider.state, equals(ProviderState.READY));
     });
 
-    test('sets and gets global context', () {
-      final context = TestEvaluationContext({'key': 'value'});
-      api.setGlobalContext(context);
-      expect(api.globalContext?.attributes['key'], equals('value'));
-    });
-
-    test('merges evaluation contexts', () {
-      final globalContext = TestEvaluationContext({'global': 'value'});
-      final localContext = TestEvaluationContext({'local': 'value'});
-
-      final merged = globalContext.merge(localContext);
-      expect(merged.attributes['global'], equals('value'));
-      expect(merged.attributes['local'], equals('value'));
+    test('provider metadata is accessible', () async {
+      final provider = TestProvider({'test': true});
+      await api.setProvider(provider);
+      expect(api.provider.metadata.name, equals('TestProvider'));
     });
   });
 }

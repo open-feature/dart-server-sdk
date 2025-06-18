@@ -142,6 +142,7 @@ class _ImmediateReadyProvider implements FeatureProvider {
 class OpenFeatureAPI {
   static final Logger _logger = Logger('OpenFeatureAPI');
   static OpenFeatureAPI? _instance;
+  static bool _testMode = false; // Add test mode flag
 
   late FeatureProvider _provider;
   final DomainManager _domainManager = DomainManager();
@@ -162,8 +163,25 @@ class OpenFeatureAPI {
   }
 
   factory OpenFeatureAPI() {
+    // In test mode, always return new instance
+    if (_testMode) {
+      return OpenFeatureAPI._internal();
+    }
+
     _instance ??= OpenFeatureAPI._internal();
     return _instance!;
+  }
+
+  // Enable test mode - disables singleton
+  static void enableTestMode() {
+    _testMode = true;
+    _instance = null;
+  }
+
+  // Disable test mode - re-enables singleton
+  static void disableTestMode() {
+    _testMode = false;
+    _instance = null;
   }
 
   // Public constructor for testing - bypasses singleton
