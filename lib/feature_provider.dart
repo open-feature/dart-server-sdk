@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 
 /// Provider states for lifecycle management
 enum ProviderState {
@@ -14,6 +15,30 @@ enum ProviderState {
   MAINTENANCE,
 }
 
+/// OpenFeature error codes
+enum ErrorCode {
+  FLAG_NOT_FOUND,
+  TYPE_MISMATCH,
+  GENERAL,
+  PARSE_ERROR,
+  TARGETING_KEY_MISSING,
+  INVALID_CONTEXT,
+  PROVIDER_NOT_READY,
+}
+
+/// Provider metadata
+class ProviderMetadata {
+  final String name;
+  final String version;
+  final Map<String, String> attributes;
+
+  const ProviderMetadata({
+    required this.name,
+    this.version = '1.0.0',
+    this.attributes = const {},
+  });
+}
+
 /// Provider configuration
 class ProviderConfig {
   final Duration connectionTimeout;
@@ -22,6 +47,7 @@ class ProviderConfig {
   final Duration retryDelay;
   final bool enableCache;
   final Duration cacheTTL;
+  final int maxCacheSize;
   final Map<String, dynamic> customConfig;
 
   const ProviderConfig({
@@ -31,8 +57,24 @@ class ProviderConfig {
     this.retryDelay = const Duration(seconds: 1),
     this.enableCache = true,
     this.cacheTTL = const Duration(minutes: 5),
+    this.maxCacheSize = 1000,
     this.customConfig = const {},
   });
+}
+
+/// Cache entry for provider-level caching
+class _ProviderCacheEntry<T> {
+  final T value;
+  final DateTime expiresAt;
+  final String contextHash;
+
+  _ProviderCacheEntry({
+    required this.value,
+    required Duration ttl,
+    required this.contextHash,
+  }) : expiresAt = DateTime.now().add(ttl);
+
+  bool get isExpired => DateTime.now().isAfter(expiresAt);
 }
 
 /// Result of feature flag evaluation
@@ -40,6 +82,9 @@ class FlagEvaluationResult<T> {
   final String flagKey;
   final T value;
   final String reason;
+  final String? variant;
+  final ErrorCode? errorCode;
+  final String? errorMessage;
   final Map<String, dynamic>? details;
   final DateTime evaluatedAt;
   final String evaluatorId;
@@ -48,26 +93,48 @@ class FlagEvaluationResult<T> {
     required this.flagKey,
     required this.value,
     this.reason = 'DEFAULT',
+    this.variant,
+    this.errorCode,
+    this.errorMessage,
     this.details,
     required this.evaluatedAt,
     this.evaluatorId = '',
   });
+
+  /// Create an error result
+  static FlagEvaluationResult<T> error<T>(
+    String flagKey,
+    T defaultValue,
+    ErrorCode errorCode,
+    String message, {
+    String evaluatorId = '',
+  }) {
+    return FlagEvaluationResult<T>(
+      flagKey: flagKey,
+      value: defaultValue,
+      reason: 'ERROR',
+      errorCode: errorCode,
+      errorMessage: message,
+      evaluatedAt: DateTime.now(),
+      evaluatorId: evaluatorId,
+    );
+  }
 }
 
 /// Provider exception
 class ProviderException implements Exception {
   final String message;
-  final String code;
+  final ErrorCode code;
   final Map<String, dynamic>? details;
 
   const ProviderException(
     this.message, {
-    this.code = 'PROVIDER_ERROR',
+    this.code = ErrorCode.GENERAL,
     this.details,
   });
 
   @override
-  String toString() => 'ProviderException: $message (code: $code)';
+  String toString() => 'ProviderException: $message (code: ${code.name})';
 }
 
 /// Feature provider interface
@@ -75,6 +142,7 @@ abstract class FeatureProvider {
   String get name;
   ProviderState get state;
   ProviderConfig get config;
+  ProviderMetadata get metadata;
 
   Future<void> initialize([Map<String, dynamic>? config]);
   Future<void> connect();
@@ -111,17 +179,21 @@ abstract class FeatureProvider {
   });
 }
 
-/// In-memory provider implementation
-class InMemoryProvider implements FeatureProvider {
-  final Map<String, dynamic> _flags;
-  ProviderState _state = ProviderState.NOT_READY;
+/// Base provider with caching capabilities
+abstract class CachedFeatureProvider implements FeatureProvider {
   final ProviderConfig _config;
+  final ProviderMetadata _metadata;
+  ProviderState _state = ProviderState.NOT_READY;
 
-  InMemoryProvider(this._flags, [ProviderConfig? config])
-    : _config = config ?? const ProviderConfig();
+  // Provider-level cache
+  final LinkedHashMap<String, _ProviderCacheEntry<dynamic>> _cache =
+      LinkedHashMap<String, _ProviderCacheEntry<dynamic>>();
 
-  @override
-  String get name => 'InMemoryProvider';
+  CachedFeatureProvider({
+    required ProviderMetadata metadata,
+    ProviderConfig? config,
+  }) : _metadata = metadata,
+       _config = config ?? const ProviderConfig();
 
   @override
   ProviderState get state => _state;
@@ -130,44 +202,124 @@ class InMemoryProvider implements FeatureProvider {
   ProviderConfig get config => _config;
 
   @override
-  Future<void> initialize([Map<String, dynamic>? config]) async {
-    _state = ProviderState.READY;
-  }
+  ProviderMetadata get metadata => _metadata;
 
   @override
-  Future<void> connect() async {
-    _state = ProviderState.READY;
+  String get name => _metadata.name;
+
+  /// Set provider state
+  void setState(ProviderState newState) {
+    _state = newState;
   }
 
-  @override
-  Future<void> shutdown() async {
-    _state = ProviderState.SHUTDOWN;
-  }
-
-  void _checkState() {
-    if (_state != ProviderState.READY) {
-      throw ProviderException(
-        'Provider not in READY state',
-        code: 'PROVIDER_NOT_READY',
-        details: {'currentState': _state.toString()},
-      );
+  /// Generate cache key
+  String _generateCacheKey(String flagKey, Map<String, dynamic>? context) {
+    final buffer = StringBuffer(flagKey);
+    if (context != null) {
+      final sortedKeys = context.keys.toList()..sort();
+      for (final key in sortedKeys) {
+        buffer.write('$key:${context[key]}');
+      }
     }
+    return buffer.toString();
   }
 
+  /// Add to cache
+  void _addToCache<T>(String key, T value) {
+    if (!_config.enableCache) return;
+
+    // Remove oldest entries if cache is full
+    while (_cache.length >= _config.maxCacheSize) {
+      _cache.remove(_cache.keys.first);
+    }
+
+    _cache[key] = _ProviderCacheEntry<T>(
+      value: value,
+      ttl: _config.cacheTTL,
+      contextHash: key,
+    );
+  }
+
+  /// Get cache entry with reason
+  _ProviderCacheEntry<T>? _getCacheEntry<T>(String key) {
+    if (!_config.enableCache) return null;
+
+    final entry = _cache[key];
+    if (entry == null || entry.isExpired) {
+      _cache.remove(key);
+      return null;
+    }
+    return entry as _ProviderCacheEntry<T>?;
+  }
+
+  /// Clear cache
+  void clearCache() {
+    _cache.clear();
+  }
+
+  /// Abstract methods for actual flag resolution
+  Future<FlagEvaluationResult<bool>> resolveBooleanFlag(
+    String flagKey,
+    bool defaultValue, {
+    Map<String, dynamic>? context,
+  });
+
+  Future<FlagEvaluationResult<String>> resolveStringFlag(
+    String flagKey,
+    String defaultValue, {
+    Map<String, dynamic>? context,
+  });
+
+  Future<FlagEvaluationResult<int>> resolveIntegerFlag(
+    String flagKey,
+    int defaultValue, {
+    Map<String, dynamic>? context,
+  });
+
+  Future<FlagEvaluationResult<double>> resolveDoubleFlag(
+    String flagKey,
+    double defaultValue, {
+    Map<String, dynamic>? context,
+  });
+
+  Future<FlagEvaluationResult<Map<String, dynamic>>> resolveObjectFlag(
+    String flagKey,
+    Map<String, dynamic> defaultValue, {
+    Map<String, dynamic>? context,
+  });
+
+  /// Cached evaluation implementations
   @override
   Future<FlagEvaluationResult<bool>> getBooleanFlag(
     String flagKey,
     bool defaultValue, {
     Map<String, dynamic>? context,
   }) async {
-    _checkState();
-    final value = _flags[flagKey] ?? defaultValue;
-    return FlagEvaluationResult(
-      flagKey: flagKey,
-      value: value is bool ? value : defaultValue,
-      evaluatedAt: DateTime.now(),
-      evaluatorId: name,
+    final cacheKey = _generateCacheKey(flagKey, context);
+    final cachedEntry = _getCacheEntry<bool>(cacheKey);
+
+    if (cachedEntry != null) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: cachedEntry.value,
+        reason: 'CACHED',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    final result = await resolveBooleanFlag(
+      flagKey,
+      defaultValue,
+      context: context,
     );
+
+    // Cache successful evaluations
+    if (result.errorCode == null) {
+      _addToCache(cacheKey, result.value);
+    }
+
+    return result;
   }
 
   @override
@@ -176,14 +328,30 @@ class InMemoryProvider implements FeatureProvider {
     String defaultValue, {
     Map<String, dynamic>? context,
   }) async {
-    _checkState();
-    final value = _flags[flagKey] ?? defaultValue;
-    return FlagEvaluationResult(
-      flagKey: flagKey,
-      value: value is String ? value : defaultValue,
-      evaluatedAt: DateTime.now(),
-      evaluatorId: name,
+    final cacheKey = _generateCacheKey(flagKey, context);
+    final cachedEntry = _getCacheEntry<String>(cacheKey);
+
+    if (cachedEntry != null) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: cachedEntry.value,
+        reason: 'CACHED',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    final result = await resolveStringFlag(
+      flagKey,
+      defaultValue,
+      context: context,
     );
+
+    if (result.errorCode == null) {
+      _addToCache(cacheKey, result.value);
+    }
+
+    return result;
   }
 
   @override
@@ -192,14 +360,30 @@ class InMemoryProvider implements FeatureProvider {
     int defaultValue, {
     Map<String, dynamic>? context,
   }) async {
-    _checkState();
-    final value = _flags[flagKey] ?? defaultValue;
-    return FlagEvaluationResult(
-      flagKey: flagKey,
-      value: value is int ? value : defaultValue,
-      evaluatedAt: DateTime.now(),
-      evaluatorId: name,
+    final cacheKey = _generateCacheKey(flagKey, context);
+    final cachedEntry = _getCacheEntry<int>(cacheKey);
+
+    if (cachedEntry != null) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: cachedEntry.value,
+        reason: 'CACHED',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    final result = await resolveIntegerFlag(
+      flagKey,
+      defaultValue,
+      context: context,
     );
+
+    if (result.errorCode == null) {
+      _addToCache(cacheKey, result.value);
+    }
+
+    return result;
   }
 
   @override
@@ -208,14 +392,30 @@ class InMemoryProvider implements FeatureProvider {
     double defaultValue, {
     Map<String, dynamic>? context,
   }) async {
-    _checkState();
-    final value = _flags[flagKey] ?? defaultValue;
-    return FlagEvaluationResult(
-      flagKey: flagKey,
-      value: value is double ? value : defaultValue,
-      evaluatedAt: DateTime.now(),
-      evaluatorId: name,
+    final cacheKey = _generateCacheKey(flagKey, context);
+    final cachedEntry = _getCacheEntry<double>(cacheKey);
+
+    if (cachedEntry != null) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: cachedEntry.value,
+        reason: 'CACHED',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    final result = await resolveDoubleFlag(
+      flagKey,
+      defaultValue,
+      context: context,
     );
+
+    if (result.errorCode == null) {
+      _addToCache(cacheKey, result.value);
+    }
+
+    return result;
   }
 
   @override
@@ -224,37 +424,287 @@ class InMemoryProvider implements FeatureProvider {
     Map<String, dynamic> defaultValue, {
     Map<String, dynamic>? context,
   }) async {
+    final cacheKey = _generateCacheKey(flagKey, context);
+    final cachedEntry = _getCacheEntry<Map<String, dynamic>>(cacheKey);
+
+    if (cachedEntry != null) {
+      return FlagEvaluationResult(
+        flagKey: flagKey,
+        value: cachedEntry.value,
+        reason: 'CACHED',
+        evaluatedAt: DateTime.now(),
+        evaluatorId: name,
+      );
+    }
+
+    final result = await resolveObjectFlag(
+      flagKey,
+      defaultValue,
+      context: context,
+    );
+
+    if (result.errorCode == null) {
+      _addToCache(cacheKey, result.value);
+    }
+
+    return result;
+  }
+}
+
+/// In-memory provider implementation with caching - FIXED for synchronous default provider
+class InMemoryProvider extends CachedFeatureProvider {
+  final Map<String, dynamic> _flags;
+
+  InMemoryProvider(this._flags, [ProviderConfig? config])
+    : super(
+        metadata: const ProviderMetadata(name: 'InMemoryProvider'),
+        config: config,
+      );
+
+  @override
+  Future<void> initialize([Map<String, dynamic>? config]) async {
+    if (state == ProviderState.SHUTDOWN) {
+      throw ProviderException(
+        'Cannot initialize a shutdown provider',
+        code: ErrorCode.PROVIDER_NOT_READY,
+      );
+    }
+
+    setState(ProviderState.CONNECTING);
+
+    try {
+      // Simulate initialization work
+      await Future.delayed(Duration(milliseconds: 10));
+      setState(ProviderState.READY);
+    } catch (e) {
+      setState(ProviderState.ERROR);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> connect() async {
+    if (state == ProviderState.SHUTDOWN) {
+      throw ProviderException(
+        'Cannot connect a shutdown provider',
+        code: ErrorCode.PROVIDER_NOT_READY,
+      );
+    }
+
+    setState(ProviderState.CONNECTING);
+
+    try {
+      await Future.delayed(Duration(milliseconds: 10));
+      setState(ProviderState.READY);
+    } catch (e) {
+      setState(ProviderState.ERROR);
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> shutdown() async {
+    clearCache();
+    setState(ProviderState.SHUTDOWN);
+  }
+
+  void _checkState() {
+    if (state != ProviderState.READY) {
+      throw ProviderException(
+        'Provider not in READY state: ${state.name}',
+        code: ErrorCode.PROVIDER_NOT_READY,
+        details: {'currentState': state.name},
+      );
+    }
+  }
+
+  @override
+  Future<FlagEvaluationResult<bool>> resolveBooleanFlag(
+    String flagKey,
+    bool defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
     _checkState();
-    final value = _flags[flagKey] ?? defaultValue;
+
+    if (!_flags.containsKey(flagKey)) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.FLAG_NOT_FOUND,
+        'Flag "$flagKey" not found',
+        evaluatorId: name,
+      );
+    }
+
+    final value = _flags[flagKey];
+    if (value is! bool) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.TYPE_MISMATCH,
+        'Flag "$flagKey" is not a boolean, got ${value.runtimeType}',
+        evaluatorId: name,
+      );
+    }
+
     return FlagEvaluationResult(
       flagKey: flagKey,
-      value: value is Map<String, dynamic> ? value : defaultValue,
+      value: value,
+      reason: 'STATIC',
       evaluatedAt: DateTime.now(),
       evaluatorId: name,
     );
   }
-}
-
-/// Abstract base class for commercial provider integrations
-abstract class CommercialProvider implements FeatureProvider {
-  final String providerName;
-  final Uri baseUrl;
-  final Map<String, String> headers;
-  final Duration timeout;
-  ProviderState _state = ProviderState.NOT_READY;
-
-  CommercialProvider({
-    required this.providerName,
-    required this.baseUrl,
-    this.headers = const {},
-    this.timeout = const Duration(seconds: 5),
-  });
 
   @override
-  String get name => providerName;
+  Future<FlagEvaluationResult<String>> resolveStringFlag(
+    String flagKey,
+    String defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    _checkState();
+
+    if (!_flags.containsKey(flagKey)) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.FLAG_NOT_FOUND,
+        'Flag "$flagKey" not found',
+        evaluatorId: name,
+      );
+    }
+
+    final value = _flags[flagKey];
+    if (value is! String) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.TYPE_MISMATCH,
+        'Flag "$flagKey" is not a string, got ${value.runtimeType}',
+        evaluatorId: name,
+      );
+    }
+
+    return FlagEvaluationResult(
+      flagKey: flagKey,
+      value: value,
+      reason: 'STATIC',
+      evaluatedAt: DateTime.now(),
+      evaluatorId: name,
+    );
+  }
 
   @override
-  ProviderState get state => _state;
+  Future<FlagEvaluationResult<int>> resolveIntegerFlag(
+    String flagKey,
+    int defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    _checkState();
 
-  // HTTP request implementation template
+    if (!_flags.containsKey(flagKey)) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.FLAG_NOT_FOUND,
+        'Flag "$flagKey" not found',
+        evaluatorId: name,
+      );
+    }
+
+    final value = _flags[flagKey];
+    if (value is! int) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.TYPE_MISMATCH,
+        'Flag "$flagKey" is not an integer, got ${value.runtimeType}',
+        evaluatorId: name,
+      );
+    }
+
+    return FlagEvaluationResult(
+      flagKey: flagKey,
+      value: value,
+      reason: 'STATIC',
+      evaluatedAt: DateTime.now(),
+      evaluatorId: name,
+    );
+  }
+
+  @override
+  Future<FlagEvaluationResult<double>> resolveDoubleFlag(
+    String flagKey,
+    double defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    _checkState();
+
+    if (!_flags.containsKey(flagKey)) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.FLAG_NOT_FOUND,
+        'Flag "$flagKey" not found',
+        evaluatorId: name,
+      );
+    }
+
+    final value = _flags[flagKey];
+    if (value is! double) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.TYPE_MISMATCH,
+        'Flag "$flagKey" is not a double, got ${value.runtimeType}',
+        evaluatorId: name,
+      );
+    }
+
+    return FlagEvaluationResult(
+      flagKey: flagKey,
+      value: value,
+      reason: 'STATIC',
+      evaluatedAt: DateTime.now(),
+      evaluatorId: name,
+    );
+  }
+
+  @override
+  Future<FlagEvaluationResult<Map<String, dynamic>>> resolveObjectFlag(
+    String flagKey,
+    Map<String, dynamic> defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    _checkState();
+
+    if (!_flags.containsKey(flagKey)) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.FLAG_NOT_FOUND,
+        'Flag "$flagKey" not found',
+        evaluatorId: name,
+      );
+    }
+
+    final value = _flags[flagKey];
+    if (value is! Map<String, dynamic>) {
+      return FlagEvaluationResult.error(
+        flagKey,
+        defaultValue,
+        ErrorCode.TYPE_MISMATCH,
+        'Flag "$flagKey" is not an object, got ${value.runtimeType}',
+        evaluatorId: name,
+      );
+    }
+
+    return FlagEvaluationResult(
+      flagKey: flagKey,
+      value: value,
+      reason: 'STATIC',
+      evaluatedAt: DateTime.now(),
+      evaluatorId: name,
+    );
+  }
 }
