@@ -51,7 +51,7 @@
 
 ### Requirements
 
-Dart language version: [3.7.2](https://dart.dev/get-dart/archive)
+Dart language version: [3.7.3](https://dart.dev/get-dart/archive)
 
 > [!NOTE]
 > The OpenFeature DartServer SDK only supports the latest currently maintained Dart language versions.
