@@ -206,6 +206,11 @@ abstract class CachedFeatureProvider implements FeatureProvider {
   ProviderMetadata get metadata => _metadata;
 
   @override
+
+  ProviderMetadata get metadata => _metadata;
+
+  @override
+
   String get name => _metadata.name;
 
   /// Set provider state
@@ -474,6 +479,7 @@ class InMemoryProvider extends CachedFeatureProvider {
     setState(ProviderState.CONNECTING);
 
 
+
     try {
       // Simulate initialization work
       await Future.delayed(Duration(milliseconds: 10));
@@ -517,7 +523,7 @@ class InMemoryProvider extends CachedFeatureProvider {
   void _checkState() {
     if (state != ProviderState.READY) {
       throw ProviderException(
-
+t
         'Provider not in READY state: ${state.name}',
         code: ErrorCode.PROVIDER_NOT_READY,
         details: {'currentState': state.name},

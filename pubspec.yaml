@@ -16,21 +16,21 @@ version: 0.0.10
 
 homepage: https://github.com/open-feature/dart-server-sdk
 environment:
-  sdk: ^3.8.1
+  sdk: ^3.9.2
 
 dependencies:
-# Core dependencies
-  collection: ^1.19.1   # For efficient list and map operations
-  logging: ^1.3.0       # For structured logging
-  meta: ^1.16.0         # For annotations like @required
+  # Core dependencies
+  collection: ^1.19.1 # For efficient list and map operations
+  logging: ^1.3.0 # For structured logging
+  meta: ^1.17.0 # For annotations like @required
 
 dev_dependencies:
-# For testing
-  coverage: ^1.14.0     # For Code Coverage Reports
-  git_hooks: ^1.0.2     # Provides hooks for locla ddevelopment
-  lints: ^6.0.0         # Recommended lints for maintaining code quality
-  mockito: ^5.4.6       # For mocking objects in unit tests
-  test: ^1.26.2        # Dart's core testing framework
+  # For testing
+  coverage: ^1.15.0 # For Code Coverage Reports
+  git_hooks: ^1.0.2 # Provides hooks for locla ddevelopment
+  lints: ^6.0.0 # Recommended lints for maintaining code quality
+  mockito: ^5.5.0 # For mocking objects in unit tests
+  test: ^1.26.3 # Dart's core testing framework
 
 
 # Optional Local Hooks for development.
