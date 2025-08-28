@@ -37,6 +37,7 @@ jobs:
       branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
       event_name: ${{ needs.determine-workflow.outputs.event_name }}
 
+
   #commented out for now, as we are not running coverage on this repo(for testing).
 
   # trigger-coverage:
@@ -47,6 +48,7 @@ jobs:
   #     branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
   #     event_name: ${{ needs.determine-workflow.outputs.event_name }}
 
+
   contributor-workflow:
     name: Trigger Contributor Workflow
     needs: determine-workflow
@@ -55,3 +57,4 @@ jobs:
       branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
 
       event_name: ${{ needs.determine-workflow.outputs.event_name }}
+

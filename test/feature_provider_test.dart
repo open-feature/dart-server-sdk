@@ -235,6 +235,7 @@ void main() {
 
       });
 
+
       group('caching behavior', () {
         test('caches successful evaluations', () async {
           // First evaluation
@@ -296,6 +297,7 @@ void main() {
           expect(result2.reason, equals('STATIC'));
         });
       });
+
     });
   });
 

@@ -158,12 +158,13 @@ void main() {
 
   group('ClientMetrics Tests', () {
     test('calculates average response time', () {
-      final metrics = ClientMetrics()
-        ..responseTimes.addAll([
-          Duration(milliseconds: 100),
-          Duration(milliseconds: 200),
-          Duration(milliseconds: 300),
-        ]);
+      final metrics =
+          ClientMetrics()
+            ..responseTimes.addAll([
+              Duration(milliseconds: 100),
+              Duration(milliseconds: 200),
+              Duration(milliseconds: 300),
+            ]);
 
       expect(metrics.averageResponseTime, equals(Duration(milliseconds: 200)));
     });
@@ -182,10 +183,12 @@ void main() {
     });
 
     test('converts to JSON correctly', () {
+
       final metrics = ClientMetrics()
         ..flagEvaluations = 10
         ..responseTimes.add(Duration(milliseconds: 100))
         ..errorCounts['TestError'] = 1;
+
 
       final json = metrics.toJson();
 
@@ -244,6 +247,7 @@ void main() {
       expect(metrics.errorCounts['FLAG_NOT_FOUND'], equals(1));
     });
 
+
     test('evaluates string flags', () async {
       final result = await client.getStringFlag('string-flag');
       expect(result, equals('hello'));
@@ -251,6 +255,7 @@ void main() {
 
     test('provider metadata is accessible through client', () {
       expect(client.provider.metadata.name, equals('MockProvider'));
+
     });
   });
 }

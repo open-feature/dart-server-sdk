@@ -98,7 +98,9 @@ class IsolatedDefaultProvider implements FeatureProvider {
   String get name => 'InMemoryProvider';
 
   @override
+
   ProviderState get state => _state;
+
 
   @override
   ProviderConfig get config => ProviderConfig();
@@ -107,6 +109,7 @@ class IsolatedDefaultProvider implements FeatureProvider {
   ProviderMetadata get metadata => ProviderMetadata(name: 'InMemoryProvider');
 
   @override
+
   ProviderMetadata get metadata => ProviderMetadata(name: 'InMemoryProvider');
 
   @override
@@ -123,6 +126,7 @@ class IsolatedDefaultProvider implements FeatureProvider {
   Future<void> shutdown() async {
     _state = ProviderState.SHUTDOWN;
   }
+
 
   @override
   Future<FlagEvaluationResult<bool>> getBooleanFlag(
@@ -378,6 +382,7 @@ void main() {
       expect(true, isTrue);
     });
 
+
     test('emits error events for flag evaluation issues', () async {
       final provider = IsolatedTestProvider({}, ProviderState.NOT_READY);
       await api.setProvider(provider);
@@ -388,6 +393,7 @@ void main() {
       // No events in this simplified version
       expect(true, isTrue);
     });
+
 
     test('handles evaluation errors gracefully', () async {
       final provider = IsolatedTestProvider({'string-flag': 'not-boolean'});
@@ -435,3 +441,4 @@ void main() {
     });
   });
 }
+
