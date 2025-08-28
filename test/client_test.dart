@@ -317,11 +317,12 @@ void main() {
     });
 
     test('converts to JSON correctly', () {
-      final metrics =
-          ClientMetrics()
-            ..flagEvaluations = 10
-            ..responseTimes.add(Duration(milliseconds: 100))
-            ..errorCounts['TestError'] = 1;
+
+      final metrics = ClientMetrics()
+        ..flagEvaluations = 10
+        ..responseTimes.add(Duration(milliseconds: 100))
+        ..errorCounts['TestError'] = 1;
+
 
       final json = metrics.toJson();
 
@@ -379,6 +380,7 @@ void main() {
       expect(metrics.flagEvaluations, equals(2));
       expect(metrics.errorCounts['FLAG_NOT_FOUND'], equals(1));
     });
+
 
     test('evaluates string flags', () async {
       final result = await client.getStringFlag('string-flag');

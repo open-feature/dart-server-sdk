@@ -10,7 +10,6 @@ enum OpenFeatureEventType {
   error,
   shutdown,
   domainUpdated,
-  domainUpdated,
 }
 
 class OpenFeatureEvent {
@@ -154,6 +153,8 @@ class _ImmediateReadyProvider implements FeatureProvider {
     );
   }
 }
+
+
 
 class OpenFeatureAPI {
   static final Logger _logger = Logger('OpenFeatureAPI');
@@ -304,6 +305,7 @@ class OpenFeatureAPI {
 
     try {
       _runBeforeEvaluationHooks(flagKey, context);
+
 
       final result = await _provider.getBooleanFlag(
         flagKey,

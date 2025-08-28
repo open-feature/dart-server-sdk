@@ -1,4 +1,5 @@
 import 'package:test/test.dart';
+import 'package:test/test.dart' as errorEvents;
 import '../lib/feature_provider.dart';
 import '../lib/domain_manager.dart';
 
