@@ -16,8 +16,9 @@
     <img alt="Specification" src="https://img.shields.io/static/v1?label=specification&message=v0.8.0&color=yellow&style=for-the-badge" />
   </a>
   <!-- x-release-please-start-version -->
-  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.10">
-    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.10&color=blue&style=for-the-badge" />
+
+  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.11">
+    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.11&color=blue&style=for-the-badge" />
   </a>
   <!-- x-release-please-end -->
   <a href="https://dart.dev/">
@@ -51,7 +52,7 @@
 
 ### Requirements
 
-Dart language version: [3.7.2](https://dart.dev/get-dart/archive)
+Dart language version: [3.9.2](https://dart.dev/get-dart/archive)
 
 > [!NOTE]
 > The OpenFeature DartServer SDK only supports the latest currently maintained Dart language versions.

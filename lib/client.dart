@@ -112,14 +112,7 @@ class FeatureClient {
             (_metrics.errorCounts[result.errorCode!.name] ?? 0) + 1;
       }
 
-      // Handle errors from the provider
-      if (result.errorCode != null) {
-        _logger.warning(
-          'Flag evaluation error for $flagKey: ${result.errorMessage}',
-        );
-        _metrics.errorCounts[result.errorCode!.name] =
-            (_metrics.errorCounts[result.errorCode!.name] ?? 0) + 1;
-      }
+
 
       _metrics.responseTimes.add(DateTime.now().difference(startTime));
       return result.value;
@@ -157,6 +150,7 @@ class FeatureClient {
 
   /// Evaluate string flag
 
+
   Future<String> getStringFlag(
     String flagKey, {
     EvaluationContext? context,
@@ -170,6 +164,7 @@ class FeatureClient {
 
   /// Evaluate integer flag
 
+
   Future<int> getIntegerFlag(
     String flagKey, {
     EvaluationContext? context,
@@ -180,6 +175,7 @@ class FeatureClient {
     (ctx) => _provider.getIntegerFlag(flagKey, defaultValue, context: ctx),
     context: context?.attributes,
   );
+
 
 
   /// Evaluate double flag
