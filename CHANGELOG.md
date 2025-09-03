@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.0.12](https://github.com/open-feature/dart-server-sdk/compare/v0.0.11...v0.0.12) (2025-08-30)
+
+
+### 📚 Documentation
+
+* update install version and links ([#68](https://github.com/open-feature/dart-server-sdk/issues/68)) ([3f1f302](https://github.com/open-feature/dart-server-sdk/commit/3f1f30263a8ec89d14eb744bfcb192e36d15fc8e))
+
+## [0.0.11](https://github.com/open-feature/dart-server-sdk/compare/v0.0.10...v0.0.11) (2025-08-28)
+
+
+### 🧹 Chore
+
+* Development to Main ([#69](https://github.com/open-feature/dart-server-sdk/issues/69)) ([d21c553](https://github.com/open-feature/dart-server-sdk/commit/d21c5539334681c2c96e354e088b8434c91e7d34))
+
 ## [0.0.10](https://github.com/open-feature/dart-server-sdk/compare/v0.0.9...v0.0.10) (2025-06-16)
 
 

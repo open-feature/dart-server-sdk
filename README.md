@@ -17,15 +17,14 @@
   </a>
   <!-- x-release-please-start-version -->
 
-  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.9">
-    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.9&color=blue&style=for-the-badge" />
-
-
+  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.12">
+    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.12&color=blue&style=for-the-badge" />
   </a>
+  <!-- x-release-please-end -->
   <a href="https://dart.dev/">
     <img alt="Built with Dart" src="https://img.shields.io/badge/Built%20with-Dart-blue.svg?style=for-the-badge" />
   </a>
-  <!-- x-release-please-end -->
+
   <br/>
   <!-- Dart-Specific Badges -->
   <a href="https://pub.dev/packages/openfeature_dart_server_sdk">
@@ -60,10 +59,12 @@ Dart language version: [3.9.2](https://dart.dev/get-dart/archive)
 
 ### Install
 
+<!-- x-release-please-start-version -->
 ```yaml
 dependencies:
-  openfeature_dart_server_sdk: ^0.0.6
+  openfeature_dart_server_sdk: ^0.0.12
 ```
+<!-- x-release-please-end -->
 
 ### Then run:
 
@@ -139,7 +140,7 @@ See [here](https://pub.dev/documentation/openfeature_dart_server_sdk/latest/) fo
 ### Providers
 
 [Providers](https://openfeature.dev/docs/reference/concepts/provider) are an abstraction between a flag management system and the OpenFeature SDK.
-Look [here](https://openfeature.dev/ecosystem?instant_search%5BrefinementList%5D%5Btype%5D%5B0%5D=Provider&instant_search%5BrefinementList%5D%5Btechnology%5D%5B0%5D=Dart) for a complete list of available providers.
+Look [here](https://openfeature.dev//ecosystem?instant_search%5BrefinementList%5D%5Btype%5D%5B0%5D=Provider&instant_search%5BrefinementList%5D%5BallTechnologies%5D%5B0%5D=Dart) for a complete list of available providers.
 If the provider you're looking for hasn't been created yet, see the [develop a provider](#develop-a-provider) section to learn how to build it yourself.
 
 Once you've added a provider as a dependency, it can be registered with OpenFeature like this:
