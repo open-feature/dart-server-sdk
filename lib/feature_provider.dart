@@ -205,12 +205,6 @@ abstract class CachedFeatureProvider implements FeatureProvider {
   ProviderMetadata get metadata => _metadata;
 
   @override
-  ProviderMetadata get metadata => _metadata;
-
-  @override
-  ProviderMetadata get metadata => _metadata;
-
-  @override
   String get name => _metadata.name;
 
   /// Set provider state
