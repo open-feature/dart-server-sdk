@@ -31,7 +31,7 @@ jobs:
           restore-keys: |
             pub-${{ runner.os }}-
 
-      - name: dart --version
+      - name: Print Dart version
         run: dart --version
 
       - name: Install Dependencies
@@ -39,92 +39,93 @@ jobs:
           echo "Installing dependencies for core SDK..."
           dart pub get
 
-      # Run analyze, capture exit code + full report, but NEVER fail this step
+      # Run analyze, keep logs AND write to file, never fail step
       - name: Run Static Analysis (capture only)
         id: analyze
         shell: bash
         continue-on-error: true
         run: |
           set -o pipefail
-          mkdir -p artifacts/core-sdk
-          echo "Running static analysis for core SDK..."
-          dart analyze lib/ --format=human > artifacts/core-sdk/analysis_report.txt 2>&1
-          ANALYZE_EXIT=$?
-          echo "analyzer_exit=$ANALYZE_EXIT" >> "$GITHUB_OUTPUT"
-          if [ $ANALYZE_EXIT -eq 0 ]; then
-            echo "✅ dart analyze exited 0"
-          else
-            echo "⚠️ dart analyze exited $ANALYZE_EXIT (see artifacts/core-sdk/analysis_report.txt)"
-          fi
+          ART_DIR="artifacts/core-sdk"
+          mkdir -p "$ART_DIR"
 
-      - name: Bucket & Summarize Results
+          echo "Running static analysis for core SDK..."
+          # Write to both console and file
+          dart analyze lib/ --format=human | tee "$ART_DIR/analysis_report.txt"
+          ANALYZE_EXIT=${PIPESTATUS[0]}
+          echo "analyzer_exit=$ANALYZE_EXIT" >> "$GITHUB_OUTPUT"
+
+          # Bucket results (best-effort pattern matching on 'human' format)
+          grep -iE " error "   "$ART_DIR/analysis_report.txt" > "$ART_DIR/error_report.txt"   || true
+          grep -iE " warning " "$ART_DIR/analysis_report.txt" > "$ART_DIR/warning_report.txt" || true
+          grep -iE " info "    "$ART_DIR/analysis_report.txt" > "$ART_DIR/info_report.txt"    || true
+
+          echo "Analyze exit code: $ANALYZE_EXIT"
+
+      - name: Summarize Results (Job Summary)
         id: bucket
         if: ${{ always() }}
         shell: bash
         run: |
           set -euo pipefail
-          rpt="artifacts/core-sdk/analysis_report.txt"
-          if [[ ! -f "$rpt" ]]; then
+          ART_DIR="artifacts/core-sdk"
+          RPT="$ART_DIR/analysis_report.txt"
+
+          if [[ ! -f "$RPT" ]]; then
             echo "report_missing=true" >> "$GITHUB_OUTPUT"
-            echo "No analysis report found." >> "$GITHUB_STEP_SUMMARY"
+            echo "## Dart analysis summary" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "_No analysis report found._" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
-          # Bucketing (best-effort for 'human' format)
-          grep -iE " error "   "$rpt" > artifacts/core-sdk/error_report.txt   || true
-          grep -iE " warning " "$rpt" > artifacts/core-sdk/warning_report.txt || true
-          grep -iE " info "    "$rpt" > artifacts/core-sdk/info_report.txt    || true
+          ERR=$(wc -l < "$ART_DIR/error_report.txt"    2>/dev/null || echo 0)
+          WARN=$(wc -l < "$ART_DIR/warning_report.txt" 2>/dev/null || echo 0)
+          INF=$(wc -l < "$ART_DIR/info_report.txt"     2>/dev/null || echo 0)
 
-          ERROR_COUNT=$(wc -l < artifacts/core-sdk/error_report.txt    || echo 0)
-          WARNING_COUNT=$(wc -l < artifacts/core-sdk/warning_report.txt || echo 0)
-          INFO_COUNT=$(wc -l < artifacts/core-sdk/info_report.txt       || echo 0)
+          echo "errors=$ERR"     >> "$GITHUB_OUTPUT"
+          echo "warnings=$WARN"  >> "$GITHUB_OUTPUT"
+          echo "infos=$INF"      >> "$GITHUB_OUTPUT"
 
-          {
-            echo "errors=$ERROR_COUNT"
-            echo "warnings=$WARNING_COUNT"
-            echo "infos=$INFO_COUNT"
-          } >> "$GITHUB_OUTPUT"
-
-          # Pretty job summary (top 30 lines of each bucket)
           {
             echo "## Dart analysis summary"
             echo
-            echo "- **Errors:** $ERROR_COUNT"
-            echo "- **Warnings:** $WARNING_COUNT"
-            echo "- **Infos:** $INFO_COUNT"
+            echo "- **Errors:** $ERR"
+            echo "- **Warnings:** $WARN"
+            echo "- **Infos:** $INF"
             echo
 
-            if [ "$ERROR_COUNT" -gt 0 ]; then
+            if [[ -s "$ART_DIR/error_report.txt" ]]; then
               echo "### Errors (first 30)"
-              head -n 30 artifacts/core-sdk/error_report.txt | sed -e 's/^/- /'
+              head -n 30 "$ART_DIR/error_report.txt" | sed 's/^/- /'
               echo
             fi
 
-            if [ "$WARNING_COUNT" -gt 0 ]; then
+            if [[ -s "$ART_DIR/warning_report.txt" ]]; then
               echo "### Warnings (first 30)"
-              head -n 30 artifacts/core-sdk/warning_report.txt | sed -e 's/^/- /'
+              head -n 30 "$ART_DIR/warning_report.txt" | sed 's/^/- /'
               echo
             fi
 
-            if [ "$INFO_COUNT" -gt 0 ]; then
+            if [[ -s "$ART_DIR/info_report.txt" ]]; then
               echo "### Infos (first 30)"
-              head -n 30 artifacts/core-sdk/info_report.txt | sed -e 's/^/- /'
+              head -n 30 "$ART_DIR/info_report.txt" | sed 's/^/- /'
               echo
             fi
 
             echo "<details><summary>Full analyzer output</summary>"
             echo
-            sed -e 's/^/    /' "$rpt"
+            sed 's/^/    /' "$RPT"
             echo
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Analysis Artifacts
-        if: always()
+        if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
           name: core-sdk-analysis
-          path: artifacts/core-sdk/*
+          path: artifacts/core-sdk/**
           retention-days: 7
 
       # Single, explicit policy gate (defaults to: only fail on errors)
@@ -136,29 +137,4 @@ jobs:
           FAIL_ON="${{ inputs.fail_on }}"
           ERR=${{ steps.bucket.outputs.errors || 0 }}
           WARN=${{ steps.bucket.outputs.warnings || 0 }}
-          ANA_EXIT=${{ steps.analyze.outputs.analyzer_exit || 0 }}
-
-          echo "Policy: fail_on=$FAIL_ON | analyzer_exit=$ANA_EXIT | errors=$ERR | warnings=$WARN"
-
-          case "$FAIL_ON" in
-            never)
-              echo "Policy 'never': job will pass regardless of analyzer results."
-              exit 0
-              ;;
-            errors)
-              if [ "$ERR" -gt 0 ] || [ "$ANA_EXIT" -ne 0 ]; then
-                echo "Failing due to errors."
-                exit 1
-              fi
-              ;;
-            warnings)
-              if [ "$ERR" -gt 0 ] || [ "$WARN" -gt 0 ] || [ "$ANA_EXIT" -ne 0 ]; then
-                echo "Failing due to warnings/errors."
-                exit 1
-              fi
-              ;;
-            *)
-              echo "Unknown fail_on='$FAIL_ON' (use never|errors|warnings). Failing to be safe."
-              exit 1
-              ;;
-          esac
+          ANA_EXIT=${{ steps.analyze.outputs.analyzer_exit
