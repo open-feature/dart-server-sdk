@@ -107,7 +107,7 @@ jobs:
 
       # (Optional) decide whether to fail the job based on analyze exit + policy
       - name: Fail if analysis had errors
-        if: steps.analyze.outputs.analyze_exit != '0'
+        if: ${{ steps.analyze.outputs.analyze_exit != '0' }}
         run: |
           echo "Failing the job because dart analyze returned a non-zero exit code."
           exit 1
