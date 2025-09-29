@@ -3,11 +3,10 @@ name: Contributor Workflow
 on:
   workflow_call:
     inputs:
-      branch_name:
-        required: true
-        type: string
-      event_name:
-        required: true
+      fail_on:            # 'never' | 'errors' | 'warnings'
+        description: "When to fail the job"
+        required: false
+        default: errors
         type: string
 
 jobs:
@@ -24,6 +23,14 @@ jobs:
         with:
           dart-version: stable
 
+      - name: Cache pub packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.pub-cache
+          key: pub-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            pub-${{ runner.os }}-
+
       - name: dart --version
         run: dart --version
 
@@ -32,70 +39,85 @@ jobs:
           echo "Installing dependencies for core SDK..."
           dart pub get
 
-      - name: Check for Outdated Dependencies (non-blocking)
-        run: |
-          echo "Checking for outdated dependencies..."
-          dart pub outdated || true
-
-      - name: Run Static Analysis (capture, do not fail)
+      # Run analyze, capture exit code + full report, but NEVER fail this step
+      - name: Run Static Analysis (capture only)
         id: analyze
+        shell: bash
+        continue-on-error: true
         run: |
-          set -euo pipefail
+          set -o pipefail
           mkdir -p artifacts/core-sdk
           echo "Running static analysis for core SDK..."
-          # If you want warnings to be fatal, add: --fatal-warnings
-          # If you want infos to be fatal, add: --fatal-infos
-          if dart analyze lib/ --format=human > artifacts/core-sdk/analysis_report.txt 2>&1; then
-            echo "analyze_exit=0" >> $GITHUB_OUTPUT
-            echo "✅ Static analysis completed successfully."
+          dart analyze lib/ --format=human > artifacts/core-sdk/analysis_report.txt 2>&1
+          ANALYZE_EXIT=$?
+          echo "analyzer_exit=$ANALYZE_EXIT" >> "$GITHUB_OUTPUT"
+          if [ $ANALYZE_EXIT -eq 0 ]; then
+            echo "✅ dart analyze exited 0"
           else
-            echo "analyze_exit=$?" >> $GITHUB_OUTPUT
-            echo "❌ Static analysis reported issues. (See artifacts/core-sdk/analysis_report.txt)"
+            echo "⚠️ dart analyze exited $ANALYZE_EXIT (see artifacts/core-sdk/analysis_report.txt)"
           fi
 
-      - name: Categorize and Count Analysis Results
+      - name: Bucket & Summarize Results
+        id: bucket
+        if: ${{ always() }}
+        shell: bash
         run: |
           set -euo pipefail
           rpt="artifacts/core-sdk/analysis_report.txt"
-          [[ -f "$rpt" ]] || { echo "Report not found: $rpt"; exit 0; }
+          if [[ ! -f "$rpt" ]]; then
+            echo "report_missing=true" >> "$GITHUB_OUTPUT"
+            echo "No analysis report found." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
-          # Split into buckets (case-insensitive)
-          grep -i " info "    "$rpt" > artifacts/core-sdk/info_report.txt     || true
-          grep -i " warning " "$rpt" > artifacts/core-sdk/warning_report.txt  || true
-          grep -i " error "   "$rpt" > artifacts/core-sdk/error_report.txt    || true
+          # Bucketing (best-effort for 'human' format)
+          grep -iE " error "   "$rpt" > artifacts/core-sdk/error_report.txt   || true
+          grep -iE " warning " "$rpt" > artifacts/core-sdk/warning_report.txt || true
+          grep -iE " info "    "$rpt" > artifacts/core-sdk/info_report.txt    || true
 
-          INFO_COUNT=$(wc -l < artifacts/core-sdk/info_report.txt     || echo 0)
+          ERROR_COUNT=$(wc -l < artifacts/core-sdk/error_report.txt    || echo 0)
           WARNING_COUNT=$(wc -l < artifacts/core-sdk/warning_report.txt || echo 0)
-          ERROR_COUNT=$(wc -l < artifacts/core-sdk/error_report.txt   || echo 0)
+          INFO_COUNT=$(wc -l < artifacts/core-sdk/info_report.txt       || echo 0)
 
-          echo "Summary of analysis results:"
-          echo "Infos:    $INFO_COUNT"
-          echo "Warnings: $WARNING_COUNT"
-          echo "Errors:   $ERROR_COUNT"
-          echo ""
+          {
+            echo "errors=$ERROR_COUNT"
+            echo "warnings=$WARNING_COUNT"
+            echo "infos=$INFO_COUNT"
+          } >> "$GITHUB_OUTPUT"
 
-          # (Optional) echo contents for visibility
-          [[ $ERROR_COUNT -gt 0 ]]   && { echo "Errors:";   cat artifacts/core-sdk/error_report.txt;   echo ""; }
-          [[ $WARNING_COUNT -gt 0 ]] && { echo "Warnings:"; cat artifacts/core-sdk/warning_report.txt; echo ""; }
-          [[ $INFO_COUNT -gt 0 ]]    && { echo "Infos:";    cat artifacts/core-sdk/info_report.txt;    echo ""; }
+          # Pretty job summary (top 30 lines of each bucket)
+          {
+            echo "## Dart analysis summary"
+            echo
+            echo "- **Errors:** $ERROR_COUNT"
+            echo "- **Warnings:** $WARNING_COUNT"
+            echo "- **Infos:** $INFO_COUNT"
+            echo
 
-      - name: Identify Specific Commits for Issues
-        run: |
-          set -euo pipefail
-          rpt="artifacts/core-sdk/analysis_report.txt"
-          [[ -f "$rpt" ]] || exit 0
-
-          echo "Identifying specific commits for files mentioned in the report..."
-          while IFS= read -r line; do
-            file=$(echo "$line" | awk -F ':' '{print $1}')
-            if [[ -n "$file" && -f "$file" ]]; then
-              git_log=$(git log -n 1 --pretty=format:"%h by %an <%ae>" -- "$file" || true)
-              echo "File:   $file"
-              echo "Issue:  $line"
-              echo "Commit: ${git_log:-N/A}"
-              echo ""
+            if [ "$ERROR_COUNT" -gt 0 ]; then
+              echo "### Errors (first 30)"
+              head -n 30 artifacts/core-sdk/error_report.txt | sed -e 's/^/- /'
+              echo
             fi
-          done < "$rpt"
+
+            if [ "$WARNING_COUNT" -gt 0 ]; then
+              echo "### Warnings (first 30)"
+              head -n 30 artifacts/core-sdk/warning_report.txt | sed -e 's/^/- /'
+              echo
+            fi
+
+            if [ "$INFO_COUNT" -gt 0 ]; then
+              echo "### Infos (first 30)"
+              head -n 30 artifacts/core-sdk/info_report.txt | sed -e 's/^/- /'
+              echo
+            fi
+
+            echo "<details><summary>Full analyzer output</summary>"
+            echo
+            sed -e 's/^/    /' "$rpt"
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload Analysis Artifacts
         if: always()
@@ -105,9 +127,38 @@ jobs:
           path: artifacts/core-sdk/*
           retention-days: 7
 
-      # (Optional) decide whether to fail the job based on analyze exit + policy
-      - name: Fail if analysis had errors
-        if: ${{ steps.analyze.outputs.analyze_exit != '0' }}
+      # Single, explicit policy gate (defaults to: only fail on errors)
+      - name: Gate on policy
+        if: ${{ always() }}
+        shell: bash
         run: |
-          echo "Failing the job because dart analyze returned a non-zero exit code."
-          exit 1
+          set -euo pipefail
+          FAIL_ON="${{ inputs.fail_on }}"
+          ERR=${{ steps.bucket.outputs.errors || 0 }}
+          WARN=${{ steps.bucket.outputs.warnings || 0 }}
+          ANA_EXIT=${{ steps.analyze.outputs.analyzer_exit || 0 }}
+
+          echo "Policy: fail_on=$FAIL_ON | analyzer_exit=$ANA_EXIT | errors=$ERR | warnings=$WARN"
+
+          case "$FAIL_ON" in
+            never)
+              echo "Policy 'never': job will pass regardless of analyzer results."
+              exit 0
+              ;;
+            errors)
+              if [ "$ERR" -gt 0 ] || [ "$ANA_EXIT" -ne 0 ]; then
+                echo "Failing due to errors."
+                exit 1
+              fi
+              ;;
+            warnings)
+              if [ "$ERR" -gt 0 ] || [ "$WARN" -gt 0 ] || [ "$ANA_EXIT" -ne 0 ]; then
+                echo "Failing due to warnings/errors."
+                exit 1
+              fi
+              ;;
+            *)
+              echo "Unknown fail_on='$FAIL_ON' (use never|errors|warnings). Failing to be safe."
+              exit 1
+              ;;
+          esac
