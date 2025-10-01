@@ -1,12 +1,15 @@
+# This workflow analyzes the Dart Server SDK and an example project
+
 name: Contributor Workflow
 
 on:
-  workflow_call:
+  workflow_call: # Makes the workflow reusable
     inputs:
-      fail_on:            # 'never' | 'errors' | 'warnings'
-        description: "When to fail the job"
-        required: false
-        default: errors
+      branch_name:
+        required: true
+        type: string
+      event_name:
+        required: true
         type: string
 
 jobs:
@@ -20,121 +23,130 @@ jobs:
 
       - name: Setup Dart
         uses: dart-lang/setup-dart@v1
-        with:
-          dart-version: stable
+        # with:
+        #   sdk: stable   # (optional; stable is the default)
 
-      - name: Cache pub packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.pub-cache
-          key: pub-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: |
-            pub-${{ runner.os }}-
-
-      - name: Print Dart version
-        run: dart --version
+      # Find the Dart package root (directory that has pubspec.yaml).
+      - name: Locate package root
+        id: pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Prefer repo root if it has a pubspec.yaml, otherwise take the first match.
+          if [[ -f "pubspec.yaml" ]]; then
+            echo "dir=." >> "$GITHUB_OUTPUT"
+          else
+            PKG_DIR=$(git ls-files | grep -E '(^|/)(pubspec\.yaml)$' | head -n 1 | xargs -r dirname)
+            if [[ -z "${PKG_DIR:-}" ]]; then
+              echo "No pubspec.yaml found in repository." >&2
+              exit 1
+            fi
+            echo "dir=$PKG_DIR" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Using package dir: $(cat $GITHUB_OUTPUT)"
 
       - name: Install Dependencies
+        working-directory: ${{ steps.pkg.outputs.dir }}
         run: |
           echo "Installing dependencies for core SDK..."
           dart pub get
 
-      # Run analyze, keep logs AND write to file, never fail step
-      - name: Run Static Analysis (capture only)
+      - name: Check for Outdated Dependencies
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: |
+          echo "Checking for outdated dependencies..."
+          dart pub outdated || true
+
+      - name: Run Static Analysis (capture & show)
         id: analyze
+        working-directory: ${{ steps.pkg.outputs.dir }}
         shell: bash
-        continue-on-error: true
         run: |
           set -o pipefail
-          ART_DIR="artifacts/core-sdk"
-          mkdir -p "$ART_DIR"
-
           echo "Running static analysis for core SDK..."
-          # Write to both console and file
-          dart analyze lib/ --format=human | tee "$ART_DIR/analysis_report.txt"
-          ANALYZE_EXIT=${PIPESTATUS[0]}
-          echo "analyzer_exit=$ANALYZE_EXIT" >> "$GITHUB_OUTPUT"
+          # Write both stdout and stderr to files while also echoing to the log.
+          # Keep stdout and stderr separate so we can categorize later.
+          # stdout -> analysis_report.txt, stderr -> error_log.txt
+          { dart analyze lib/ | tee analysis_report.txt; } 2> >(tee error_log.txt >&2)
+          STATUS=${PIPESTATUS[0]}
+          if [[ $STATUS -ne 0 ]]; then
+            echo "❌ Static analysis failed. See error_log.txt below:"
+            sed -n '1,200p' error_log.txt || true
+          else
+            echo "✅ Static analysis completed successfully. No critical errors found."
+          fi
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          exit $STATUS || true  # Don’t fail the step here; allow categorization + artifacts.
 
-          # Bucket results (best-effort pattern matching on 'human' format)
-          grep -iE " error "   "$ART_DIR/analysis_report.txt" > "$ART_DIR/error_report.txt"   || true
-          grep -iE " warning " "$ART_DIR/analysis_report.txt" > "$ART_DIR/warning_report.txt" || true
-          grep -iE " info "    "$ART_DIR/analysis_report.txt" > "$ART_DIR/info_report.txt"    || true
-
-          echo "Analyze exit code: $ANALYZE_EXIT"
-
-      - name: Summarize Results (Job Summary)
-        id: bucket
-        if: ${{ always() }}
+      - name: Categorize and Count Analysis Results
+        if: always()
+        working-directory: ${{ steps.pkg.outputs.dir }}
         shell: bash
         run: |
-          set -euo pipefail
-          ART_DIR="artifacts/core-sdk"
-          RPT="$ART_DIR/analysis_report.txt"
+          echo "Categorizing analysis results..."
+          touch analysis_report.txt error_log.txt
+          # Create categorized files (empty if none)
+          grep -i "info"    analysis_report.txt > info_report.txt    || true
+          grep -i "warning" analysis_report.txt > warning_report.txt || true
+          grep -i "error"   analysis_report.txt > error_report.txt   || true
 
-          if [[ ! -f "$RPT" ]]; then
-            echo "report_missing=true" >> "$GITHUB_OUTPUT"
-            echo "## Dart analysis summary" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "_No analysis report found._" >> "$GITHUB_STEP_SUMMARY"
-            exit 0
+          INFO_COUNT=$(wc -l < info_report.txt || echo 0)
+          WARNING_COUNT=$(wc -l < warning_report.txt || echo 0)
+          ERROR_COUNT=$(wc -l < error_report.txt || echo 0)
+
+          echo ""
+          echo "Summary of analysis results:"
+          echo "Informational messages: $INFO_COUNT"
+          echo "Warnings: $WARNING_COUNT"
+          echo "Errors: $ERROR_COUNT"
+          echo ""
+
+          if [[ $WARNING_COUNT -gt 0 ]]; then
+            echo "Warnings (first 200 lines):"
+            sed -n '1,200p' warning_report.txt
           fi
 
-          ERR=$(wc -l < "$ART_DIR/error_report.txt"    2>/dev/null || echo 0)
-          WARN=$(wc -l < "$ART_DIR/warning_report.txt" 2>/dev/null || echo 0)
-          INF=$(wc -l < "$ART_DIR/info_report.txt"     2>/dev/null || echo 0)
+          if [[ $ERROR_COUNT -gt 0 ]]; then
+            echo ""
+            echo "Errors (first 200 lines):"
+            sed -n '1,200p' error_report.txt
+          fi
 
-          echo "errors=$ERR"     >> "$GITHUB_OUTPUT"
-          echo "warnings=$WARN"  >> "$GITHUB_OUTPUT"
-          echo "infos=$INF"      >> "$GITHUB_OUTPUT"
-
-          {
-            echo "## Dart analysis summary"
-            echo
-            echo "- **Errors:** $ERR"
-            echo "- **Warnings:** $WARN"
-            echo "- **Infos:** $INF"
-            echo
-
-            if [[ -s "$ART_DIR/error_report.txt" ]]; then
-              echo "### Errors (first 30)"
-              head -n 30 "$ART_DIR/error_report.txt" | sed 's/^/- /'
-              echo
-            fi
-
-            if [[ -s "$ART_DIR/warning_report.txt" ]]; then
-              echo "### Warnings (first 30)"
-              head -n 30 "$ART_DIR/warning_report.txt" | sed 's/^/- /'
-              echo
-            fi
-
-            if [[ -s "$ART_DIR/info_report.txt" ]]; then
-              echo "### Infos (first 30)"
-              head -n 30 "$ART_DIR/info_report.txt" | sed 's/^/- /'
-              echo
-            fi
-
-            echo "<details><summary>Full analyzer output</summary>"
-            echo
-            sed 's/^/    /' "$RPT"
-            echo
-            echo "</details>"
-          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Identify Specific Commits for Issues
+        if: always()
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        shell: bash
+        run: |
+          echo "Identifying specific commits for files mentioned by analyzer..."
+          # Extract file paths from analyzer output, then show last touching commit.
+          awk -F: '{print $1}' analysis_report.txt \
+            | grep -E '\.dart$' \
+            | sort -u \
+            | while read -r file; do
+                if [[ -n "$file" && -f "$file" ]]; then
+                  git_log=$(git -C "$GITHUB_WORKSPACE" log -n 1 --pretty=format:"%h by %an <%ae>" -- "$file" || true)
+                  echo "File: $file"
+                  echo "Last change: ${git_log:-unknown}"
+                  echo ""
+                fi
+              done
 
       - name: Upload Analysis Artifacts
-        if: ${{ always() }}
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: core-sdk-analysis
-          path: artifacts/core-sdk/**
+          path: |
+            ${{ steps.pkg.outputs.dir }}/analysis_report.txt
+            ${{ steps.pkg.outputs.dir }}/error_log.txt
+            ${{ steps.pkg.outputs.dir }}/info_report.txt
+            ${{ steps.pkg.outputs.dir }}/warning_report.txt
+            ${{ steps.pkg.outputs.dir }}/error_report.txt
           retention-days: 7
 
-      # Single, explicit policy gate (defaults to: only fail on errors)
-      - name: Gate on policy
-        if: ${{ always() }}
-        shell: bash
+      # Fail the job if the analyzer actually failed.
+      - name: Fail if analyzer failed
+        if: ${{ steps.analyze.outputs.status != '0' }}
         run: |
-          set -euo pipefail
-          FAIL_ON="${{ inputs.fail_on }}"
-          ERR=${{ steps.bucket.outputs.errors || 0 }}
-          WARN=${{ steps.bucket.outputs.warnings || 0 }}
-          ANA_EXIT=${{ steps.analyze.outputs.analyzer_exit
+          echo "❌ Failing job because the analyzer returned a non-zero exit code."
+          exit 1
