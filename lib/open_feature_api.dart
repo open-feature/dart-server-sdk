@@ -37,208 +37,6 @@ abstract class OpenFeatureHook {
     dynamic result,
     Map<String, dynamic>? context,
   );
-
-}
-
-/// Default provider that's immediately ready - completely independent
-class _ImmediateReadyProvider implements FeatureProvider {
-  @override
-  String get name => 'InMemoryProvider';
-
-  @override
-  ProviderState get state => ProviderState.READY;
-
-  @override
-  ProviderConfig get config => const ProviderConfig();
-
-  @override
-  ProviderMetadata get metadata =>
-      const ProviderMetadata(name: 'InMemoryProvider');
-
-  @override
-  Future<void> initialize([Map<String, dynamic>? config]) async {}
-
-  @override
-  Future<void> connect() async {}
-
-  @override
-  Future<void> shutdown() async {}
-
-  @override
-  Future<FlagEvaluationResult<bool>> getBooleanFlag(
-    String flagKey,
-    bool defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<String>> getStringFlag(
-    String flagKey,
-    String defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<int>> getIntegerFlag(
-    String flagKey,
-    int defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<double>> getDoubleFlag(
-    String flagKey,
-    double defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<Map<String, dynamic>>> getObjectFlag(
-    String flagKey,
-    Map<String, dynamic> defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-}
-
-/// Default provider that's immediately ready - completely independent
-class _ImmediateReadyProvider implements FeatureProvider {
-  @override
-  String get name => 'InMemoryProvider';
-
-  @override
-  ProviderState get state => ProviderState.READY;
-
-  @override
-  ProviderConfig get config => const ProviderConfig();
-
-  @override
-  ProviderMetadata get metadata =>
-      const ProviderMetadata(name: 'InMemoryProvider');
-
-  @override
-  Future<void> initialize([Map<String, dynamic>? config]) async {}
-
-  @override
-  Future<void> connect() async {}
-
-  @override
-  Future<void> shutdown() async {}
-
-  @override
-  Future<FlagEvaluationResult<bool>> getBooleanFlag(
-    String flagKey,
-    bool defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<String>> getStringFlag(
-    String flagKey,
-    String defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<int>> getIntegerFlag(
-    String flagKey,
-    int defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<double>> getDoubleFlag(
-    String flagKey,
-    double defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
-  @override
-  Future<FlagEvaluationResult<Map<String, dynamic>>> getObjectFlag(
-    String flagKey,
-    Map<String, dynamic> defaultValue, {
-    Map<String, dynamic>? context,
-  }) async {
-    return FlagEvaluationResult.error(
-      flagKey,
-      defaultValue,
-      ErrorCode.FLAG_NOT_FOUND,
-      'Flag not found',
-      evaluatorId: name,
-    );
-  }
-
 }
 
 /// Default provider that's immediately ready - completely independent
@@ -357,14 +155,11 @@ class OpenFeatureAPI {
 
   OpenFeatureAPI._internal()
     : _providerStreamController = StreamController<FeatureProvider>.broadcast(),
-
       _eventStreamController = StreamController<OpenFeatureEvent>.broadcast(),
       _domainUpdatesController =
           StreamController<Map<String, String>>.broadcast() {
     _configureLogging();
-
     _initializeDefaultProvider();
-
   }
 
   factory OpenFeatureAPI() {
@@ -397,22 +192,17 @@ class OpenFeatureAPI {
   static bool _loggingConfigured = false;
 
   void _configureLogging() {
-    // Only configure logging once globally to prevent multiple listeners
-    if (!_loggingConfigured) {
-      Logger.root.level = Level.ALL;
-      Logger.root.onRecord.listen((record) {
-        print(
-          '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
-        );
-      });
-      _loggingConfigured = true;
-    }
+    Logger.root.level = Level.ALL;
+    Logger.root.onRecord.listen((record) {
+      print(
+        '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
+      );
+    });
   }
 
   void _initializeDefaultProvider() {
     _provider = _ImmediateReadyProvider();
     _logger.info('Default provider initialized and ready');
-
   }
 
   Future<void> setProvider(FeatureProvider provider) async {
@@ -442,7 +232,6 @@ class OpenFeatureAPI {
         data: error,
       );
     }
-
   }
 
   FeatureProvider get provider => _provider;
@@ -495,7 +284,6 @@ class OpenFeatureAPI {
 
     try {
       _runBeforeEvaluationHooks(flagKey, context);
-
 
       final result = await _provider.getBooleanFlag(
         flagKey,
@@ -577,18 +365,9 @@ class OpenFeatureAPI {
     await _domainUpdatesController.close();
   }
 
-  // FIXED: Proper singleton reset with complete cleanup
   static void resetInstance() {
-    if (_instance != null) {
-      try {
-        _instance!._providerStreamController.close();
-        _instance!._eventStreamController.close();
-        _instance!._domainUpdatesController.close();
-        _instance!._domainManager.dispose();
-      } catch (e) {
-        // Ignore disposal errors during reset
-      }
-    }
+    _instance?.dispose();
+
     _instance = null;
   }
 

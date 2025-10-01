@@ -247,7 +247,6 @@ void main() {
       expect(metrics.errorCounts['FLAG_NOT_FOUND'], equals(1));
     });
 
-
     test('evaluates string flags', () async {
       final result = await client.getStringFlag('string-flag');
       expect(result, equals('hello'));
@@ -255,7 +254,6 @@ void main() {
 
     test('provider metadata is accessible through client', () {
       expect(client.provider.metadata.name, equals('MockProvider'));
-
     });
   });
 }
