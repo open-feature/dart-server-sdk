@@ -118,18 +118,22 @@ jobs:
         shell: bash
         run: |
           echo "Identifying specific commits for files mentioned by analyzer..."
-          # Extract file paths from analyzer output, then show last touching commit.
-          awk -F: '{print $1}' analysis_report.txt \
-            | grep -E '\.dart$' \
-            | sort -u \
-            | while read -r file; do
-                if [[ -n "$file" && -f "$file" ]]; then
-                  git_log=$(git -C "$GITHUB_WORKSPACE" log -n 1 --pretty=format:"%h by %an <%ae>" -- "$file" || true)
-                  echo "File: $file"
-                  echo "Last change: ${git_log:-unknown}"
-                  echo ""
-                fi
-              done
+          # Collect .dart file paths mentioned by analyzer; tolerate empty sets
+          FILES=$(awk -F: '{print $1}' analysis_report.txt | grep -E '\.dart$' | sort -u || true)
+
+          if [[ -z "$FILES" ]]; then
+            echo "No files with issues were reported by the analyzer."
+            exit 0
+          fi
+
+          for file in $FILES; do
+            if [[ -f "$file" ]]; then
+              git_log=$(git -C "$GITHUB_WORKSPACE" log -n 1 --pretty=format:"%h by %an <%ae>" -- "$file" || true)
+              echo "File: $file"
+              echo "Last change: ${git_log:-unknown}"
+              echo ""
+            fi
+          done
 
       - name: Upload Analysis Artifacts
         if: always()
