@@ -342,6 +342,7 @@ class OpenFeatureAPI {
 
   static void resetInstance() {
     _instance?.dispose();
+
     _instance = null;
   }
 

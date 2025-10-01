@@ -233,6 +233,68 @@ void main() {
         });
       });
 
+      group('caching behavior', () {
+        test('caches successful evaluations', () async {
+          // First evaluation
+          final result1 = await provider.getBooleanFlag('bool-flag', false);
+          expect(result1.reason, equals('STATIC'));
+
+          // Second evaluation should be cached
+          final result2 = await provider.getBooleanFlag('bool-flag', false);
+          expect(result2.reason, equals('CACHED'));
+          expect(result2.value, equals(result1.value));
+        });
+
+        test('does not cache error results', () async {
+          // First evaluation (error)
+          final result1 = await provider.getBooleanFlag('missing-flag', false);
+          expect(result1.errorCode, equals(ErrorCode.FLAG_NOT_FOUND));
+
+          // Second evaluation should still be an error, not cached
+          final result2 = await provider.getBooleanFlag('missing-flag', false);
+          expect(result2.errorCode, equals(ErrorCode.FLAG_NOT_FOUND));
+          expect(result2.reason, equals('ERROR'));
+        });
+
+        test('clears cache on shutdown', () async {
+          // Cache a value
+          await provider.getBooleanFlag('bool-flag', false);
+
+          // Shutdown clears cache
+          await provider.shutdown();
+
+          // Reinitialize
+          provider = InMemoryProvider(testFlags);
+          await provider.initialize();
+
+          // Should not be cached
+          final result = await provider.getBooleanFlag('bool-flag', false);
+          expect(result.reason, equals('STATIC'));
+        });
+
+        test('respects cache configuration', () async {
+          final noCacheProvider = InMemoryProvider(
+            testFlags,
+            ProviderConfig(enableCache: false),
+          );
+          await noCacheProvider.initialize();
+
+          // First evaluation
+          final result1 = await noCacheProvider.getBooleanFlag(
+            'bool-flag',
+            false,
+          );
+          expect(result1.reason, equals('STATIC'));
+
+          // Second evaluation should not be cached
+          final result2 = await noCacheProvider.getBooleanFlag(
+            'bool-flag',
+            false,
+          );
+          expect(result2.reason, equals('STATIC'));
+        });
+      });
+
 
       group('caching behavior', () {
         test('caches successful evaluations', () async {
@@ -296,6 +358,23 @@ void main() {
         });
       });
 
+    });
+  });
+
+  group('ProviderException', () {
+    test('creates with message and default code', () {
+      final exception = ProviderException('Test error');
+      expect(exception.message, equals('Test error'));
+      expect(exception.code, equals(ErrorCode.GENERAL));
+    });
+
+    test('creates with specific error code', () {
+      final exception = ProviderException(
+        'Not ready',
+        code: ErrorCode.PROVIDER_NOT_READY,
+      );
+      expect(exception.code, equals(ErrorCode.PROVIDER_NOT_READY));
+      expect(exception.toString(), contains('PROVIDER_NOT_READY'));
     });
   });
 

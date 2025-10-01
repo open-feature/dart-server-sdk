@@ -708,3 +708,4 @@ class InMemoryProvider extends CachedFeatureProvider {
     );
   }
 }
+

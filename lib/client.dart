@@ -167,7 +167,6 @@ class FeatureClient {
     (ctx) => _provider.getIntegerFlag(flagKey, defaultValue, context: ctx),
     context: context?.attributes,
   );
-
   /// Evaluate double flag
   Future<double> getDoubleFlag(
     String flagKey, {
@@ -179,8 +178,6 @@ class FeatureClient {
     (ctx) => _provider.getDoubleFlag(flagKey, defaultValue, context: ctx),
     context: context?.attributes,
   );
-
-  /// Evaluate object flag
   Future<Map<String, dynamic>> getObjectFlag(
     String flagKey, {
     EvaluationContext? context,
@@ -191,8 +188,6 @@ class FeatureClient {
     (ctx) => _provider.getObjectFlag(flagKey, defaultValue, context: ctx),
     context: context?.attributes,
   );
-
-  /// Get client metrics
   ClientMetrics getMetrics() => _metrics;
 
   /// Access to provider for management operations
