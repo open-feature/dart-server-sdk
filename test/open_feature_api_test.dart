@@ -3,9 +3,11 @@ import '../lib/open_feature_api.dart';
 import '../lib/feature_provider.dart';
 
 class TestProvider implements FeatureProvider {
+
   final Map<String, dynamic> _flags;
   ProviderState _state;
   final bool _shouldFailInitialization;
+
 
   TestProvider(
     this._flags, [
@@ -47,6 +49,7 @@ class TestProvider implements FeatureProvider {
   void setState(ProviderState newState) {
     _state = newState;
   }
+
 
   @override
   Future<FlagEvaluationResult<bool>> getBooleanFlag(
@@ -122,7 +125,6 @@ class TestProvider implements FeatureProvider {
     Map<String, dynamic>? context,
   }) async => throw UnimplementedError();
 }
-
 class TestHook extends OpenFeatureHook {
   final List<String> calls = [];
 
@@ -159,7 +161,6 @@ void main() {
     test('sets and gets provider', () async {
       final api = OpenFeatureAPI();
       final provider = TestProvider({'test': true});
-
       await api.setProvider(provider);
       expect(api.provider, equals(provider));
       expect(api.provider.state, equals(ProviderState.READY));
@@ -168,6 +169,7 @@ void main() {
     test('sets and gets global context', () {
       final api = OpenFeatureAPI();
       final context = OpenFeatureEvaluationContext({'key': 'value'});
+
 
       api.setGlobalContext(context);
       expect(api.globalContext?.attributes['key'], equals('value'));
@@ -189,7 +191,6 @@ void main() {
       final api = OpenFeatureAPI();
       final provider = TestProvider({'test-flag': true});
       final hook = TestHook();
-
       await api.setProvider(provider);
       api.addHooks([hook]);
       api.bindClientToProvider('test-client', 'TestProvider');
@@ -212,6 +213,7 @@ void main() {
       await api.setProvider(provider);
       // Debug output
       print('Provider state after setProvider: ${api.provider.state}');
+
       expect(api.provider.state, equals(ProviderState.ERROR));
 
       api.bindClientToProvider('test-client', 'TestProvider');
@@ -260,7 +262,6 @@ void main() {
     test('handles evaluation errors gracefully', () async {
       final api = OpenFeatureAPI();
       final provider = TestProvider({'string-flag': 'not-boolean'});
-
       await api.setProvider(provider);
       api.bindClientToProvider('test-client', 'TestProvider');
 
@@ -300,3 +301,4 @@ void main() {
     });
   });
 }
+

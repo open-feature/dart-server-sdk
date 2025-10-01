@@ -18,6 +18,7 @@ homepage: https://github.com/open-feature/dart-server-sdk
 environment:
   sdk: ^3.9.3
 
+
 dependencies:
   # Core dependencies
   collection: ^1.19.1 # For efficient list and map operations

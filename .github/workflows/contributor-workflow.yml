@@ -51,6 +51,7 @@ jobs:
           echo "Installing dependencies for core SDK..."
           dart pub get
 
+
       - name: Check for Outdated Dependencies
         working-directory: ${{ steps.pkg.outputs.dir }}
         run: |
