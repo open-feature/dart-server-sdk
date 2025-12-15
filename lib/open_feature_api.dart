@@ -26,7 +26,7 @@ abstract class OpenFeatureHook {
   );
 }
 
-/// Default provider that's immediately ready - completely independent
+/// Default provider that is immediately ready - completely independent
 class _ImmediateReadyProvider implements FeatureProvider {
   @override
   String get name => 'InMemoryProvider';
