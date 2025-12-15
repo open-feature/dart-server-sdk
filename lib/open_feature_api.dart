@@ -1,4 +1,3 @@
-// ignore: unused_field bool _loggingConfigured = false;
 import 'dart:async';
 import 'package:logging/logging.dart';
 import 'domain_manager.dart';
