@@ -246,10 +246,6 @@ class OpenFeatureAPI {
 
   /// Get or create a client
   FeatureClient getClient(String name, {String? domain}) {
-    final providerName = domain != null
-        ? _domainManager.getProviderForClient(domain)
-        : null;
-
     // Build hook manager with global hooks
     final hookManager = HookManager();
     for (final hook in _hooks) {
@@ -313,33 +309,6 @@ class OpenFeatureAPI {
       defaultValue: false,
       context: context != null ? EvaluationContext(attributes: context) : null,
     );
-  }
-
-  void _runBeforeEvaluationHooks(
-    String flagKey,
-    Map<String, dynamic>? context,
-  ) {
-    for (var hook in _hooks) {
-      try {
-        hook.beforeEvaluation(flagKey, context);
-      } catch (e) {
-        _logger.warning('Error in before-evaluation hook: $e');
-      }
-    }
-  }
-
-  void _runAfterEvaluationHooks(
-    String flagKey,
-    dynamic result,
-    Map<String, dynamic>? context,
-  ) {
-    for (var hook in _hooks) {
-      try {
-        hook.afterEvaluation(flagKey, result, context);
-      } catch (e) {
-        _logger.warning('Error in after-evaluation hook: $e');
-      }
-    }
   }
 
   void _emitEvent(OpenFeatureEventType type, String message, {dynamic data}) {

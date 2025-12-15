@@ -217,11 +217,7 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     bool defaultValue = false,
   }) async {
-    final value = await getBooleanFlag(
-      flagKey,
-      context: context,
-      defaultValue: defaultValue,
-    );
+    await getBooleanFlag(flagKey, context: context, defaultValue: defaultValue);
 
     // Get the result from provider for details
     final effectiveContext = {
@@ -245,11 +241,7 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     String defaultValue = '',
   }) async {
-    final value = await getStringFlag(
-      flagKey,
-      context: context,
-      defaultValue: defaultValue,
-    );
+    await getStringFlag(flagKey, context: context, defaultValue: defaultValue);
 
     final effectiveContext = {
       ..._defaultContext.attributes,
@@ -272,11 +264,7 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     int defaultValue = 0,
   }) async {
-    final value = await getIntegerFlag(
-      flagKey,
-      context: context,
-      defaultValue: defaultValue,
-    );
+    await getIntegerFlag(flagKey, context: context, defaultValue: defaultValue);
 
     final effectiveContext = {
       ..._defaultContext.attributes,
@@ -299,11 +287,7 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     double defaultValue = 0.0,
   }) async {
-    final value = await getDoubleFlag(
-      flagKey,
-      context: context,
-      defaultValue: defaultValue,
-    );
+    await getDoubleFlag(flagKey, context: context, defaultValue: defaultValue);
 
     final effectiveContext = {
       ..._defaultContext.attributes,
@@ -326,11 +310,7 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     Map<String, dynamic> defaultValue = const {},
   }) async {
-    final value = await getObjectFlag(
-      flagKey,
-      context: context,
-      defaultValue: defaultValue,
-    );
+    await getObjectFlag(flagKey, context: context, defaultValue: defaultValue);
 
     final effectiveContext = {
       ..._defaultContext.attributes,
