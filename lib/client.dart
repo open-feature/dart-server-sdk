@@ -90,6 +90,8 @@ class FeatureClient {
         HookStage.BEFORE,
         flagKey,
         effectiveContext,
+        clientMetadata: metadata,
+        providerMetadata: _provider.metadata,
       );
 
       // Delegate to provider (which handles caching)
@@ -101,6 +103,8 @@ class FeatureClient {
         flagKey,
         effectiveContext,
         result: result,
+        clientMetadata: metadata,
+        providerMetadata: _provider.metadata,
       );
 
       // Track errors from provider
@@ -125,11 +129,19 @@ class FeatureClient {
         flagKey,
         context,
         error: e is Exception ? e : Exception(e.toString()),
+        clientMetadata: metadata,
+        providerMetadata: _provider.metadata,
       );
       return defaultValue;
     } finally {
       // Execute finally hooks
-      await _hookManager.executeHooks(HookStage.FINALLY, flagKey, context);
+      await _hookManager.executeHooks(
+        HookStage.FINALLY,
+        flagKey,
+        context,
+        clientMetadata: metadata,
+        providerMetadata: _provider.metadata,
+      );
     }
   }
 
@@ -198,4 +210,123 @@ class FeatureClient {
 
   /// Access to provider for management operations
   FeatureProvider get provider => _provider;
+}
+
+/// Extension to add evaluation details methods
+extension ClientEvaluationDetails on FeatureClient {
+  /// Get boolean flag with full evaluation details
+  Future<FlagEvaluationDetails<bool>> getBooleanDetails(
+    String flagKey, {
+    EvaluationContext? context,
+    bool defaultValue = false,
+  }) async {
+    await getBooleanFlag(flagKey, context: context, defaultValue: defaultValue);
+
+    // Get the result from provider for details
+    final effectiveContext = {
+      ..._defaultContext.attributes,
+      ...context?.attributes ?? {},
+      ..._transactionManager.currentContext?.effectiveAttributes ?? {},
+    };
+
+    final result = await _provider.getBooleanFlag(
+      flagKey,
+      defaultValue,
+      context: effectiveContext,
+    );
+
+    return FlagEvaluationDetails.fromResult(result);
+  }
+
+  /// Get string flag with full evaluation details
+  Future<FlagEvaluationDetails<String>> getStringDetails(
+    String flagKey, {
+    EvaluationContext? context,
+    String defaultValue = '',
+  }) async {
+    await getStringFlag(flagKey, context: context, defaultValue: defaultValue);
+
+    final effectiveContext = {
+      ..._defaultContext.attributes,
+      ...context?.attributes ?? {},
+      ..._transactionManager.currentContext?.effectiveAttributes ?? {},
+    };
+
+    final result = await _provider.getStringFlag(
+      flagKey,
+      defaultValue,
+      context: effectiveContext,
+    );
+
+    return FlagEvaluationDetails.fromResult(result);
+  }
+
+  /// Get integer flag with full evaluation details
+  Future<FlagEvaluationDetails<int>> getIntegerDetails(
+    String flagKey, {
+    EvaluationContext? context,
+    int defaultValue = 0,
+  }) async {
+    await getIntegerFlag(flagKey, context: context, defaultValue: defaultValue);
+
+    final effectiveContext = {
+      ..._defaultContext.attributes,
+      ...context?.attributes ?? {},
+      ..._transactionManager.currentContext?.effectiveAttributes ?? {},
+    };
+
+    final result = await _provider.getIntegerFlag(
+      flagKey,
+      defaultValue,
+      context: effectiveContext,
+    );
+
+    return FlagEvaluationDetails.fromResult(result);
+  }
+
+  /// Get double flag with full evaluation details
+  Future<FlagEvaluationDetails<double>> getDoubleDetails(
+    String flagKey, {
+    EvaluationContext? context,
+    double defaultValue = 0.0,
+  }) async {
+    await getDoubleFlag(flagKey, context: context, defaultValue: defaultValue);
+
+    final effectiveContext = {
+      ..._defaultContext.attributes,
+      ...context?.attributes ?? {},
+      ..._transactionManager.currentContext?.effectiveAttributes ?? {},
+    };
+
+    final result = await _provider.getDoubleFlag(
+      flagKey,
+      defaultValue,
+      context: effectiveContext,
+    );
+
+    return FlagEvaluationDetails.fromResult(result);
+  }
+
+  /// Get object flag with full evaluation details
+  Future<FlagEvaluationDetails<Map<String, dynamic>>> getObjectDetails(
+    String flagKey, {
+    EvaluationContext? context,
+    Map<String, dynamic> defaultValue = const {},
+  }) async {
+    await getObjectFlag(flagKey, context: context, defaultValue: defaultValue);
+
+    final effectiveContext = {
+      ..._defaultContext.attributes,
+      ...context?.attributes ?? {},
+      ..._transactionManager.currentContext?.effectiveAttributes ?? {},
+    };
+
+    final result = await _provider.getObjectFlag(
+      flagKey,
+      defaultValue,
+      context: effectiveContext,
+    );
+
+    return FlagEvaluationDetails.fromResult(result);
+  }
 }

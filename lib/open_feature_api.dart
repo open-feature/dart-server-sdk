@@ -2,23 +2,10 @@ import 'dart:async';
 import 'package:logging/logging.dart';
 import 'domain_manager.dart';
 import 'feature_provider.dart';
-
-enum OpenFeatureEventType {
-  providerChanged,
-  flagEvaluated,
-  contextUpdated,
-  error,
-  shutdown,
-  domainUpdated,
-}
-
-class OpenFeatureEvent {
-  final OpenFeatureEventType type;
-  final String message;
-  final dynamic data;
-
-  OpenFeatureEvent(this.type, this.message, {this.data});
-}
+import 'open_feature_event.dart';
+import 'client.dart';
+import 'hooks.dart';
+import 'evaluation_context.dart';
 
 class OpenFeatureEvaluationContext {
   final Map<String, dynamic> attributes;
@@ -39,7 +26,7 @@ abstract class OpenFeatureHook {
   );
 }
 
-/// Default provider that's immediately ready - completely independent
+/// Default provider that is immediately ready - completely independent
 class _ImmediateReadyProvider implements FeatureProvider {
   @override
   String get name => 'InMemoryProvider';
@@ -178,6 +165,7 @@ class OpenFeatureAPI {
   void _initializeDefaultProvider() {
     _provider = _ImmediateReadyProvider();
     _logger.info('Default provider initialized and ready');
+    _emitEvent(OpenFeatureEventType.PROVIDER_READY, 'Default provider ready');
   }
 
   Future<void> setProvider(FeatureProvider provider) async {
@@ -191,10 +179,20 @@ class OpenFeatureAPI {
 
       _provider = provider;
       _providerStreamController.add(provider);
-      _emitEvent(
-        OpenFeatureEventType.providerChanged,
-        'Provider changed to ${provider.name}',
-      );
+
+      // Emit appropriate event based on state
+      if (provider.state == ProviderState.READY) {
+        _emitEvent(
+          OpenFeatureEventType.PROVIDER_READY,
+          'Provider ready: ${provider.name}',
+        );
+      } else {
+        _emitEvent(
+          OpenFeatureEventType.PROVIDER_ERROR,
+          'Provider not ready: ${provider.name}',
+          data: {'state': provider.state.name},
+        );
+      }
     } catch (error) {
       _logger.severe('Failed to initialize provider: $error');
 
@@ -202,11 +200,72 @@ class OpenFeatureAPI {
       _provider = provider;
       _providerStreamController.add(provider);
       _emitEvent(
-        OpenFeatureEventType.error,
+        OpenFeatureEventType.PROVIDER_ERROR,
         'Provider initialization failed: ${provider.name}',
         data: error,
       );
     }
+  }
+
+  /// Set provider and wait for it to be ready
+  Future<void> setProviderAndWait(FeatureProvider provider) async {
+    _logger.info('Setting provider and waiting: ${provider.name}');
+
+    try {
+      // Initialize if needed
+      if (provider.state == ProviderState.NOT_READY) {
+        await provider.initialize();
+      }
+
+      // Wait for READY state
+      if (provider.state != ProviderState.READY) {
+        throw ProviderException(
+          'Provider failed to reach READY state: ${provider.state}',
+          code: ErrorCode.PROVIDER_NOT_READY,
+        );
+      }
+
+      _provider = provider;
+      _providerStreamController.add(provider);
+      _emitEvent(
+        OpenFeatureEventType.PROVIDER_READY,
+        'Provider ready: ${provider.name}',
+      );
+    } catch (error) {
+      _logger.severe('Failed to initialize provider: $error');
+      _provider = provider;
+      _providerStreamController.add(provider);
+      _emitEvent(
+        OpenFeatureEventType.PROVIDER_ERROR,
+        'Provider initialization failed: ${provider.name}',
+        data: error,
+      );
+      rethrow;
+    }
+  }
+
+  /// Get or create a client
+  FeatureClient getClient(String name, {String? domain}) {
+    // Build hook manager with global hooks
+    final hookManager = HookManager();
+    for (final hook in _hooks) {
+      // Convert OpenFeatureHook to Hook if needed
+      hookManager.addHook(_wrapHook(hook));
+    }
+
+    return FeatureClient(
+      metadata: ClientMetadata(name: name),
+      hookManager: hookManager,
+      defaultContext: _globalContext != null
+          ? EvaluationContext(attributes: _globalContext!.attributes)
+          : EvaluationContext(attributes: {}),
+      provider: _provider,
+    );
+  }
+
+  /// Wrap OpenFeatureHook into Hook interface
+  Hook _wrapHook(OpenFeatureHook openFeatureHook) {
+    return _OpenFeatureHookAdapter(openFeatureHook);
   }
 
   FeatureProvider get provider => _provider;
@@ -214,7 +273,10 @@ class OpenFeatureAPI {
   void setGlobalContext(OpenFeatureEvaluationContext context) {
     _logger.info('Setting global context');
     _globalContext = context;
-    _emitEvent(OpenFeatureEventType.contextUpdated, 'Global context updated');
+    _emitEvent(
+      OpenFeatureEventType.PROVIDER_CONTEXT_CHANGED,
+      'Global context updated',
+    );
   }
 
   OpenFeatureEvaluationContext? get globalContext => _globalContext;
@@ -228,105 +290,25 @@ class OpenFeatureAPI {
   void bindClientToProvider(String clientId, String providerId) {
     _domainManager.bindClientToProvider(clientId, providerId);
     _emitEvent(
-      OpenFeatureEventType.domainUpdated,
+      OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED,
       'Client $clientId bound to provider $providerId',
     );
   }
 
+  /// @deprecated Use getClient().getBooleanValue() instead
+  /// This method exists for backwards compatibility only
+  @Deprecated('Use getClient().getBooleanValue() instead')
   Future<bool> evaluateBooleanFlag(
     String flagKey,
     String clientId, {
     Map<String, dynamic>? context,
   }) async {
-    final providerId = _domainManager.getProviderForClient(clientId);
-    if (providerId == null) {
-      _logger.warning('No provider found for client $clientId');
-      return false;
-    }
-
-    // Per OpenFeature spec: short-circuit if provider not READY
-    if (_provider.state != ProviderState.READY) {
-      _logger.warning(
-        'Provider not ready for evaluation (state: ${_provider.state})',
-      );
-      _emitEvent(
-        OpenFeatureEventType.error,
-        'Flag evaluation attempted on non-ready provider',
-        data: {'flagKey': flagKey, 'providerState': _provider.state.name},
-      );
-      return false;
-    }
-
-    try {
-      _runBeforeEvaluationHooks(flagKey, context);
-
-      final result = await _provider.getBooleanFlag(
-        flagKey,
-        false,
-        context: context,
-      );
-
-      _emitEvent(
-        OpenFeatureEventType.flagEvaluated,
-        'Flag $flagKey evaluated for client $clientId',
-        data: {
-          'result': result.value,
-          'context': context,
-          'errorCode': result.errorCode?.name,
-        },
-      );
-
-      _runAfterEvaluationHooks(flagKey, result.value, context);
-
-      if (result.errorCode != null) {
-        _logger.warning('Flag evaluation error: ${result.errorMessage}');
-        _emitEvent(
-          OpenFeatureEventType.error,
-          'Error evaluating flag $flagKey',
-          data: {
-            'errorCode': result.errorCode?.name,
-            'errorMessage': result.errorMessage,
-          },
-        );
-      }
-
-      return result.value;
-    } catch (error) {
-      _logger.warning('Error evaluating flag $flagKey: $error');
-      _emitEvent(
-        OpenFeatureEventType.error,
-        'Error evaluating flag $flagKey',
-        data: error,
-      );
-      return false;
-    }
-  }
-
-  void _runBeforeEvaluationHooks(
-    String flagKey,
-    Map<String, dynamic>? context,
-  ) {
-    for (var hook in _hooks) {
-      try {
-        hook.beforeEvaluation(flagKey, context);
-      } catch (e) {
-        _logger.warning('Error in before-evaluation hook: $e');
-      }
-    }
-  }
-
-  void _runAfterEvaluationHooks(
-    String flagKey,
-    dynamic result,
-    Map<String, dynamic>? context,
-  ) {
-    for (var hook in _hooks) {
-      try {
-        hook.afterEvaluation(flagKey, result, context);
-      } catch (e) {
-        _logger.warning('Error in after-evaluation hook: $e');
-      }
-    }
+    final client = getClient(clientId);
+    return await client.getBooleanFlag(
+      flagKey,
+      defaultValue: false,
+      context: context != null ? EvaluationContext(attributes: context) : null,
+    );
   }
 
   void _emitEvent(OpenFeatureEventType type, String message, {dynamic data}) {
@@ -350,4 +332,25 @@ class OpenFeatureAPI {
   Stream<OpenFeatureEvent> get events => _eventStreamController.stream;
   Stream<Map<String, String>> get domainUpdates =>
       _domainUpdatesController.stream;
+}
+
+class _OpenFeatureHookAdapter extends BaseHook {
+  final OpenFeatureHook _hook;
+
+  _OpenFeatureHookAdapter(this._hook)
+    : super(metadata: HookMetadata(name: 'OpenFeatureHookAdapter'));
+
+  @override
+  Future<void> before(HookContext context) async {
+    _hook.beforeEvaluation(context.flagKey, context.evaluationContext);
+  }
+
+  @override
+  Future<void> after(HookContext context) async {
+    _hook.afterEvaluation(
+      context.flagKey,
+      context.result,
+      context.evaluationContext,
+    );
+  }
 }

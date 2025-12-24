@@ -6,6 +6,7 @@ enum ProviderState {
   READY,
   ERROR,
   NOT_READY,
+  STALE,
   SHUTDOWN,
   CONNECTING,
   SYNCHRONIZING,
@@ -117,6 +118,40 @@ class FlagEvaluationResult<T> {
       errorMessage: message,
       evaluatedAt: DateTime.now(),
       evaluatorId: evaluatorId,
+    );
+  }
+}
+
+/// Evaluation details containing full context about flag evaluation
+class FlagEvaluationDetails<T> {
+  final String flagKey;
+  final T value;
+  final ErrorCode? errorCode;
+  final String? errorMessage;
+  final String? reason;
+  final String? variant;
+  final Map<String, dynamic>? flagMetadata;
+  final DateTime timestamp;
+
+  FlagEvaluationDetails({
+    required this.flagKey,
+    required this.value,
+    this.errorCode,
+    this.errorMessage,
+    this.reason,
+    this.variant,
+    this.flagMetadata,
+  }) : timestamp = DateTime.now();
+
+  factory FlagEvaluationDetails.fromResult(FlagEvaluationResult<T> result) {
+    return FlagEvaluationDetails(
+      flagKey: result.flagKey,
+      value: result.value,
+      errorCode: result.errorCode,
+      errorMessage: result.errorMessage,
+      reason: result.reason,
+      variant: result.variant,
+      flagMetadata: result.details,
     );
   }
 }
