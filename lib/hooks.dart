@@ -1,6 +1,8 @@
 // Hook interface with OpenTelemetry support
 import 'dart:async';
 import 'dart:convert';
+import 'client.dart';
+import 'feature_provider.dart';
 
 /// Defines the stages in the hook lifecycle
 /// Used internally by the hook manager for execution ordering
@@ -73,6 +75,8 @@ class HookContext {
   final dynamic result;
   final Exception? error;
   final Map<String, dynamic> metadata;
+  final ClientMetadata? clientMetadata;
+  final ProviderMetadata? providerMetadata;
 
   HookContext({
     required this.flagKey,
@@ -80,6 +84,8 @@ class HookContext {
     this.result,
     this.error,
     this.metadata = const {},
+    this.clientMetadata,
+    this.providerMetadata,
   });
 }
 
@@ -139,12 +145,16 @@ class HookManager {
     Exception? error,
     EvaluationDetails? evaluationDetails,
     HookHints? hints,
+    ClientMetadata? clientMetadata,
+    ProviderMetadata? providerMetadata,
   }) async {
     final hookContext = HookContext(
       flagKey: flagKey,
       evaluationContext: context,
       result: result,
       error: error,
+      clientMetadata: clientMetadata,
+      providerMetadata: providerMetadata,
     );
 
     for (final hook in _hooks) {
@@ -461,16 +471,15 @@ class OpenTelemetryHook extends BaseHook {
     HookHints? hints,
   ]) async {
     // Generate OpenTelemetry attributes
-    final otelAttributes =
-        evaluationDetails != null
-            ? OpenTelemetryUtil.fromEvaluationDetails(
-              evaluationDetails,
-              providerName: providerName,
-            )
-            : OpenTelemetryUtil.fromHookContext(
-              context,
-              providerName: providerName,
-            );
+    final otelAttributes = evaluationDetails != null
+        ? OpenTelemetryUtil.fromEvaluationDetails(
+            evaluationDetails,
+            providerName: providerName,
+          )
+        : OpenTelemetryUtil.fromHookContext(
+            context,
+            providerName: providerName,
+          );
 
     // Call the telemetry callback if provided
     telemetryCallback?.call(otelAttributes);

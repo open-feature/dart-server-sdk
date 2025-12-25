@@ -76,32 +76,34 @@ dart pub get
 
 ```dart
 import 'dart:async';
-import 'package:openfeature_dart_server_sdk/client.dart';
 import 'package:openfeature_dart_server_sdk/open_feature_api.dart';
 import 'package:openfeature_dart_server_sdk/feature_provider.dart';
-import 'package:openfeature_dart_server_sdk/evaluation_context.dart';
-import 'package:openfeature_dart_server_sdk/hooks.dart';
 
 void main() async {
-  // Register your feature flag provider
+  // Get the API instance
   final api = OpenFeatureAPI();
-  api.setProvider(InMemoryProvider({
+  
+  // Register your feature flag provider and wait for it to be ready
+  await api.setProviderAndWait(InMemoryProvider({
     'new-feature': true,
     'welcome-message': 'Hello, OpenFeature!'
   }));
 
   // Create a client
-  final client = FeatureClient(
-    metadata: ClientMetadata(name: 'my-app'),
-    hookManager: HookManager(),
-    defaultContext: EvaluationContext(attributes: {}),
-  );
+  final client = api.getClient('my-app');
 
   // Evaluate your feature flags
   final newFeatureEnabled = await client.getBooleanFlag(
     'new-feature',
     defaultValue: false,
   );
+
+  // Get full evaluation details if needed
+  final details = await client.getBooleanDetails(
+    'new-feature',
+    defaultValue: false,
+  );
+  print('Reason: ${details.reason}, Variant: ${details.variant}');
 
   // Use the returned flag value
   if (newFeatureEnabled) {
