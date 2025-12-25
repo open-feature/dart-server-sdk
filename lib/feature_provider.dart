@@ -495,7 +495,6 @@ class InMemoryProvider extends CachedFeatureProvider {
         metadata: const ProviderMetadata(name: 'InMemoryProvider'),
         config: config,
       );
-
   @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
     if (state == ProviderState.SHUTDOWN) {
@@ -513,6 +512,24 @@ class InMemoryProvider extends CachedFeatureProvider {
       setState(ProviderState.READY);
     } catch (e) {
       setState(ProviderState.ERROR);
+      rethrow;
+    }
+    if (_state == ProviderState.SHUTDOWN) {
+      throw ProviderException(
+        'Cannot initialize a shutdown provider',
+        code: ErrorCode.PROVIDER_NOT_READY,
+      );
+    }
+
+    setState(ProviderState.CONNECTING);
+
+    try {
+      // Simulate initialization work
+      await Future.delayed(Duration(milliseconds: 10));
+      setState(ProviderState.READY);
+    } catch (e) {
+      setState(ProviderState.ERROR);
+
       rethrow;
     }
   }
