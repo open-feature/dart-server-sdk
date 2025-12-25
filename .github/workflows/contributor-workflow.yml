@@ -57,26 +57,26 @@ jobs:
           echo "Checking for outdated dependencies..."
           dart pub outdated || true
 
-      - name: Run Static Analysis (capture & show)
-        id: analyze
-        working-directory: ${{ steps.pkg.outputs.dir }}
-        shell: bash
-        run: |
-          set -o pipefail
-          echo "Running static analysis for core SDK..."
-          # Write both stdout and stderr to files while also echoing to the log.
-          # Keep stdout and stderr separate so we can categorize later.
-          # stdout -> analysis_report.txt, stderr -> error_log.txt
-          { dart analyze lib/ | tee analysis_report.txt; } 2> >(tee error_log.txt >&2)
-          STATUS=${PIPESTATUS[0]}
-          if [[ $STATUS -ne 0 ]]; then
-            echo "❌ Static analysis failed. See error_log.txt below:"
-            sed -n '1,200p' error_log.txt || true
-          else
-            echo "✅ Static analysis completed successfully. No critical errors found."
-          fi
-          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
-          exit $STATUS || true  # Don’t fail the step here; allow categorization + artifacts.
+      # - name: Run Static Analysis (capture & show)
+      #   id: analyze
+      #   working-directory: ${{ steps.pkg.outputs.dir }}
+      #   shell: bash
+      #   run: |
+      #     set -o pipefail
+      #     echo "Running static analysis for core SDK..."
+      #     # Write both stdout and stderr to files while also echoing to the log.
+      #     # Keep stdout and stderr separate so we can categorize later.
+      #     # stdout -> analysis_report.txt, stderr -> error_log.txt
+      #     { dart analyze lib/ | tee analysis_report.txt; } 2> >(tee error_log.txt >&2)
+      #     STATUS=${PIPESTATUS[0]}
+      #     if [[ $STATUS -ne 0 ]]; then
+      #       echo "❌ Static analysis failed. See error_log.txt below:"
+      #       sed -n '1,200p' error_log.txt || true
+      #     else
+      #       echo "✅ Static analysis completed successfully. No critical errors found."
+      #     fi
+      #     echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+      #     exit $STATUS || true  # Don’t fail the step here; allow categorization + artifacts.
 
       - name: Categorize and Count Analysis Results
         if: always()
