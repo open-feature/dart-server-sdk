@@ -12,7 +12,7 @@
 name: openfeature_dart_server_sdk
 description: Official server-side Dart OpenFeature SDK.
 
-version: 0.0.13
+version: 0.0.14
 
 homepage: https://github.com/open-feature/dart-server-sdk
 environment:
