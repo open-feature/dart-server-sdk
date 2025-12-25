@@ -175,9 +175,6 @@ class OpenFeatureAPI {
   factory OpenFeatureAPI.forTesting() {
     return OpenFeatureAPI._internal();
   }
-
-  static bool _loggingConfigured = false;
-
   void _configureLogging() {
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((record) {
