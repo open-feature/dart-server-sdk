@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.15](https://github.com/open-feature/dart-server-sdk/compare/v0.0.14...v0.0.15) (2025-12-26)
+
+
+### ✨ New Features
+
+* A new feature ([#86](https://github.com/open-feature/dart-server-sdk/issues/86)) ([edc52e7](https://github.com/open-feature/dart-server-sdk/commit/edc52e7eb497b4634f32da8e39ccfef061144c1c))
+
 ## [0.0.14](https://github.com/open-feature/dart-server-sdk/compare/v0.0.13...v0.0.14) (2025-12-25)
 
 
