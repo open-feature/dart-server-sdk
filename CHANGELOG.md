@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.14](https://github.com/open-feature/dart-server-sdk/compare/v0.0.13...v0.0.14) (2025-12-25)
+
+
+### ✨ New Features
+
+* A new feature ([#83](https://github.com/open-feature/dart-server-sdk/issues/83)) ([dc73440](https://github.com/open-feature/dart-server-sdk/commit/dc73440bc6dc0f852b798f9387b678df7e76de20))
+
+
+### 🧹 Chore
+
+* update copyright to OpenFeature Maintainers ([#80](https://github.com/open-feature/dart-server-sdk/issues/80)) ([5d2dc98](https://github.com/open-feature/dart-server-sdk/commit/5d2dc988b61db1cd61f232b9091a7f01a17aaff0))
+
 ## [0.0.13](https://github.com/open-feature/dart-server-sdk/compare/v0.0.12...v0.0.13) (2025-10-01)
 
 

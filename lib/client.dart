@@ -6,6 +6,7 @@ import 'feature_provider.dart';
 import 'transaction_context.dart';
 
 /// Client metadata for identification
+/// Client metadata for identification
 class ClientMetadata {
   final String name;
   final String version;
