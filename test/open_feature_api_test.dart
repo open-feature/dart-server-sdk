@@ -297,6 +297,7 @@ void main() {
       await api.setProvider(provider);
       expect(api.provider.metadata.name, equals('TestProvider'));
     });
+
     test('getClient creates client with proper configuration', () async {
       final api = OpenFeatureAPI();
       final provider = TestProvider({'test': true});
@@ -308,4 +309,3 @@ void main() {
     });
   });
 }
-
