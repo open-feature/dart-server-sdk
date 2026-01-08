@@ -1,6 +1,10 @@
 name: Coverage Workflow
 
 on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_call:
     inputs:
       branch_name:
