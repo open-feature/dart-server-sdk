@@ -24,7 +24,16 @@ class TestProvider implements FeatureProvider {
   ProviderConfig get config => ProviderConfig();
 
   @override
-Future<void> initialize([Map<String, dynamic>? config]) async {}
+  ProviderMetadata get metadata => ProviderMetadata(name: 'TestProvider');
+
+  @override
+  Future<void> initialize([Map<String, dynamic>? config]) async {
+    if (_shouldFailInitialization) {
+      _state = ProviderState.ERROR;
+      throw Exception('Initialization failed');
+    }
+    _state = ProviderState.READY;
+  }
 
   @override
   Future<void> connect() async {
@@ -150,7 +159,6 @@ void main() {
     test('sets and gets provider', () async {
       final api = OpenFeatureAPI();
       final provider = TestProvider({'test': true});
-
       await api.setProvider(provider);
       expect(api.provider, equals(provider));
       expect(api.provider.state, equals(ProviderState.READY));
@@ -180,7 +188,6 @@ void main() {
       final api = OpenFeatureAPI();
       final provider = TestProvider({'test-flag': true});
       final hook = TestHook();
-
       await api.setProvider(provider);
       api.addHooks([hook]);
 
@@ -190,15 +197,6 @@ void main() {
       expect(result, isTrue);
       expect(hook.calls, contains('before:test-flag'));
       expect(hook.calls, contains('after:test-flag:true'));
-    });
-
-
-
-      api.bindClientToProvider('test-client', 'TestProvider');
-      final result = await api.evaluateBooleanFlag('test-flag', 'test-client');
-
-    // Should return default value when provider has error
-      expect(result, isFalse);
     });
 
     test('handles provider not ready gracefully', () async {
@@ -262,7 +260,6 @@ void main() {
     test('handles evaluation errors gracefully', () async {
       final api = OpenFeatureAPI();
       final provider = TestProvider({'string-flag': 'not-boolean'});
-
       await api.setProvider(provider);
 
       final client = api.getClient('test-client');
