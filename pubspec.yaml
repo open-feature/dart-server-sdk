@@ -16,7 +16,7 @@ version: 0.0.14
 
 homepage: https://github.com/open-feature/dart-server-sdk
 environment:
-  sdk: ^3.9.3
+  sdk: ^3.10.7
 
 dependencies:
   # Core dependencies

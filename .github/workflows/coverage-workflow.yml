@@ -1,7 +1,7 @@
 name: Coverage Workflow
 
 on:
-  workflow_call: # Makes the workflow reusable
+  workflow_call:
     inputs:
       branch_name:
         required: true
@@ -13,11 +13,10 @@ on:
 jobs:
   test-and-upload:
     runs-on: ubuntu-latest
-    outputs:
-      coverage-path: ${{ steps.upload_artifact.outputs.artifact-path }}
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Dart
         uses: dart-lang/setup-dart@v1
@@ -28,22 +27,26 @@ jobs:
         run: dart pub get
 
       - name: Run tests with coverage
-        run: dart test --coverage=coverage
+        run: |
+          mkdir -p coverage
+          dart test --coverage=coverage
+
+      - name: Activate coverage package
+        run: dart pub global activate coverage
 
       - name: Generate LCOV report
         run: |
-          dart pub global activate coverage
-          dart run coverage:format_coverage \
-            --report-on=lib \
+          dart pub global run coverage:format_coverage \
+            --in=coverage \
+            --out=coverage/lcov.info \
             --lcov \
-            -i coverage \
-            --out=coverage/lcov.info
+            --report-on=lib \
+            --packages=.dart_tool/package_config.json
 
       - name: List coverage files
         run: ls -al coverage
 
       - name: Upload coverage artifact
-        id: upload_artifact
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -52,15 +55,16 @@ jobs:
   upload-coverage:
     runs-on: ubuntu-latest
     needs: test-and-upload
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Download coverage artifact
         uses: actions/download-artifact@v4
         with:
           name: coverage-report
-          path: ./coverage
+          path: coverage
 
       - name: List coverage files after download
         run: ls -al coverage
@@ -68,6 +72,6 @@ jobs:
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ secrets.CODECOV_TOKEN }} # omit for public repos if you want
           slug: open-feature/dart-server-sdk
-          files: ./coverage/lcov.info
+          files: coverage/lcov.info
