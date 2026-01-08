@@ -6,7 +6,6 @@ import 'feature_provider.dart';
 import 'transaction_context.dart';
 
 /// Client metadata for identification
-/// Client metadata for identification
 class ClientMetadata {
   final String name;
   final String version;
@@ -102,7 +101,7 @@ class FeatureClient {
         HookStage.AFTER,
         flagKey,
         effectiveContext,
-        result: result,
+        result: result.value,
         clientMetadata: metadata,
         providerMetadata: _provider.metadata,
       );
@@ -193,7 +192,6 @@ class FeatureClient {
     context: context?.attributes,
   );
 
-  /// Evaluate object flag
   Future<Map<String, dynamic>> getObjectFlag(
     String flagKey, {
     EvaluationContext? context,
@@ -205,7 +203,6 @@ class FeatureClient {
     context: context?.attributes,
   );
 
-  /// Get client metrics
   ClientMetrics getMetrics() => _metrics;
 
   /// Access to provider for management operations
@@ -220,9 +217,7 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     bool defaultValue = false,
   }) async {
-    await getBooleanFlag(flagKey, context: context, defaultValue: defaultValue);
-
-    // Get the result from provider for details
+    // Build effective context
     final effectiveContext = {
       ..._defaultContext.attributes,
       ...context?.attributes ?? {},
@@ -244,8 +239,6 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     String defaultValue = '',
   }) async {
-    await getStringFlag(flagKey, context: context, defaultValue: defaultValue);
-
     final effectiveContext = {
       ..._defaultContext.attributes,
       ...context?.attributes ?? {},
@@ -267,8 +260,6 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     int defaultValue = 0,
   }) async {
-    await getIntegerFlag(flagKey, context: context, defaultValue: defaultValue);
-
     final effectiveContext = {
       ..._defaultContext.attributes,
       ...context?.attributes ?? {},
@@ -290,8 +281,6 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     double defaultValue = 0.0,
   }) async {
-    await getDoubleFlag(flagKey, context: context, defaultValue: defaultValue);
-
     final effectiveContext = {
       ..._defaultContext.attributes,
       ...context?.attributes ?? {},
@@ -313,8 +302,6 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     Map<String, dynamic> defaultValue = const {},
   }) async {
-    await getObjectFlag(flagKey, context: context, defaultValue: defaultValue);
-
     final effectiveContext = {
       ..._defaultContext.attributes,
       ...context?.attributes ?? {},

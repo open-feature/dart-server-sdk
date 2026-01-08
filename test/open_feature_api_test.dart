@@ -239,18 +239,19 @@ void main() {
 
     test('emits error events for flag evaluation issues', () async {
       final api = OpenFeatureAPI();
-      final provider = TestProvider({}, ProviderState.NOT_READY);
+      final provider = TestProvider(
+        {},
+        ProviderState.NOT_READY,
+        true, // shouldFailInitialization
+      );
       final events = <OpenFeatureEvent>[];
 
-      await api.setProvider(provider);
-      provider.setState(ProviderState.NOT_READY);
+      // Subscribe BEFORE setProvider to capture the error event
       api.events.listen(events.add);
-
-      final client = api.getClient('test-client');
-      await client.getBooleanFlag('missing-flag');
+      await api.setProvider(provider);
       await Future.delayed(Duration(milliseconds: 10));
 
-      // Provider not ready will have emitted PROVIDER_ERROR
+      // Provider initialization failure will have emitted PROVIDER_ERROR
       expect(
         events.any((e) => e.type == OpenFeatureEventType.PROVIDER_ERROR),
         isTrue,
