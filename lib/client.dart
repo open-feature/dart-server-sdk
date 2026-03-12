@@ -103,7 +103,7 @@ class FeatureClient {
         HookStage.AFTER,
         flagKey,
         effectiveContext,
-        result: result,
+        result: result.value,
         clientMetadata: metadata,
         providerMetadata: _provider.metadata,
       );

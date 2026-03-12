@@ -380,9 +380,13 @@ class _OpenFeatureHookAdapter extends BaseHook {
 
   @override
   Future<void> after(HookContext context) async {
+    dynamic resultValue = context.result;
+    if (resultValue is FlagEvaluationResult) {
+      resultValue = resultValue.value;
+    }
     _hook.afterEvaluation(
       context.flagKey,
-      context.result,
+      resultValue,
       context.evaluationContext,
     );
   }
