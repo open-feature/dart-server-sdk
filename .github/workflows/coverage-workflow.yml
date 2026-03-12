@@ -72,6 +72,6 @@ jobs:
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
-          token: ${{ secrets.CODECOV_TOKEN }} # omit for public repos if you want
+          token: ${{ secrets.CODECOV__UPLOAD_TOKEN }} # omit for public repos if you want
           slug: open-feature/dart-server-sdk
           files: coverage/lcov.info

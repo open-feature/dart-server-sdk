@@ -21,6 +21,7 @@ class ClientMetadata {
 /// Client metrics for monitoring
 class ClientMetrics {
   int flagEvaluations = 0;
+  int trackingEvents = 0;
   List<Duration> responseTimes = [];
   Map<String, int> errorCounts = {};
 
@@ -35,6 +36,7 @@ class ClientMetrics {
 
   Map<String, dynamic> toJson() => {
     'flagEvaluations': flagEvaluations,
+    'trackingEvents': trackingEvents,
     'averageResponseTime': averageResponseTime.inMilliseconds,
     'errorCounts': errorCounts,
   };
@@ -203,6 +205,33 @@ class FeatureClient {
     context: context?.attributes,
   );
 
+  /// Tracking API (spec Section 6) - record a tracking event
+  /// Context merging follows: API → transaction → client → invocation
+  /// If the provider does not support tracking, the call silently no-ops.
+  Future<void> track(
+    String trackingEventName, {
+    EvaluationContext? context,
+    TrackingEventDetails? trackingDetails,
+  }) async {
+    _metrics.trackingEvents++;
+
+    final effectiveContext = {
+      ..._defaultContext.attributes,
+      ...context?.attributes ?? {},
+      ..._transactionManager.currentContext?.effectiveAttributes ?? {},
+    };
+
+    try {
+      await _provider.track(
+        trackingEventName,
+        evaluationContext: effectiveContext,
+        trackingDetails: trackingDetails,
+      );
+    } catch (e) {
+      _logger.warning('Error sending tracking event "$trackingEventName": $e');
+    }
+  }
+
   ClientMetrics getMetrics() => _metrics;
 
   /// Access to provider for management operations
@@ -217,7 +246,9 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     bool defaultValue = false,
   }) async {
-    // Build effective context
+    await getBooleanFlag(flagKey, context: context, defaultValue: defaultValue);
+
+    // Get the result from provider for details
     final effectiveContext = {
       ..._defaultContext.attributes,
       ...context?.attributes ?? {},
@@ -239,6 +270,8 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     String defaultValue = '',
   }) async {
+    await getStringFlag(flagKey, context: context, defaultValue: defaultValue);
+
     final effectiveContext = {
       ..._defaultContext.attributes,
       ...context?.attributes ?? {},
@@ -260,6 +293,8 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     int defaultValue = 0,
   }) async {
+    await getIntegerFlag(flagKey, context: context, defaultValue: defaultValue);
+
     final effectiveContext = {
       ..._defaultContext.attributes,
       ...context?.attributes ?? {},
@@ -281,6 +316,8 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     double defaultValue = 0.0,
   }) async {
+    await getDoubleFlag(flagKey, context: context, defaultValue: defaultValue);
+
     final effectiveContext = {
       ..._defaultContext.attributes,
       ...context?.attributes ?? {},
@@ -302,6 +339,8 @@ extension ClientEvaluationDetails on FeatureClient {
     EvaluationContext? context,
     Map<String, dynamic> defaultValue = const {},
   }) async {
+    await getObjectFlag(flagKey, context: context, defaultValue: defaultValue);
+
     final effectiveContext = {
       ..._defaultContext.attributes,
       ...context?.attributes ?? {},

@@ -10,7 +10,8 @@ enum OpenFeatureEventType {
   error,
   shutdown,
   sync,
-  stateChanged
+  stateChanged,
+  providerReconciling,
 }
 
 /// Event priority levels
@@ -32,12 +33,12 @@ class OpenFeatureEvent {
   }) : timestamp = DateTime.now();
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'type': type.name,
-        'timestamp': timestamp.toIso8601String(),
-        'data': data,
-        'priority': priority.name,
-      };
+    'id': id,
+    'type': type.name,
+    'timestamp': timestamp.toIso8601String(),
+    'data': data,
+    'priority': priority.name,
+  };
 }
 
 /// Event filter specification
@@ -46,11 +47,7 @@ class EventFilter {
   final Set<EventPriority>? priorities;
   final bool Function(OpenFeatureEvent)? customFilter;
 
-  const EventFilter({
-    this.types,
-    this.priorities,
-    this.customFilter,
-  });
+  const EventFilter({this.types, this.priorities, this.customFilter});
 
   bool matches(OpenFeatureEvent event) {
     if (types != null && !types!.contains(event.type)) return false;
@@ -87,11 +84,9 @@ class EventBus {
   final int _maxQueueSize;
   final Queue<OpenFeatureEvent> _eventQueue = Queue();
 
-  EventBus({
-    bool sync = false,
-    int maxQueueSize = 1000,
-  })  : _controller = StreamController<OpenFeatureEvent>.broadcast(sync: sync),
-        _maxQueueSize = maxQueueSize {
+  EventBus({bool sync = false, int maxQueueSize = 1000})
+    : _controller = StreamController<OpenFeatureEvent>.broadcast(sync: sync),
+      _maxQueueSize = maxQueueSize {
     _controller.stream.listen(_dispatchEvent);
   }
 

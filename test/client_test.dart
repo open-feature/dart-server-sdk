@@ -36,6 +36,13 @@ class MockProvider implements FeatureProvider {
   }
 
   @override
+  Future<void> track(
+    String trackingEventName, {
+    Map<String, dynamic>? evaluationContext,
+    TrackingEventDetails? trackingDetails,
+  }) async {}
+
+  @override
   Future<FlagEvaluationResult<bool>> getBooleanFlag(
     String flagKey,
     bool defaultValue, {
