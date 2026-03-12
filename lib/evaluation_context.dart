@@ -19,7 +19,7 @@ enum TargetingOperator {
   MATCHES_REGEX,
   VERSION_GREATER_THAN,
   VERSION_LESS_THAN,
-  SEMANTIC_VERSION_MATCH
+  SEMANTIC_VERSION_MATCH,
 }
 
 /// Cache entry for evaluation results
@@ -100,7 +100,9 @@ class TargetingRule {
             0;
       case TargetingOperator.SEMANTIC_VERSION_MATCH:
         return _matchSemanticVersion(
-            attributeValue.toString(), value.toString());
+          attributeValue.toString(),
+          value.toString(),
+        );
     }
   }
 
@@ -152,6 +154,7 @@ class _EvaluationCache {
 
 /// Evaluation context with enhanced targeting capabilities
 class EvaluationContext {
+  final String? targetingKey;
   final Map<String, dynamic> attributes;
   final EvaluationContext? parent;
   final List<TargetingRule> rules;
@@ -159,6 +162,7 @@ class EvaluationContext {
   static final _cache = _EvaluationCache();
 
   const EvaluationContext({
+    this.targetingKey,
     required this.attributes,
     this.parent,
     this.rules = const [],
@@ -171,8 +175,10 @@ class EvaluationContext {
   }
 
   /// Create a new context by merging with another
+  /// Per spec: overriding context targeting key takes precedence
   EvaluationContext merge(EvaluationContext other) {
     return EvaluationContext(
+      targetingKey: other.targetingKey ?? targetingKey,
       attributes: {
         ...parent?.attributes ?? {},
         ...attributes,
@@ -189,6 +195,9 @@ class EvaluationContext {
     void addToKey(EvaluationContext? context) {
       if (context == null) return;
       addToKey(context.parent);
+      if (context.targetingKey != null) {
+        buffer.write('tk:${context.targetingKey}|');
+      }
       buffer.write(context.attributes.toString());
       buffer.write(context.rules.toString());
     }
@@ -220,10 +229,12 @@ class EvaluationContext {
   /// Create a child context
   EvaluationContext createChild(
     Map<String, dynamic> childAttributes, {
+    String? childTargetingKey,
     List<TargetingRule>? childRules,
     Duration? childCacheDuration,
   }) {
     return EvaluationContext(
+      targetingKey: childTargetingKey ?? targetingKey,
       attributes: childAttributes,
       parent: this,
       rules: childRules ?? [],
