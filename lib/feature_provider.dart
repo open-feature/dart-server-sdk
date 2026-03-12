@@ -8,6 +8,7 @@ enum ProviderState {
   NOT_READY,
   STALE,
   SHUTDOWN,
+  FATAL,
   CONNECTING,
   SYNCHRONIZING,
   DEGRADED,
@@ -25,6 +26,7 @@ enum ErrorCode {
   TARGETING_KEY_MISSING,
   INVALID_CONTEXT,
   PROVIDER_NOT_READY,
+  PROVIDER_FATAL,
 }
 
 /// Provider metadata
@@ -172,6 +174,14 @@ class ProviderException implements Exception {
   String toString() => 'ProviderException: $message (code: ${code.name})';
 }
 
+/// Tracking event details for the Tracking API (spec Section 6)
+class TrackingEventDetails {
+  final double? value;
+  final Map<String, dynamic> attributes;
+
+  const TrackingEventDetails({this.value, this.attributes = const {}});
+}
+
 /// Feature provider interface
 abstract class FeatureProvider {
   String get name;
@@ -211,6 +221,14 @@ abstract class FeatureProvider {
     String flagKey,
     Map<String, dynamic> defaultValue, {
     Map<String, dynamic>? context,
+  });
+
+  /// Tracking API (spec Section 6) - record a tracking event
+  /// Providers that do not support tracking should silently no-op.
+  Future<void> track(
+    String trackingEventName, {
+    Map<String, dynamic>? evaluationContext,
+    TrackingEventDetails? trackingDetails,
   });
 }
 
@@ -323,7 +341,6 @@ abstract class CachedFeatureProvider implements FeatureProvider {
     Map<String, dynamic>? context,
   });
 
-  /// Cached evaluation implementations
   @override
   Future<FlagEvaluationResult<bool>> getBooleanFlag(
     String flagKey,
@@ -349,7 +366,6 @@ abstract class CachedFeatureProvider implements FeatureProvider {
       context: context,
     );
 
-    // Cache successful evaluations
     if (result.errorCode == null) {
       _addToCache(cacheKey, result.value);
     }
@@ -484,6 +500,16 @@ abstract class CachedFeatureProvider implements FeatureProvider {
 
     return result;
   }
+
+  /// Default track implementation - silently no-ops per spec
+  @override
+  Future<void> track(
+    String trackingEventName, {
+    Map<String, dynamic>? evaluationContext,
+    TrackingEventDetails? trackingDetails,
+  }) async {
+    // Default: no-op. Subclasses that support tracking should override.
+  }
 }
 
 /// In-memory provider implementation with caching - FIXED for synchronous default provider
@@ -495,6 +521,7 @@ class InMemoryProvider extends CachedFeatureProvider {
         metadata: const ProviderMetadata(name: 'InMemoryProvider'),
         config: config,
       );
+
   @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
     if (state == ProviderState.SHUTDOWN) {
@@ -512,24 +539,6 @@ class InMemoryProvider extends CachedFeatureProvider {
       setState(ProviderState.READY);
     } catch (e) {
       setState(ProviderState.ERROR);
-      rethrow;
-    }
-    if (_state == ProviderState.SHUTDOWN) {
-      throw ProviderException(
-        'Cannot initialize a shutdown provider',
-        code: ErrorCode.PROVIDER_NOT_READY,
-      );
-    }
-
-    setState(ProviderState.CONNECTING);
-
-    try {
-      // Simulate initialization work
-      await Future.delayed(Duration(milliseconds: 10));
-      setState(ProviderState.READY);
-    } catch (e) {
-      setState(ProviderState.ERROR);
-
       rethrow;
     }
   }

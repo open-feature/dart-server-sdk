@@ -7,6 +7,7 @@ enum OpenFeatureEventType {
   PROVIDER_CONFIGURATION_CHANGED,
   PROVIDER_STALE,
   PROVIDER_CONTEXT_CHANGED,
+  PROVIDER_RECONCILING,
 }
 
 class OpenFeatureEvent {
@@ -15,7 +16,13 @@ class OpenFeatureEvent {
   final dynamic data;
   final DateTime timestamp;
   final ProviderMetadata? providerMetadata;
+  final ErrorCode? errorCode;
 
-  OpenFeatureEvent(this.type, this.message, {this.data, this.providerMetadata})
-    : timestamp = DateTime.now();
+  OpenFeatureEvent(
+    this.type,
+    this.message, {
+    this.data,
+    this.providerMetadata,
+    this.errorCode,
+  }) : timestamp = DateTime.now();
 }

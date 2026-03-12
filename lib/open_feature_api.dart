@@ -26,7 +26,7 @@ abstract class OpenFeatureHook {
   );
 }
 
-/// Default provider that is immediately ready - completely independent
+/// Default provider that's immediately ready - completely independent
 class _ImmediateReadyProvider implements FeatureProvider {
   @override
   String get name => 'InMemoryProvider';
@@ -49,6 +49,13 @@ class _ImmediateReadyProvider implements FeatureProvider {
 
   @override
   Future<void> shutdown() async {}
+
+  @override
+  Future<void> track(
+    String trackingEventName, {
+    Map<String, dynamic>? evaluationContext,
+    TrackingEventDetails? trackingDetails,
+  }) async {}
 
   @override
   Future<FlagEvaluationResult<bool>> getBooleanFlag(
@@ -129,7 +136,6 @@ class _ImmediateReadyProvider implements FeatureProvider {
 class OpenFeatureAPI {
   static final Logger _logger = Logger('OpenFeatureAPI');
   static OpenFeatureAPI? _instance;
-  static bool _testMode = false; // Add test mode flag
 
   late FeatureProvider _provider;
   final DomainManager _domainManager = DomainManager();
@@ -150,31 +156,10 @@ class OpenFeatureAPI {
   }
 
   factory OpenFeatureAPI() {
-    // In test mode, always return new instance
-    if (_testMode) {
-      return OpenFeatureAPI._internal();
-    }
-
     _instance ??= OpenFeatureAPI._internal();
     return _instance!;
   }
 
-  // Enable test mode - disables singleton
-  static void enableTestMode() {
-    _testMode = true;
-    _instance = null;
-  }
-
-  // Disable test mode - re-enables singleton
-  static void disableTestMode() {
-    _testMode = false;
-    _instance = null;
-  }
-
-  // Public constructor for testing - bypasses singleton
-  factory OpenFeatureAPI.forTesting() {
-    return OpenFeatureAPI._internal();
-  }
   void _configureLogging() {
     Logger.root.level = Level.ALL;
     Logger.root.onRecord.listen((record) {
@@ -266,8 +251,34 @@ class OpenFeatureAPI {
     }
   }
 
+  /// Shutdown the current provider (spec v0.8.0: status MUST indicate NOT_READY after shutdown)
+  Future<void> shutdownProvider() async {
+    _logger.info('Shutting down provider: ${_provider.name}');
+
+    try {
+      await _provider.shutdown();
+      _emitEvent(
+        OpenFeatureEventType.PROVIDER_STALE,
+        'Provider shutdown: ${_provider.name}',
+      );
+    } catch (e) {
+      _logger.severe('Error during provider shutdown: $e');
+      _emitEvent(
+        OpenFeatureEventType.PROVIDER_ERROR,
+        'Provider shutdown failed: ${_provider.name}',
+        data: e,
+      );
+    }
+
+    _initializeDefaultProvider();
+  }
+
   /// Get or create a client
   FeatureClient getClient(String name, {String? domain}) {
+    if (domain != null) {
+      _domainManager.getProviderForClient(domain);
+    }
+
     // Build hook manager with global hooks
     final hookManager = HookManager();
     for (final hook in _hooks) {

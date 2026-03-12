@@ -21,6 +21,9 @@ enum HookPriority {
   LOW, // Lowest priority
 }
 
+/// Flag value types for hook context
+enum FlagValueType { BOOLEAN, STRING, INTEGER, DOUBLE, OBJECT }
+
 /// Configuration for hook behavior
 class HookConfig {
   final bool continueOnError;
@@ -68,6 +71,30 @@ class EvaluationDetails {
   });
 }
 
+/// Mutable data container that propagates between hook stages (spec Section 4.6)
+/// Hook data allows mutable state to be shared across before/after/error/finally stages
+/// within a single flag evaluation lifecycle.
+class HookData {
+  final Map<String, dynamic> _data = {};
+
+  /// Set a value in hook data
+  void set(String key, dynamic value) {
+    _data[key] = value;
+  }
+
+  /// Get a value from hook data
+  dynamic get(String key) => _data[key];
+
+  /// Check if a key exists
+  bool containsKey(String key) => _data.containsKey(key);
+
+  /// Remove a key
+  dynamic remove(String key) => _data.remove(key);
+
+  /// Get all entries as an unmodifiable map
+  Map<String, dynamic> toMap() => Map.unmodifiable(_data);
+}
+
 /// Context passed to hooks during execution
 class HookContext {
   final String flagKey;
@@ -77,6 +104,9 @@ class HookContext {
   final Map<String, dynamic> metadata;
   final ClientMetadata? clientMetadata;
   final ProviderMetadata? providerMetadata;
+  final dynamic defaultValue;
+  final FlagValueType? flagValueType;
+  final HookData hookData;
 
   HookContext({
     required this.flagKey,
@@ -86,7 +116,10 @@ class HookContext {
     this.metadata = const {},
     this.clientMetadata,
     this.providerMetadata,
-  });
+    this.defaultValue,
+    this.flagValueType,
+    HookData? hookData,
+  }) : hookData = hookData ?? HookData();
 }
 
 /// Optional hints for hook execution
@@ -147,7 +180,11 @@ class HookManager {
     HookHints? hints,
     ClientMetadata? clientMetadata,
     ProviderMetadata? providerMetadata,
+    dynamic defaultValue,
+    FlagValueType? flagValueType,
+    HookData? hookData,
   }) async {
+    final sharedHookData = hookData ?? HookData();
     final hookContext = HookContext(
       flagKey: flagKey,
       evaluationContext: context,
@@ -155,6 +192,9 @@ class HookManager {
       error: error,
       clientMetadata: clientMetadata,
       providerMetadata: providerMetadata,
+      defaultValue: defaultValue,
+      flagValueType: flagValueType,
+      hookData: sharedHookData,
     );
 
     for (final hook in _hooks) {
@@ -275,6 +315,7 @@ class OTelFeatureFlagConstants {
   static const String REASON_ERROR = 'ERROR';
   static const String REASON_DISABLED = 'DISABLED';
   static const String REASON_UNKNOWN = 'UNKNOWN';
+  static const String REASON_STALE = 'STALE';
 
   /// Value types
   static const String TYPE_BOOLEAN = 'BOOLEAN';

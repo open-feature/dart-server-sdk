@@ -45,6 +45,13 @@ class TestProvider implements FeatureProvider {
     _state = ProviderState.SHUTDOWN;
   }
 
+  @override
+  Future<void> track(
+    String trackingEventName, {
+    Map<String, dynamic>? evaluationContext,
+    TrackingEventDetails? trackingDetails,
+  }) async {}
+
   void setState(ProviderState newState) {
     _state = newState;
   }
@@ -239,19 +246,18 @@ void main() {
 
     test('emits error events for flag evaluation issues', () async {
       final api = OpenFeatureAPI();
-      final provider = TestProvider(
-        {},
-        ProviderState.NOT_READY,
-        true, // shouldFailInitialization
-      );
+      final provider = TestProvider({}, ProviderState.NOT_READY);
       final events = <OpenFeatureEvent>[];
 
-      // Subscribe BEFORE setProvider to capture the error event
-      api.events.listen(events.add);
       await api.setProvider(provider);
+      provider.setState(ProviderState.NOT_READY);
+      api.events.listen(events.add);
+
+      final client = api.getClient('test-client');
+      await client.getBooleanFlag('missing-flag');
       await Future.delayed(Duration(milliseconds: 10));
 
-      // Provider initialization failure will have emitted PROVIDER_ERROR
+      // Provider not ready will have emitted PROVIDER_ERROR
       expect(
         events.any((e) => e.type == OpenFeatureEventType.PROVIDER_ERROR),
         isTrue,
