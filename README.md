@@ -259,7 +259,6 @@ See [hooks](#hooks) for more information on adding custom logging behavior via h
 Clients can be assigned to a domain. A domain is a logical identifier that can be used to associate clients with a particular provider. If a domain has no associated provider, the default provider is used.
 
 ```dart
-import 'package:openfeature_dart_server_sdk/domain_manager.dart';
 import 'package:openfeature_dart_server_sdk/feature_provider.dart';
 import 'package:openfeature_dart_server_sdk/open_feature_api.dart';
 
