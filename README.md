@@ -52,7 +52,7 @@
 
 ### Requirements
 
-Dart language version: [3.9.2](https://dart.dev/get-dart/archive)
+Dart language version: [3.10.7](https://dart.dev/get-dart/archive)
 
 > [!NOTE]
 > The OpenFeature DartServer SDK only supports the latest currently maintained Dart language versions.
@@ -60,10 +60,12 @@ Dart language version: [3.9.2](https://dart.dev/get-dart/archive)
 ### Install
 
 <!-- x-release-please-start-version -->
+
 ```yaml
 dependencies:
   openfeature_dart_server_sdk: ^0.0.16
 ```
+
 <!-- x-release-please-end -->
 
 ### Then run:
@@ -82,7 +84,7 @@ import 'package:openfeature_dart_server_sdk/feature_provider.dart';
 void main() async {
   // Get the API instance
   final api = OpenFeatureAPI();
-  
+
   // Register your feature flag provider and wait for it to be ready
   await api.setProviderAndWait(InMemoryProvider({
     'new-feature': true,
@@ -166,13 +168,14 @@ api.setGlobalContext(OpenFeatureEvaluationContext({
   'region': 'us-east-1-iah-1a',
 }));
 
-// Create a client with a specific evaluation context
+// Create a client with a client-level default context
 final client = FeatureClient(
   metadata: ClientMetadata(name: 'my-app'),
   hookManager: HookManager(),
   defaultContext: EvaluationContext(attributes: {
     'version': '1.4.6',
   }),
+  provider: api.provider,
 );
 
 // Set a value to the invocation context
@@ -207,12 +210,12 @@ final client = FeatureClient(
   metadata: ClientMetadata(name: 'my-app'),
   hookManager: hookManager,
   defaultContext: EvaluationContext(attributes: {}),
+  provider: api.provider,
 );
-
-// Create a hook for a specific evaluation
-final myHook = MyHook();
-// You can use the hook with a specific evaluation
 ```
+
+> [!NOTE]
+> Invocation-level hooks are not yet supported. Hooks can currently be registered at the global or client level.
 
 ### Tracking
 
@@ -246,49 +249,10 @@ await client.track(
 
 Note that in accordance with the OpenFeature specification, the SDK doesn't generally log messages during flag evaluation.
 
-#### Logging Hook
+The SDK uses the [package:logging](https://pub.dev/packages/logging) structured logging API internally.
+You can configure log levels and listeners to capture SDK log output for troubleshooting and debugging.
 
-The Dart SDK includes a `LoggingHook`, which logs detailed information at key points during flag evaluation, using the [package:logging](https://pub.dev/packages/logging) structured logging API.
-This hook can be particularly helpful for troubleshooting and debugging; simply attach it at the global, client or invocation level and ensure your log level is set to "debug".
-
-##### Usage example
-
-```dart
-import 'package:logging/logging.dart';
-import 'package:openfeature_dart_server_sdk/hooks.dart';
-
-// Configure logging
-Logger.root.level = Level.ALL;
-Logger.root.onRecord.listen((record) {
-  print('${record.time} [${record.level.name}] ${record.message}');
-});
-
-// Create a logging hook
-final loggingHook = LoggingHook();
-
-// Add the hook to your hook manager
-final hookManager = HookManager();
-hookManager.addHook(loggingHook);
-
-// Create a client using this hook manager
-final client = FeatureClient(
-  metadata: ClientMetadata(name: 'test-client'),
-  hookManager: hookManager,
-  defaultContext: EvaluationContext(attributes: {}),
-);
-
-// Evaluate a flag
-final result = await client.getBooleanFlag('my-flag', defaultValue: false);
-```
-
-###### Output
-
-```sh
-{"time":"2024-10-23T13:33:09.8870867+03:00","level":"DEBUG","msg":"Before stage","domain":"test-client","provider_name":"InMemoryProvider","flag_key":"not-exist","default_value":true}
-{"time":"2024-10-23T13:33:09.8968242+03:00","level":"ERROR","msg":"Error stage","domain":"test-client","provider_name":"InMemoryProvider","flag_key":"not-exist","default_value":true,"error_message":"error code: FLAG_NOT_FOUND: flag for key not-exist not found"}
-```
-
-See [hooks](#hooks) for more information on configuring hooks.
+See [hooks](#hooks) for more information on adding custom logging behavior via hooks.
 
 ### Domains
 
@@ -309,10 +273,12 @@ api.setProvider(InMemoryProvider({'default-flag': true}));
 api.bindClientToProvider('cache-domain', 'CachedProvider');
 
 // Client backed by default provider
-api.evaluateBooleanFlag('my-flag', 'default-client');
+final defaultClient = api.getClient('default-client');
+await defaultClient.getBooleanFlag('my-flag', defaultValue: false);
 
 // Client backed by CachedProvider
-api.evaluateBooleanFlag('my-flag', 'cache-domain');
+final cacheClient = api.getClient('cache-client', domain: 'cache-domain');
+await cacheClient.getBooleanFlag('my-flag', defaultValue: false);
 ```
 
 ### Eventing
@@ -330,19 +296,28 @@ import 'package:openfeature_dart_server_sdk/open_feature_event.dart';
 // Get the OpenFeature API instance
 final api = OpenFeatureAPI();
 
-// Listen for provider change events
+// Listen for provider configuration change events
 api.events.listen((event) {
-  if (event.type == OpenFeatureEventType.providerChanged) {
-    print('Provider changed: ${event.message}');
+  if (event.type == OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED) {
+    print('Provider configuration changed: ${event.message}');
   }
 });
+```
+
+The SDK also provides a global event bus for flag evaluation events:
+
+```dart
+import 'package:openfeature_dart_server_sdk/event_system.dart';
 
 // Listen for flag evaluation events
-api.events.listen((event) {
-  if (event.type == OpenFeatureEventType.flagEvaluated) {
+OpenFeatureEvents.instance.subscribe(
+  (event) {
     print('Flag evaluated: ${event.data['flagKey']} = ${event.data['result']}');
-  }
-});
+  },
+  filter: EventFilter(
+    types: {OpenFeatureEventType.flagEvaluated},
+  ),
+);
 ```
 
 ### Shutdown
@@ -380,7 +355,7 @@ Transaction context can be set where specific data is available (e.g. an auth se
 ```dart
 import 'package:openfeature_dart_server_sdk/transaction_context.dart';
 
-// Create a transaction context manager
+// Get the transaction context manager (singleton)
 final transactionManager = TransactionContextManager();
 
 // Set the transaction context
@@ -424,6 +399,9 @@ import 'package:openfeature_dart_server_sdk/feature_provider.dart';
 class MyCustomProvider implements FeatureProvider {
   @override
   String get name => 'MyCustomProvider';
+
+  @override
+  ProviderMetadata get metadata => ProviderMetadata(name: name);
 
   @override
   ProviderState get state => ProviderState.READY;
@@ -538,9 +516,9 @@ class MyCustomProvider implements FeatureProvider {
 
 To develop a hook, you need to create a new project and include the OpenFeature SDK as a dependency.
 This can be a new repository or included in [the existing contrib repository](https://github.com/open-feature/dart-server-sdk-contrib) available under the OpenFeature organization.
-Implement your own hook by conforming to the [Hook interface](./pkg/openfeature/hooks.dart).
-To satisfy the interface, all methods (`Before`/`After`/`Finally`/`Error`) need to be defined.
-To avoid defining empty functions make use of the `UnimplementedHook` struct (which already implements all the empty functions).
+Implement your own hook by conforming to the [Hook interface](./lib/hooks.dart).
+To satisfy the interface, all methods (`before`/`after`/`finally_`/`error`) need to be defined.
+To avoid defining empty functions, extend the `BaseHook` class (which provides no-op default implementations for all methods).
 
 ```dart
 import 'dart:async';
@@ -584,10 +562,8 @@ class MyCustomHook extends BaseHook {
 
 ## Testing
 
-The SDK provides a `NewTestProvider` which allows you to set flags for the scope of a test.
-The `TestProvider` is thread-safe and can be used in tests that run in parallel.
-
-Call `testProvider.UsingFlags(t, tt.flags)` to set flags for a test, and clean them up with `testProvider.Cleanup()`
+Use the `InMemoryProvider` to set flags for the scope of a test.
+Use `OpenFeatureAPI.resetInstance()` in `tearDown` to clean up between tests.
 
 ```dart
 import 'package:test/test.dart';
