@@ -17,8 +17,8 @@
   </a>
   <!-- x-release-please-start-version -->
 
-  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.16">
-    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.16&color=blue&style=for-the-badge" />
+  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.17">
+    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.17&color=blue&style=for-the-badge" />
   </a>
   <!-- x-release-please-end -->
   <a href="https://dart.dev/">
@@ -63,7 +63,7 @@ Dart language version: [3.10.7](https://dart.dev/get-dart/archive)
 
 ```yaml
 dependencies:
-  openfeature_dart_server_sdk: ^0.0.16
+  openfeature_dart_server_sdk: ^0.0.17
 ```
 
 <!-- x-release-please-end -->
