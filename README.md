@@ -195,7 +195,7 @@ final result = await client.getBooleanFlag(
 Look [here](https://openfeature.dev/ecosystem/?instant_search%5BrefinementList%5D%5Btype%5D%5B0%5D=Hook&instant_search%5BrefinementList%5D%5Btechnology%5D%5B0%5D=Dart) for a complete list of available hooks.
 If the hook you're looking for hasn't been created yet, see the [develop a hook](#develop-a-hook) section to learn how to build it yourself.
 
-Once you've added a hook as a dependency, it can be registered at the global, client, or flag invocation level.
+Once you've added a hook as a dependency, it can be registered at the global or client level.
 
 ```dart
 // Add a hook globally, to run on all evaluations
@@ -269,17 +269,16 @@ final api = OpenFeatureAPI();
 // Register the default provider
 api.setProvider(InMemoryProvider({'default-flag': true}));
 
-// Register a domain-specific provider
+// Register a domain-specific provider binding
 api.bindClientToProvider('cache-domain', 'CachedProvider');
 
-// Client backed by default provider
-final defaultClient = api.getClient('default-client');
-await defaultClient.getBooleanFlag('my-flag', defaultValue: false);
-
-// Client backed by CachedProvider
-final cacheClient = api.getClient('cache-client', domain: 'cache-domain');
-await cacheClient.getBooleanFlag('my-flag', defaultValue: false);
+// Create a client (uses the default provider)
+final client = api.getClient('my-client');
+await client.getBooleanFlag('my-flag', defaultValue: false);
 ```
+
+> [!NOTE]
+> Domain-to-provider bindings can be registered via `bindClientToProvider`, but `getClient` does not yet resolve domain-specific provider instances. All clients currently use the default provider.
 
 ### Eventing
 
@@ -304,15 +303,15 @@ api.events.listen((event) {
 });
 ```
 
-The SDK also provides a global event bus for flag evaluation events:
+The SDK also exposes a global `EventBus` type for custom event-driven workflows. Note that automatic publishing of flag evaluation events is not currently implemented by the SDK, so subscribers will only receive events that your application publishes explicitly:
 
 ```dart
 import 'package:openfeature_dart_server_sdk/event_system.dart';
 
-// Listen for flag evaluation events
+// Listen for custom flag evaluation events published by your application
 OpenFeatureEvents.instance.subscribe(
   (event) {
-    print('Flag evaluated: ${event.data['flagKey']} = ${event.data['result']}');
+    print("Flag evaluated: ${event.data['flagKey']} = ${event.data['result']}");
   },
   filter: EventFilter(
     types: {OpenFeatureEventType.flagEvaluated},
@@ -574,13 +573,13 @@ void main() {
   late OpenFeatureAPI api;
   late InMemoryProvider testProvider;
 
-  setUp(() {
+  setUp(() async {
     api = OpenFeatureAPI();
     testProvider = InMemoryProvider({
       'test-flag': true,
       'string-flag': 'test-value',
     });
-    api.setProvider(testProvider);
+    await api.setProviderAndWait(testProvider);
   });
 
   tearDown(() {
