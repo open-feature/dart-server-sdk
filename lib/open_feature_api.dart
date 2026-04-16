@@ -307,7 +307,7 @@ class OpenFeatureAPI {
       _emitEvent(
         OpenFeatureEventType.PROVIDER_ERROR,
         'Provider initialization failed for domain "$domain": ${provider.name}',
-        data: error,
+        data: {'error': error.toString()},
       );
     }
   }
@@ -390,6 +390,17 @@ class OpenFeatureAPI {
   }
 
   Future<void> dispose() async {
+    for (final entry in _domainProviders.entries) {
+      try {
+        await entry.value.shutdown();
+      } catch (e) {
+        _logger.warning(
+          'Error shutting down provider for domain "${entry.key}": $e',
+        );
+      }
+    }
+    _domainProviders.clear();
+
     await _providerStreamController.close();
     await _eventStreamController.close();
     await _domainUpdatesController.close();
