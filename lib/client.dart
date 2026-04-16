@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:logging/logging.dart';
 import 'evaluation_context.dart';
+import 'event_system.dart';
 import 'hooks.dart';
 import 'feature_provider.dart';
 import 'transaction_context.dart';
@@ -118,6 +119,24 @@ class FeatureClient {
       }
 
       _metrics.responseTimes.add(DateTime.now().difference(startTime));
+
+      // Publish flag evaluation event to the global event bus
+      OpenFeatureEvents.instance.publish(
+        OpenFeatureEvent(
+          id: '${metadata.name}:$flagKey:${DateTime.now().microsecondsSinceEpoch}',
+          type: OpenFeatureEventType.flagEvaluated,
+          data: {
+            'flagKey': flagKey,
+            'result': result.value,
+            'clientName': metadata.name,
+            'providerName': _provider.metadata.name,
+            if (result.errorCode != null) 'errorCode': result.errorCode!.name,
+            if (result.errorMessage != null)
+              'errorMessage': result.errorMessage,
+          },
+        ),
+      );
+
       return result.value;
     } catch (e) {
       _logger.warning('Error evaluating flag $flagKey: $e');

@@ -139,6 +139,7 @@ class OpenFeatureAPI {
 
   late FeatureProvider _provider;
   final DomainManager _domainManager = DomainManager();
+  final Map<String, FeatureProvider> _domainProviders = {};
   final List<OpenFeatureHook> _hooks = [];
   OpenFeatureEvaluationContext? _globalContext;
 
@@ -273,11 +274,50 @@ class OpenFeatureAPI {
     _initializeDefaultProvider();
   }
 
-  /// Get or create a client
-  FeatureClient getClient(String name, {String? domain}) {
-    if (domain != null) {
-      _domainManager.getProviderForClient(domain);
+  /// Register a provider for a specific domain. Clients requested with this
+  /// domain will be backed by the given provider instead of the default one.
+  Future<void> setProviderForDomain(
+    String domain,
+    FeatureProvider provider,
+  ) async {
+    _logger.info('Setting provider for domain "$domain": ${provider.name}');
+
+    try {
+      if (provider.state == ProviderState.NOT_READY) {
+        await provider.initialize();
+      }
+
+      _domainProviders[domain] = provider;
+
+      if (provider.state == ProviderState.READY) {
+        _emitEvent(
+          OpenFeatureEventType.PROVIDER_READY,
+          'Provider ready for domain "$domain": ${provider.name}',
+        );
+      } else {
+        _emitEvent(
+          OpenFeatureEventType.PROVIDER_ERROR,
+          'Provider not ready for domain "$domain": ${provider.name}',
+          data: {'state': provider.state.name},
+        );
+      }
+    } catch (error) {
+      _logger.severe('Failed to initialize provider for domain "$domain": $error');
+      _domainProviders[domain] = provider;
+      _emitEvent(
+        OpenFeatureEventType.PROVIDER_ERROR,
+        'Provider initialization failed for domain "$domain": ${provider.name}',
+        data: error,
+      );
     }
+  }
+
+  /// Get or create a client. If [domain] is provided and a provider was
+  /// registered for that domain via [setProviderForDomain], the client is
+  /// backed by that provider; otherwise it falls back to the default provider.
+  FeatureClient getClient(String name, {String? domain}) {
+    final resolvedProvider =
+        (domain != null ? _domainProviders[domain] : null) ?? _provider;
 
     // Build hook manager with global hooks
     final hookManager = HookManager();
@@ -292,7 +332,7 @@ class OpenFeatureAPI {
       defaultContext: _globalContext != null
           ? EvaluationContext(attributes: _globalContext!.attributes)
           : EvaluationContext(attributes: {}),
-      provider: _provider,
+      provider: resolvedProvider,
     );
   }
 
