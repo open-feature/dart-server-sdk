@@ -36,12 +36,21 @@ class TransactionContext {
 class TransactionContextManager {
   static final TransactionContextManager _instance =
       TransactionContextManager._internal();
-  final _contexts = <String, TransactionContext>{};
-  final _contextStack = <String>[];
+  static final Object _zoneContextsKey = Object();
+  static final Object _zoneStackKey = Object();
+  final _fallbackContexts = <String, TransactionContext>{};
+  final _fallbackStack = <String>[];
 
   TransactionContextManager._internal();
 
   factory TransactionContextManager() => _instance;
+
+  Map<String, TransactionContext> get _contexts =>
+      Zone.current[_zoneContextsKey] as Map<String, TransactionContext>? ??
+      _fallbackContexts;
+
+  List<String> get _contextStack =>
+      Zone.current[_zoneStackKey] as List<String>? ?? _fallbackStack;
 
   TransactionContext? get currentContext {
     if (_contextStack.isEmpty) return null;
@@ -88,17 +97,29 @@ class TransactionContextManager {
     Map<String, dynamic> attributes,
     Future<T> Function() operation,
   ) async {
-    final context = TransactionContext(
-      transactionId: transactionId,
-      attributes: attributes,
-    );
+    final zoneContexts = Map<String, TransactionContext>.from(_contexts);
+    final zoneStack = List<String>.from(_contextStack);
 
-    pushContext(context);
-    try {
-      return await operation();
-    } finally {
-      popContext();
-    }
+    return await runZoned(
+      () async {
+        final context = TransactionContext(
+          transactionId: transactionId,
+          attributes: attributes,
+          parent: currentContext,
+        );
+
+        pushContext(context);
+        try {
+          return await operation();
+        } finally {
+          popContext();
+        }
+      },
+      zoneValues: {
+        _zoneContextsKey: zoneContexts,
+        _zoneStackKey: zoneStack,
+      },
+    );
   }
 
   void cleanup() {

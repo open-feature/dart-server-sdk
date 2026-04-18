@@ -6,6 +6,8 @@ class TestHook implements Hook {
   final List<String> executionOrder = [];
   final HookPriority _priority;
   bool receivedEvaluationDetails = false;
+  HookData? beforeHookData;
+  HookData? afterHookData;
 
   TestHook([this._priority = HookPriority.NORMAL]);
 
@@ -15,11 +17,14 @@ class TestHook implements Hook {
 
   @override
   Future<void> before(HookContext context) async {
+    beforeHookData = context.hookData;
+    context.hookData.set('fromBefore', true);
     executionOrder.add('before');
   }
 
   @override
   Future<void> after(HookContext context) async {
+    afterHookData = context.hookData;
     executionOrder.add('after');
   }
 
@@ -125,6 +130,28 @@ void main() {
       }, hints: hints);
 
       expect(testHook.executionOrder, contains('with_hints'));
+    });
+
+    test('shares hook data across stages when provided', () async {
+      final sharedHookData = HookData();
+
+      await manager.executeHooks(
+        HookStage.BEFORE,
+        'test-flag',
+        {'user': 'test'},
+        hookData: sharedHookData,
+      );
+
+      await manager.executeHooks(
+        HookStage.AFTER,
+        'test-flag',
+        {'user': 'test'},
+        result: true,
+        hookData: sharedHookData,
+      );
+
+      expect(identical(testHook.beforeHookData, testHook.afterHookData), isTrue);
+      expect(testHook.afterHookData?.get('fromBefore'), isTrue);
     });
   });
 

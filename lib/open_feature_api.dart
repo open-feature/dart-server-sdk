@@ -1,11 +1,12 @@
 import 'dart:async';
 import 'package:logging/logging.dart';
-import 'domain_manager.dart';
-import 'feature_provider.dart';
-import 'open_feature_event.dart';
 import 'client.dart';
-import 'hooks.dart';
+import 'domain.dart';
+import 'domain_manager.dart';
 import 'evaluation_context.dart';
+import 'feature_provider.dart';
+import 'hooks.dart';
+import 'open_feature_event.dart';
 
 class OpenFeatureEvaluationContext {
   final Map<String, dynamic> attributes;
@@ -138,9 +139,11 @@ class OpenFeatureAPI {
   static OpenFeatureAPI? _instance;
 
   late FeatureProvider _provider;
+  final Map<String, FeatureProvider> _providerRegistry = {};
   final DomainManager _domainManager = DomainManager();
   final List<OpenFeatureHook> _hooks = [];
   OpenFeatureEvaluationContext? _globalContext;
+  StreamSubscription<Domain>? _domainSubscription;
 
   final StreamController<FeatureProvider> _providerStreamController;
   final StreamController<OpenFeatureEvent> _eventStreamController;
@@ -152,6 +155,12 @@ class OpenFeatureAPI {
       _domainUpdatesController =
           StreamController<Map<String, String>>.broadcast() {
     _configureLogging();
+    _domainSubscription = _domainManager.domainUpdates.listen((domain) {
+      _domainUpdatesController.add({
+        'clientId': domain.clientId,
+        'providerName': domain.providerName,
+      });
+    });
     _initializeDefaultProvider();
   }
 
@@ -171,45 +180,51 @@ class OpenFeatureAPI {
 
   void _initializeDefaultProvider() {
     _provider = _ImmediateReadyProvider();
+    _providerRegistry[_provider.metadata.name] = _provider;
     _logger.info('Default provider initialized and ready');
-    _emitEvent(OpenFeatureEventType.PROVIDER_READY, 'Default provider ready');
+    _emitEvent(
+      OpenFeatureEventType.PROVIDER_READY,
+      'Default provider ready',
+      providerMetadata: _provider.metadata,
+    );
   }
 
   Future<void> setProvider(FeatureProvider provider) async {
     _logger.info('Setting provider: ${provider.name}');
 
     try {
-      // Only initialize if provider is NOT_READY
       if (provider.state == ProviderState.NOT_READY) {
         await provider.initialize();
       }
 
       _provider = provider;
+      _providerRegistry[provider.metadata.name] = provider;
       _providerStreamController.add(provider);
 
-      // Emit appropriate event based on state
       if (provider.state == ProviderState.READY) {
         _emitEvent(
           OpenFeatureEventType.PROVIDER_READY,
           'Provider ready: ${provider.name}',
+          providerMetadata: provider.metadata,
         );
       } else {
         _emitEvent(
           OpenFeatureEventType.PROVIDER_ERROR,
           'Provider not ready: ${provider.name}',
           data: {'state': provider.state.name},
+          providerMetadata: provider.metadata,
         );
       }
     } catch (error) {
       _logger.severe('Failed to initialize provider: $error');
-
-      // Per OpenFeature spec: keep provider in ERROR state
       _provider = provider;
+      _providerRegistry[provider.metadata.name] = provider;
       _providerStreamController.add(provider);
       _emitEvent(
         OpenFeatureEventType.PROVIDER_ERROR,
         'Provider initialization failed: ${provider.name}',
         data: error,
+        providerMetadata: provider.metadata,
       );
     }
   }
@@ -219,12 +234,10 @@ class OpenFeatureAPI {
     _logger.info('Setting provider and waiting: ${provider.name}');
 
     try {
-      // Initialize if needed
       if (provider.state == ProviderState.NOT_READY) {
         await provider.initialize();
       }
 
-      // Wait for READY state
       if (provider.state != ProviderState.READY) {
         throw ProviderException(
           'Provider failed to reach READY state: ${provider.state}',
@@ -233,22 +246,30 @@ class OpenFeatureAPI {
       }
 
       _provider = provider;
+      _providerRegistry[provider.metadata.name] = provider;
       _providerStreamController.add(provider);
       _emitEvent(
         OpenFeatureEventType.PROVIDER_READY,
         'Provider ready: ${provider.name}',
+        providerMetadata: provider.metadata,
       );
     } catch (error) {
       _logger.severe('Failed to initialize provider: $error');
       _provider = provider;
+      _providerRegistry[provider.metadata.name] = provider;
       _providerStreamController.add(provider);
       _emitEvent(
         OpenFeatureEventType.PROVIDER_ERROR,
         'Provider initialization failed: ${provider.name}',
         data: error,
+        providerMetadata: provider.metadata,
       );
       rethrow;
     }
+  }
+
+  void registerProvider(FeatureProvider provider) {
+    _providerRegistry[provider.metadata.name] = provider;
   }
 
   /// Shutdown the current provider (spec v0.8.0: status MUST indicate NOT_READY after shutdown)
@@ -260,6 +281,7 @@ class OpenFeatureAPI {
       _emitEvent(
         OpenFeatureEventType.PROVIDER_STALE,
         'Provider shutdown: ${_provider.name}',
+        providerMetadata: _provider.metadata,
       );
     } catch (e) {
       _logger.severe('Error during provider shutdown: $e');
@@ -267,32 +289,41 @@ class OpenFeatureAPI {
         OpenFeatureEventType.PROVIDER_ERROR,
         'Provider shutdown failed: ${_provider.name}',
         data: e,
+        providerMetadata: _provider.metadata,
       );
     }
 
     _initializeDefaultProvider();
   }
 
-  /// Get or create a client
-  FeatureClient getClient(String name, {String? domain}) {
-    if (domain != null) {
-      _domainManager.getProviderForClient(domain);
+  FeatureProvider _resolveProviderForClient(String clientId, String? domain) {
+    final bindingKey = domain ?? clientId;
+    final boundProviderName = _domainManager.getProviderForClient(bindingKey);
+    if (boundProviderName == null) {
+      return _provider;
     }
 
-    // Build hook manager with global hooks
+    return _providerRegistry[boundProviderName] ?? _provider;
+  }
+
+  /// Get or create a client
+  FeatureClient getClient(String name, {String? domain}) {
+    final selectedProvider = _resolveProviderForClient(name, domain);
+
     final hookManager = HookManager();
     for (final hook in _hooks) {
-      // Convert OpenFeatureHook to Hook if needed
       hookManager.addHook(_wrapHook(hook));
     }
 
     return FeatureClient(
       metadata: ClientMetadata(name: name),
       hookManager: hookManager,
-      defaultContext: _globalContext != null
+      apiContext: _globalContext != null
           ? EvaluationContext(attributes: _globalContext!.attributes)
-          : EvaluationContext(attributes: {}),
-      provider: _provider,
+          : const EvaluationContext(attributes: {}),
+      defaultContext: const EvaluationContext(attributes: {}),
+      provider: selectedProvider,
+      eventStream: events,
     );
   }
 
@@ -309,6 +340,7 @@ class OpenFeatureAPI {
     _emitEvent(
       OpenFeatureEventType.PROVIDER_CONTEXT_CHANGED,
       'Global context updated',
+      providerMetadata: _provider.metadata,
     );
   }
 
@@ -325,6 +357,7 @@ class OpenFeatureAPI {
     _emitEvent(
       OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED,
       'Client $clientId bound to provider $providerId',
+      providerMetadata: _providerRegistry[providerId]?.metadata,
     );
   }
 
@@ -344,12 +377,26 @@ class OpenFeatureAPI {
     );
   }
 
-  void _emitEvent(OpenFeatureEventType type, String message, {dynamic data}) {
-    final event = OpenFeatureEvent(type, message, data: data);
+  void _emitEvent(
+    OpenFeatureEventType type,
+    String message, {
+    dynamic data,
+    ProviderMetadata? providerMetadata,
+    ErrorCode? errorCode,
+  }) {
+    final event = OpenFeatureEvent(
+      type,
+      message,
+      data: data,
+      providerMetadata: providerMetadata,
+      errorCode: errorCode,
+    );
     _eventStreamController.add(event);
   }
 
   Future<void> dispose() async {
+    await _domainSubscription?.cancel();
+    _domainManager.dispose();
     await _providerStreamController.close();
     await _eventStreamController.close();
     await _domainUpdatesController.close();
