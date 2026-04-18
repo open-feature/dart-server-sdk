@@ -361,9 +361,9 @@ class OpenFeatureAPI {
     );
   }
 
-  /// @deprecated Use getClient().getBooleanValue() instead
+  /// @deprecated Use getClient().getBooleanFlag() instead
   /// This method exists for backwards compatibility only
-  @Deprecated('Use getClient().getBooleanValue() instead')
+  @Deprecated('Use getClient().getBooleanFlag() instead')
   Future<bool> evaluateBooleanFlag(
     String flagKey,
     String clientId, {
