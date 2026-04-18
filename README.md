@@ -252,7 +252,7 @@ Note that in accordance with the OpenFeature specification, the SDK doesn't gene
 The SDK uses the [package:logging](https://pub.dev/packages/logging) structured logging API internally.
 You can configure log levels and listeners to capture SDK log output for troubleshooting and debugging.
 
-See [hooks](#hooks) for more information on adding custom logging behavior via hooks.
+For lifecycle-level logging, use the built-in `LoggingHook` or `OpenTelemetryHook`.
 
 ### Domains
 
@@ -270,7 +270,8 @@ final api = OpenFeatureAPI();
 api.setProvider(InMemoryProvider({'default-flag': true}));
 
 // Register a domain-specific provider
-api.bindClientToProvider('cache-domain', 'CachedProvider');
+api.registerProvider(CustomCacheProvider());
+api.bindClientToProvider('cache-domain', 'CustomCacheProvider');
 
 // Client backed by default provider
 final defaultClient = api.getClient('default-client');
@@ -301,6 +302,15 @@ api.events.listen((event) {
   if (event.type == OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED) {
     print('Provider configuration changed: ${event.message}');
   }
+});
+```
+
+Client-scoped handlers are also available:
+
+```dart
+final client = api.getClient('my-app');
+client.addHandler((event) {
+  print('Client received event: ${event.type}');
 });
 ```
 

@@ -285,6 +285,51 @@ abstract class BaseHook implements Hook {
   ]) async {}
 }
 
+/// A lightweight hook that emits structured logs for each lifecycle stage.
+class LoggingHook extends BaseHook {
+  final void Function(String message)? logger;
+
+  LoggingHook({
+    this.logger,
+    HookPriority priority = HookPriority.NORMAL,
+  }) : super(metadata: HookMetadata(name: 'LoggingHook', priority: priority));
+
+  void _log(String stage, HookContext context, [EvaluationDetails? details]) {
+    final payload = jsonEncode({
+      'stage': stage,
+      'flagKey': context.flagKey,
+      'provider': context.providerMetadata?.name,
+      'client': context.clientMetadata?.name,
+      'context': context.evaluationContext,
+      'result': details?.value ?? context.result,
+      'reason': details?.reason,
+      'error': context.error?.toString(),
+    });
+
+    if (logger != null) {
+      logger!(payload);
+    } else {
+      print(payload);
+    }
+  }
+
+  @override
+  Future<void> before(HookContext context) async => _log('before', context);
+
+  @override
+  Future<void> after(HookContext context) async => _log('after', context);
+
+  @override
+  Future<void> error(HookContext context) async => _log('error', context);
+
+  @override
+  Future<void> finally_(
+    HookContext context,
+    EvaluationDetails? evaluationDetails, [
+    HookHints? hints,
+  ]) async => _log('finally', context, evaluationDetails);
+}
+
 //
 // OpenTelemetry Support
 //

@@ -5,17 +5,21 @@ import '../lib/open_feature_event.dart';
 
 class TestProvider implements FeatureProvider {
   final Map<String, dynamic> _flags;
+  final String _providerName;
   ProviderState _state;
   final bool _shouldFailInitialization;
 
   TestProvider(
-    this._flags, [
-    this._state = ProviderState.NOT_READY,
-    this._shouldFailInitialization = false,
-  ]);
+    this._flags, {
+    String providerName = 'TestProvider',
+    ProviderState state = ProviderState.NOT_READY,
+    bool shouldFailInitialization = false,
+  }) : _providerName = providerName,
+       _state = state,
+       _shouldFailInitialization = shouldFailInitialization;
 
   @override
-  String get name => 'TestProvider';
+  String get name => _providerName;
 
   @override
   ProviderState get state => _state;
@@ -24,7 +28,7 @@ class TestProvider implements FeatureProvider {
   ProviderConfig get config => ProviderConfig();
 
   @override
-  ProviderMetadata get metadata => ProviderMetadata(name: 'TestProvider');
+  ProviderMetadata get metadata => ProviderMetadata(name: _providerName);
 
   @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
@@ -210,8 +214,8 @@ void main() {
       final api = OpenFeatureAPI();
       final provider = TestProvider(
         {'test-flag': true},
-        ProviderState.NOT_READY,
-        true,
+        state: ProviderState.NOT_READY,
+        shouldFailInitialization: true,
       );
 
       await api.setProvider(provider);
@@ -226,6 +230,28 @@ void main() {
     test('binds client to provider', () {
       final api = OpenFeatureAPI();
       api.bindClientToProvider('client1', 'provider1');
+    });
+
+    test('routes domain-bound clients to registered providers', () async {
+      final api = OpenFeatureAPI();
+      final defaultProvider = TestProvider(
+        {'test': true},
+        providerName: 'default-provider',
+      );
+      final secondaryProvider = TestProvider(
+        {'test': false},
+        providerName: 'secondary-provider',
+      );
+
+      await api.setProvider(defaultProvider);
+      api.registerProvider(secondaryProvider);
+      api.bindClientToProvider('checkout', secondaryProvider.metadata.name);
+
+      final client = api.getClient('checkout', domain: 'checkout');
+      expect(
+        client.provider.metadata.name,
+        equals(secondaryProvider.metadata.name),
+      );
     });
 
     test('emits events on provider change', () async {
@@ -246,7 +272,11 @@ void main() {
 
     test('emits error events for flag evaluation issues', () async {
       final api = OpenFeatureAPI();
-      final provider = TestProvider({}, ProviderState.NOT_READY, true);
+      final provider = TestProvider(
+        {},
+        state: ProviderState.NOT_READY,
+        shouldFailInitialization: true,
+      );
       final events = <OpenFeatureEvent>[];
 
       api.events.listen(events.add);
