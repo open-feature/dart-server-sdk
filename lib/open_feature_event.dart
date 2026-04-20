@@ -1,4 +1,4 @@
-import 'package:openfeature_dart_server_sdk/feature_provider.dart';
+import 'feature_provider.dart';
 
 /// OpenFeature specification-compliant event types
 enum OpenFeatureEventType {

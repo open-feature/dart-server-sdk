@@ -81,6 +81,24 @@ void main() {
       expect(manager.currentContext, isNull);
     });
 
+    test('isolates async contexts across overlapping operations', () async {
+      final seen = <String>[];
+
+      await Future.wait([
+        manager.withContext('tx-a', {'requestId': 'a'}, () async {
+          await Future.delayed(const Duration(milliseconds: 20));
+          seen.add(manager.currentContext?.attributes['requestId'] as String);
+        }),
+        manager.withContext('tx-b', {'requestId': 'b'}, () async {
+          await Future.delayed(const Duration(milliseconds: 5));
+          seen.add(manager.currentContext?.attributes['requestId'] as String);
+        }),
+      ]);
+
+      expect(seen.toSet(), equals({'a', 'b'}));
+      expect(manager.currentContext, isNull);
+    });
+
     test('creates child context', () {
       final parent = TransactionContext(
         transactionId: 'parent',
