@@ -2,6 +2,11 @@ import 'dart:async';
 import 'package:test/test.dart';
 import '../lib/hooks.dart';
 
+class BrokenStringify {
+  @override
+  String toString() => throw StateError('broken toString');
+}
+
 class TestHook implements Hook {
   final List<String> executionOrder = [];
   final HookPriority _priority;
@@ -10,10 +15,7 @@ class TestHook implements Hook {
   HookData? afterHookData;
   final Map<String, dynamic>? _beforeUpdates;
 
-  TestHook([
-    this._priority = HookPriority.NORMAL,
-    this._beforeUpdates,
-  ]);
+  TestHook([this._priority = HookPriority.NORMAL, this._beforeUpdates]);
 
   @override
   HookMetadata get metadata =>
@@ -59,7 +61,9 @@ class NamedHook extends BaseHook {
   final List<String> calls;
 
   NamedHook(this.name, this.calls, HookPriority priority)
-    : super(metadata: HookMetadata(name: name, priority: priority));
+    : super(
+        metadata: HookMetadata(name: name, priority: priority),
+      );
 
   @override
   Future<Map<String, dynamic>?> before(HookContext context) async {
@@ -98,7 +102,9 @@ class ThrowingHook extends BaseHook {
     required this.stageToThrow,
     required this.name,
     this.priority = HookPriority.NORMAL,
-  }) : super(metadata: HookMetadata(name: name, priority: priority));
+  }) : super(
+         metadata: HookMetadata(name: name, priority: priority),
+       );
 
   @override
   Future<Map<String, dynamic>?> before(HookContext context) async {
@@ -153,16 +159,15 @@ class OTelTestHook extends OpenTelemetryHook {
     EvaluationDetails? evaluationDetails, [
     HookHints? hints,
   ]) async {
-    final otelAttributes =
-        evaluationDetails != null
-            ? OpenTelemetryUtil.fromEvaluationDetails(
-              evaluationDetails,
-              providerName: providerName,
-            )
-            : OpenTelemetryUtil.fromHookContext(
-              context,
-              providerName: providerName,
-            );
+    final otelAttributes = evaluationDetails != null
+        ? OpenTelemetryUtil.fromEvaluationDetails(
+            evaluationDetails,
+            providerName: providerName,
+          )
+        : OpenTelemetryUtil.fromHookContext(
+            context,
+            providerName: providerName,
+          );
 
     capturedAttributes.add(otelAttributes.toJson());
   }
@@ -224,12 +229,9 @@ void main() {
     test('shares hook data across stages when provided', () async {
       final sharedHookData = HookData();
 
-      await manager.executeHooks(
-        HookStage.BEFORE,
-        'test-flag',
-        {'user': 'test'},
-        hookData: sharedHookData,
-      );
+      await manager.executeHooks(HookStage.BEFORE, 'test-flag', {
+        'user': 'test',
+      }, hookData: sharedHookData);
 
       await manager.executeHooks(
         HookStage.AFTER,
@@ -239,7 +241,10 @@ void main() {
         hookData: sharedHookData,
       );
 
-      expect(identical(testHook.beforeHookData, testHook.afterHookData), isTrue);
+      expect(
+        identical(testHook.beforeHookData, testHook.afterHookData),
+        isTrue,
+      );
       expect(testHook.afterHookData?.get('fromBefore'), isTrue);
     });
 
@@ -251,7 +256,12 @@ void main() {
         ..addHook(first)
         ..addHook(second);
 
-      await manager.executeHooks(HookStage.AFTER, 'test-flag', {}, result: true);
+      await manager.executeHooks(
+        HookStage.AFTER,
+        'test-flag',
+        {},
+        result: true,
+      );
       await manager.executeHooks(
         HookStage.ERROR,
         'test-flag',
@@ -274,10 +284,10 @@ void main() {
     });
 
     test('before hooks can contribute merged evaluation context', () async {
-      final mergingHook = TestHook(
-        HookPriority.NORMAL,
-        {'hook': 'value', 'user': 'hook-user'},
-      );
+      final mergingHook = TestHook(HookPriority.NORMAL, {
+        'hook': 'value',
+        'user': 'hook-user',
+      });
       manager.addHook(mergingHook);
 
       final mergedContext = await manager.executeHooks(
@@ -560,6 +570,43 @@ void main() {
       expect(messages.single, contains('"flagKey":"test-flag"'));
       expect(messages.single, contains('"duration":5000000'));
       expect(messages.single, contains('"setLike":[1,2,3]'));
+    });
+
+    test('serializes circular structures without throwing', () async {
+      final messages = <String>[];
+      final hook = LoggingHook(logger: messages.add, includeContext: true);
+      final circular = <String, dynamic>{};
+      circular['self'] = circular;
+
+      await hook.before(
+        HookContext(
+          flagKey: 'test-flag',
+          evaluationContext: circular,
+          result: circular,
+        ),
+      );
+
+      expect(messages, hasLength(1));
+      expect(messages.single, contains(r'"self":"[Circular]"'));
+    });
+
+    test('falls back to an error message when serialization fails', () async {
+      final messages = <String>[];
+      final hook = LoggingHook(logger: messages.add, includeContext: true);
+
+      await hook.before(
+        HookContext(
+          flagKey: 'test-flag',
+          evaluationContext: {'broken': BrokenStringify()},
+        ),
+      );
+
+      expect(messages, hasLength(1));
+      expect(
+        messages.single,
+        contains('LoggingHook failed to serialize log for stage: before'),
+      );
+      expect(messages.single, contains('flag: test-flag'));
     });
   });
 }

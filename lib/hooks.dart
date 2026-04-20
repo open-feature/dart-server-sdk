@@ -166,9 +166,8 @@ class HookManager {
   final List<Hook> _hooks = [];
   final Duration _defaultTimeout;
 
-  HookManager({
-    Duration defaultTimeout = const Duration(seconds: 5),
-  }) : _defaultTimeout = defaultTimeout;
+  HookManager({Duration defaultTimeout = const Duration(seconds: 5)})
+    : _defaultTimeout = defaultTimeout;
 
   /// Register a new hook
   void addHook(Hook hook) {
@@ -325,18 +324,20 @@ abstract class BaseHook implements Hook {
 class LoggingHook extends BaseHook {
   final void Function(String message)? logger;
   final bool includeContext;
+  static const String _circularReferenceMarker = '[Circular]';
 
   LoggingHook({
     this.logger,
     this.includeContext = false,
     HookPriority priority = HookPriority.NORMAL,
-  }) : super(metadata: HookMetadata(name: 'LoggingHook', priority: priority));
+  }) : super(
+         metadata: HookMetadata(name: 'LoggingHook', priority: priority),
+       );
 
-  Object? _safeJsonValue(dynamic value) {
-    if (value == null ||
-        value is num ||
-        value is bool ||
-        value is String) {
+  Object? _safeJsonValue(dynamic value, [Set<Object>? visited]) {
+    final seen = visited ?? Set<Object>.identity();
+
+    if (value == null || value is num || value is bool || value is String) {
       return value;
     }
 
@@ -353,38 +354,67 @@ class LoggingHook extends BaseHook {
     }
 
     if (value is Map) {
+      if (!seen.add(value)) {
+        return _circularReferenceMarker;
+      }
+
       final jsonSafeMap = <String, Object?>{};
       value.forEach((key, nestedValue) {
-        jsonSafeMap[key.toString()] = _safeJsonValue(nestedValue);
+        jsonSafeMap[key.toString()] = _safeJsonValue(nestedValue, seen);
       });
+      seen.remove(value);
       return jsonSafeMap;
     }
 
     if (value is Iterable) {
-      return value.map(_safeJsonValue).toList(growable: false);
+      if (!seen.add(value)) {
+        return _circularReferenceMarker;
+      }
+
+      final jsonSafeValues = value
+          .map((element) => _safeJsonValue(element, seen))
+          .toList(growable: false);
+      seen.remove(value);
+      return jsonSafeValues;
     }
 
     return value.toString();
   }
 
-  void _log(String stage, HookContext context, [EvaluationDetails? details]) {
-    final payload = jsonEncode({
-      'stage': stage,
-      'flagKey': context.flagKey,
-      'provider': context.providerMetadata?.name,
-      'client': context.clientMetadata?.name,
-      if (includeContext) 'context': _safeJsonValue(context.evaluationContext),
-      if (!includeContext && context.evaluationContext.isNotEmpty)
-        'contextKeys': context.evaluationContext.keys.toList(growable: false),
-      'result': _safeJsonValue(details?.value ?? context.result),
-      'reason': details?.reason,
-      'error': context.error?.toString(),
-    });
-
+  void _writeLog(String message) {
     if (logger != null) {
-      logger!(payload);
+      logger!(message);
     } else {
-      print(payload);
+      print(message);
+    }
+  }
+
+  void _log(String stage, HookContext context, [EvaluationDetails? details]) {
+    try {
+      final payload = jsonEncode({
+        'stage': stage,
+        'flagKey': context.flagKey,
+        'provider': context.providerMetadata?.name,
+        'client': context.clientMetadata?.name,
+        if (includeContext)
+          'context': _safeJsonValue(context.evaluationContext),
+        if (!includeContext && context.evaluationContext.isNotEmpty)
+          'contextKeys': context.evaluationContext.keys.toList(growable: false),
+        'result': _safeJsonValue(details?.value ?? context.result),
+        'reason': details?.reason,
+        'error': context.error?.toString(),
+      });
+
+      _writeLog(payload);
+    } catch (error) {
+      final fallbackMessage =
+          'LoggingHook failed to serialize log for stage: '
+          '$stage, flag: ${context.flagKey}. Error: $error';
+      try {
+        _writeLog(fallbackMessage);
+      } catch (_) {
+        // Logging must never interfere with flag evaluation.
+      }
     }
   }
 
