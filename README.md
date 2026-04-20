@@ -206,20 +206,16 @@ client level.
 final api = OpenFeatureAPI();
 api.addHooks([MyGlobalHook()]);
 
-final hookManager = HookManager();
-hookManager.addHook(MyClientHook());
-
-final client = FeatureClient(
-  metadata: ClientMetadata(name: 'my-app'),
-  hookManager: hookManager,
-  defaultContext: const EvaluationContext(attributes: {}),
-  provider: api.provider,
-);
+final client = api.getClient('my-app');
+client.addHook(MyClientHook());
 ```
 
 > [!NOTE]
 > Invocation-level hooks are not yet supported. Hooks can currently be
 > registered at the global or client level.
+
+Before hooks may return context updates. Any returned attributes are merged into
+the evaluation context before the provider is called.
 
 ### Tracking
 
@@ -263,7 +259,8 @@ logging API internally. You can configure log levels and listeners to capture
 SDK output for troubleshooting and debugging.
 
 For lifecycle-level logging, use the built-in `LoggingHook` or
-`OpenTelemetryHook`.
+`OpenTelemetryHook`. `LoggingHook` redacts evaluation-context values by default
+and only emits context keys unless `includeContext: true` is set explicitly.
 
 ### Domains
 
@@ -298,6 +295,8 @@ compositions where one client should consult more than one underlying provider.
 This SDK includes an experimental `MultiProvider` implementation with a default
 `FirstMatchStrategy`. Providers are evaluated in order. A `FLAG_NOT_FOUND`
 result is treated as a miss and evaluation continues with the next provider.
+Initialization and connection fan out across all configured providers, and
+tracking is treated as best-effort fan-out.
 
 ```dart
 import 'package:openfeature_dart_server_sdk/feature_provider.dart';
@@ -348,9 +347,10 @@ its associated provider.
 
 ```dart
 final client = api.getClient('my-app');
-client.addHandler((event) {
+final sub = client.addHandler((event) {
   print('Client received event: ${event.type}');
 });
+await client.removeHandler(sub);
 ```
 
 The SDK also exposes a global event bus for SDK-specific flag evaluation events.
@@ -558,8 +558,11 @@ class MyCustomHook extends BaseHook {
     : super(metadata: HookMetadata(name: 'MyCustomHook'));
 
   @override
-  Future<void> before(HookContext context) async {
+  Future<Map<String, dynamic>?> before(HookContext context) async {
     print('Before evaluating flag: ${context.flagKey}');
+    return {
+      'requestSource': 'my-hook',
+    };
   }
 
   @override

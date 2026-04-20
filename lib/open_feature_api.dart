@@ -178,6 +178,24 @@ class OpenFeatureAPI {
     });
   }
 
+  ErrorCode? _errorCodeFrom(Object? error, {ProviderState? state}) {
+    if (error is ProviderException) {
+      return error.code;
+    }
+
+    switch (state) {
+      case ProviderState.FATAL:
+        return ErrorCode.PROVIDER_FATAL;
+      case ProviderState.NOT_READY:
+      case ProviderState.CONNECTING:
+      case ProviderState.RECONNECTING:
+      case ProviderState.SHUTDOWN:
+        return ErrorCode.PROVIDER_NOT_READY;
+      default:
+        return null;
+    }
+  }
+
   void _initializeDefaultProvider() {
     _provider = _ImmediateReadyProvider();
     _providerRegistry[_provider.metadata.name] = _provider;
@@ -213,6 +231,7 @@ class OpenFeatureAPI {
           'Provider not ready: ${provider.name}',
           data: {'state': provider.state.name},
           providerMetadata: provider.metadata,
+          errorCode: _errorCodeFrom(null, state: provider.state),
         );
       }
     } catch (error) {
@@ -225,6 +244,7 @@ class OpenFeatureAPI {
         'Provider initialization failed: ${provider.name}',
         data: error,
         providerMetadata: provider.metadata,
+        errorCode: _errorCodeFrom(error),
       );
     }
   }
@@ -263,6 +283,7 @@ class OpenFeatureAPI {
         'Provider initialization failed: ${provider.name}',
         data: error,
         providerMetadata: provider.metadata,
+        errorCode: _errorCodeFrom(error),
       );
       rethrow;
     }
@@ -290,6 +311,7 @@ class OpenFeatureAPI {
         'Provider shutdown failed: ${_provider.name}',
         data: e,
         providerMetadata: _provider.metadata,
+        errorCode: _errorCodeFrom(e),
       );
     }
 
@@ -351,6 +373,13 @@ class OpenFeatureAPI {
   }
 
   List<OpenFeatureHook> get hooks => List.unmodifiable(_hooks);
+
+  StreamSubscription<OpenFeatureEvent> addHandler(
+    void Function(OpenFeatureEvent event) handler,
+  ) => events.listen(handler);
+
+  Future<void> removeHandler(StreamSubscription<OpenFeatureEvent> handler) =>
+      handler.cancel();
 
   void bindClientToProvider(String clientId, String providerId) {
     _domainManager.bindClientToProvider(clientId, providerId);
@@ -421,8 +450,9 @@ class _OpenFeatureHookAdapter extends BaseHook {
     : super(metadata: HookMetadata(name: 'OpenFeatureHookAdapter'));
 
   @override
-  Future<void> before(HookContext context) async {
+  Future<Map<String, dynamic>?> before(HookContext context) async {
     _hook.beforeEvaluation(context.flagKey, context.evaluationContext);
+    return null;
   }
 
   @override

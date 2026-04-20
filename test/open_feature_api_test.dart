@@ -34,7 +34,10 @@ class TestProvider implements FeatureProvider {
   Future<void> initialize([Map<String, dynamic>? config]) async {
     if (_shouldFailInitialization) {
       _state = ProviderState.ERROR;
-      throw Exception('Initialization failed');
+      throw const ProviderException(
+        'Initialization failed',
+        code: ErrorCode.PROVIDER_NOT_READY,
+      );
     }
     _state = ProviderState.READY;
   }
@@ -288,6 +291,27 @@ void main() {
         events.any((e) => e.type == OpenFeatureEventType.PROVIDER_ERROR),
         isTrue,
       );
+      expect(
+        events.any(
+          (e) =>
+              e.type == OpenFeatureEventType.PROVIDER_ERROR &&
+              e.errorCode == ErrorCode.PROVIDER_NOT_READY,
+        ),
+        isTrue,
+      );
+    });
+
+    test('supports explicit API event handlers', () async {
+      final api = OpenFeatureAPI();
+      final provider = TestProvider({'test': true});
+      final events = <OpenFeatureEvent>[];
+
+      final sub = api.addHandler(events.add);
+      await api.setProvider(provider);
+      await Future.delayed(Duration(milliseconds: 10));
+
+      expect(events, isNotEmpty);
+      await api.removeHandler(sub);
     });
 
     test('handles evaluation errors gracefully', () async {

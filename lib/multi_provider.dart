@@ -96,30 +96,24 @@ class MultiProvider implements FeatureProvider {
 
   @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
-    final errors = <Object>[];
-    for (final provider in _providers) {
-      try {
-        if (provider.state == ProviderState.NOT_READY) {
-          await provider.initialize(config);
-        }
-      } catch (error) {
-        errors.add(error);
-      }
-    }
+    final errors = await _collectErrors(
+      _providers.map(
+        (provider) async {
+          if (provider.state == ProviderState.NOT_READY) {
+            await provider.initialize(config);
+          }
+        },
+      ),
+    );
 
     _throwIfNoProviderReady(errors, 'initialize');
   }
 
   @override
   Future<void> connect() async {
-    final errors = <Object>[];
-    for (final provider in _providers) {
-      try {
-        await provider.connect();
-      } catch (error) {
-        errors.add(error);
-      }
-    }
+    final errors = await _collectErrors(
+      _providers.map((provider) => provider.connect()),
+    );
 
     _throwIfNoProviderReady(errors, 'connect');
   }
@@ -150,26 +144,15 @@ class MultiProvider implements FeatureProvider {
     Map<String, dynamic>? evaluationContext,
     TrackingEventDetails? trackingDetails,
   }) async {
-    final errors = <Object>[];
-    for (final provider in _providers) {
-      try {
-        await provider.track(
+    await _collectErrors(
+      _providers.map(
+        (provider) => provider.track(
           trackingEventName,
           evaluationContext: evaluationContext,
           trackingDetails: trackingDetails,
-        );
-      } catch (error) {
-        errors.add(error);
-      }
-    }
-
-    if (errors.isNotEmpty) {
-      throw ProviderException(
-        'One or more providers failed to handle tracking.',
-        code: ErrorCode.GENERAL,
-        details: {'errors': errors.map((e) => e.toString()).toList()},
-      );
-    }
+        ),
+      ),
+    );
   }
 
   @override
@@ -260,6 +243,23 @@ class MultiProvider implements FeatureProvider {
       evaluatedAt: result.evaluatedAt,
       evaluatorId: name,
     );
+  }
+
+  Future<List<Object>> _collectErrors(
+    Iterable<Future<void>> operations,
+  ) async {
+    final results = await Future.wait<Object?>(
+      operations.map((operation) async {
+        try {
+          await operation;
+          return null;
+        } catch (error) {
+          return error;
+        }
+      }),
+    );
+
+    return results.whereType<Object>().toList(growable: false);
   }
 
   void _throwIfNoProviderReady(List<Object> errors, String operation) {

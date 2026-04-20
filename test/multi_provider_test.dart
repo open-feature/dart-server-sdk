@@ -8,11 +8,13 @@ class _StubProvider implements FeatureProvider {
     required this.providerName,
     this.booleanFlags = const {},
     this.shouldFailInitialization = false,
+    this.shouldFailTracking = false,
   });
 
   final String providerName;
   final Map<String, bool> booleanFlags;
   final bool shouldFailInitialization;
+  final bool shouldFailTracking;
   ProviderState _state = ProviderState.NOT_READY;
   int trackingCalls = 0;
 
@@ -56,6 +58,12 @@ class _StubProvider implements FeatureProvider {
     Map<String, dynamic>? evaluationContext,
     TrackingEventDetails? trackingDetails,
   }) async {
+    if (shouldFailTracking) {
+      throw ProviderException(
+        'Tracking failed for $providerName',
+        code: ErrorCode.GENERAL,
+      );
+    }
     trackingCalls++;
   }
 
@@ -215,6 +223,23 @@ void main() {
       await multiProvider.track('checkout-completed');
 
       expect(primary.trackingCalls, equals(1));
+      expect(fallback.trackingCalls, equals(1));
+    });
+
+    test('tracking is best-effort when one provider fails', () async {
+      final primary = _StubProvider(
+        providerName: 'PrimaryProvider',
+        shouldFailTracking: true,
+      );
+      final fallback = _StubProvider(providerName: 'FallbackProvider');
+
+      final multiProvider = MultiProvider([primary, fallback]);
+      await primary.initialize();
+      await fallback.initialize();
+
+      await multiProvider.track('checkout-completed');
+
+      expect(primary.trackingCalls, equals(0));
       expect(fallback.trackingCalls, equals(1));
     });
   });

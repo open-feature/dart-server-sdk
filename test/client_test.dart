@@ -162,6 +162,74 @@ class TrackingMockProvider extends MockProvider {
   }
 }
 
+class ContextCapturingProvider extends MockProvider {
+  Map<String, dynamic>? lastEvaluationContext;
+
+  ContextCapturingProvider(super.flags);
+
+  @override
+  Future<FlagEvaluationResult<bool>> getBooleanFlag(
+    String flagKey,
+    bool defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    lastEvaluationContext = context == null ? null : {...context};
+    return super.getBooleanFlag(flagKey, defaultValue, context: context);
+  }
+}
+
+class ThrowingProvider extends MockProvider {
+  final ProviderException exception;
+
+  ThrowingProvider(super.flags, this.exception);
+
+  @override
+  Future<FlagEvaluationResult<bool>> getBooleanFlag(
+    String flagKey,
+    bool defaultValue, {
+    Map<String, dynamic>? context,
+  }) async {
+    throw exception;
+  }
+}
+
+class LifecycleHook extends BaseHook {
+  final List<String> calls = [];
+  EvaluationDetails? finalDetails;
+  Exception? lastError;
+  final Map<String, dynamic>? beforeUpdates;
+
+  LifecycleHook({this.beforeUpdates})
+    : super(metadata: HookMetadata(name: 'LifecycleHook'));
+
+  @override
+  Future<Map<String, dynamic>?> before(HookContext context) async {
+    calls.add('before');
+    return beforeUpdates;
+  }
+
+  @override
+  Future<void> after(HookContext context) async {
+    calls.add('after');
+  }
+
+  @override
+  Future<void> error(HookContext context) async {
+    calls.add('error');
+    lastError = context.error;
+  }
+
+  @override
+  Future<void> finally_(
+    HookContext context,
+    EvaluationDetails? evaluationDetails, [
+    HookHints? hints,
+  ]) async {
+    calls.add('finally');
+    finalDetails = evaluationDetails;
+  }
+}
+
 void main() {
   group('ClientMetadata Tests', () {
     test('creates with required name only', () {
@@ -343,6 +411,92 @@ void main() {
       await sub.cancel();
       await client.dispose();
       await controller.close();
+    });
+
+    test('provider error result triggers error hooks instead of after hooks', () async {
+      final lifecycleHook = LifecycleHook();
+      hookManager.addHook(lifecycleHook);
+
+      final result = await client.getBooleanFlag(
+        'missing-flag',
+        defaultValue: false,
+      );
+
+      expect(result, isFalse);
+      expect(lifecycleHook.calls, equals(['before', 'error', 'finally']));
+      expect(lifecycleHook.finalDetails?.value, isFalse);
+      expect(lifecycleHook.lastError, isA<ProviderException>());
+      expect(
+        (lifecycleHook.lastError as ProviderException).code,
+        equals(ErrorCode.FLAG_NOT_FOUND),
+      );
+    });
+
+    test('preserves ProviderException error codes from thrown provider errors', () async {
+      final throwingProvider = ThrowingProvider(
+        {'test-flag': true},
+        const ProviderException(
+          'provider unavailable',
+          code: ErrorCode.PROVIDER_NOT_READY,
+        ),
+      );
+
+      client = FeatureClient(
+        metadata: ClientMetadata(name: 'test-client'),
+        hookManager: hookManager,
+        defaultContext: context,
+        provider: throwingProvider,
+      );
+
+      final details = await client.getBooleanDetails(
+        'test-flag',
+        defaultValue: false,
+      );
+
+      expect(details.value, isFalse);
+      expect(details.errorCode, equals(ErrorCode.PROVIDER_NOT_READY));
+      expect(details.errorMessage, equals('provider unavailable'));
+    });
+
+    test('before hook context updates are merged into provider evaluation context', () async {
+      final capturingProvider = ContextCapturingProvider({'test-flag': true});
+      final transactionManager = TransactionContextManager();
+      final lifecycleHook = LifecycleHook(
+        beforeUpdates: {'hook': 'value', 'userId': 'hook-user'},
+      );
+      hookManager.addHook(lifecycleHook);
+
+      client = FeatureClient(
+        metadata: ClientMetadata(name: 'test-client'),
+        hookManager: hookManager,
+        apiContext: const EvaluationContext(
+          attributes: {'global': 'value'},
+        ),
+        defaultContext: const EvaluationContext(
+          attributes: {'client': 'value'},
+        ),
+        provider: capturingProvider,
+        transactionManager: transactionManager,
+      );
+
+      await transactionManager.withContext('tx', {'requestId': '123'}, () async {
+        await client.getBooleanFlag(
+          'test-flag',
+          context: const EvaluationContext(attributes: {'userId': 'invocation'}),
+        );
+      });
+
+      expect(capturingProvider.lastEvaluationContext?['global'], equals('value'));
+      expect(
+        capturingProvider.lastEvaluationContext?['requestId'],
+        equals('123'),
+      );
+      expect(capturingProvider.lastEvaluationContext?['client'], equals('value'));
+      expect(capturingProvider.lastEvaluationContext?['hook'], equals('value'));
+      expect(
+        capturingProvider.lastEvaluationContext?['userId'],
+        equals('hook-user'),
+      );
     });
   });
 }

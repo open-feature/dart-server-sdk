@@ -92,6 +92,23 @@ class FeatureClient {
     void Function(OpenFeatureEvent event) handler,
   ) => events.listen(handler);
 
+  Future<void> removeHandler(StreamSubscription<OpenFeatureEvent> handler) =>
+      handler.cancel();
+
+  void addHook(Hook hook) {
+    _hookManager.addHook(hook);
+  }
+
+  void addHooks(Iterable<Hook> hooks) {
+    for (final hook in hooks) {
+      _hookManager.addHook(hook);
+    }
+  }
+
+  void removeHook(Hook hook) {
+    _hookManager.removeHook(hook);
+  }
+
   Map<String, dynamic> _buildEffectiveContext(Map<String, dynamic>? context) {
     return {
       ..._apiContext.attributes,
@@ -109,6 +126,58 @@ class FeatureClient {
     return FlagValueType.OBJECT;
   }
 
+  EvaluationDetails _createEvaluationDetails<T>(FlagEvaluationResult<T> result) {
+    return EvaluationDetails(
+      flagKey: result.flagKey,
+      value: result.value,
+      variant: result.variant,
+      reason: result.reason,
+      evaluationTime: result.evaluatedAt,
+      additionalDetails: result.details,
+    );
+  }
+
+  Exception _asException(Object error) {
+    return error is Exception ? error : Exception(error.toString());
+  }
+
+  Exception _providerErrorAsException<T>(FlagEvaluationResult<T> result) {
+    return ProviderException(
+      result.errorMessage ?? 'Provider returned an evaluation error.',
+      code: result.errorCode ?? ErrorCode.GENERAL,
+      details: result.details,
+    );
+  }
+
+  FlagEvaluationResult<T> _exceptionResult<T>(
+    String flagKey,
+    T defaultValue,
+    Exception error,
+  ) {
+    final errorCode = error is ProviderException
+        ? error.code
+        : ErrorCode.GENERAL;
+    final errorMessage = error is ProviderException
+        ? error.message
+        : error.toString();
+
+    return FlagEvaluationResult<T>(
+      flagKey: flagKey,
+      value: defaultValue,
+      reason: 'ERROR',
+      errorCode: errorCode,
+      errorMessage: errorMessage,
+      details: error is ProviderException ? error.details : null,
+      evaluatedAt: DateTime.now(),
+      evaluatorId: _provider.metadata.name,
+    );
+  }
+
+  void _recordEvaluationError(ErrorCode? errorCode, Exception error) {
+    final errorKey = errorCode?.name ?? error.runtimeType.toString();
+    _metrics.errorCounts[errorKey] = (_metrics.errorCounts[errorKey] ?? 0) + 1;
+  }
+
   Future<FlagEvaluationResult<T>> _evaluateFlagResult<T>(
     String flagKey,
     T defaultValue,
@@ -116,15 +185,16 @@ class FeatureClient {
     Map<String, dynamic>? context,
   }) async {
     final startTime = DateTime.now();
-    final effectiveContext = _buildEffectiveContext(context);
+    var effectiveContext = _buildEffectiveContext(context);
     final hookData = HookData();
     final flagValueType = _inferFlagValueType(defaultValue);
+    FlagEvaluationResult<T>? finalResult;
     EvaluationDetails? evaluationDetails;
     Exception? evaluationError;
     _metrics.flagEvaluations++;
 
     try {
-      await _hookManager.executeHooks(
+      effectiveContext = await _hookManager.executeHooks(
         HookStage.BEFORE,
         flagKey,
         effectiveContext,
@@ -135,21 +205,58 @@ class FeatureClient {
         hookData: hookData,
       );
 
-      final result = await evaluator(effectiveContext);
-      evaluationDetails = EvaluationDetails(
-        flagKey: result.flagKey,
-        value: result.value,
-        variant: result.variant,
-        reason: result.reason,
-        evaluationTime: result.evaluatedAt,
-        additionalDetails: result.details,
-      );
+      finalResult = await evaluator(effectiveContext);
+      evaluationDetails = _createEvaluationDetails(finalResult);
+
+      if (finalResult.errorCode == null) {
+        await _hookManager.executeHooks(
+          HookStage.AFTER,
+          flagKey,
+          effectiveContext,
+          result: finalResult.value,
+          evaluationDetails: evaluationDetails,
+          clientMetadata: metadata,
+          providerMetadata: _provider.metadata,
+          defaultValue: defaultValue,
+          flagValueType: flagValueType,
+          hookData: hookData,
+        );
+      } else {
+        evaluationError = _providerErrorAsException(finalResult);
+        _logger.warning(
+          'Flag evaluation error for $flagKey: ${finalResult.errorMessage}',
+        );
+        _recordEvaluationError(finalResult.errorCode, evaluationError);
+
+        await _hookManager.executeHooks(
+          HookStage.ERROR,
+          flagKey,
+          effectiveContext,
+          result: finalResult.value,
+          error: evaluationError,
+          evaluationDetails: evaluationDetails,
+          clientMetadata: metadata,
+          providerMetadata: _provider.metadata,
+          defaultValue: defaultValue,
+          flagValueType: flagValueType,
+          hookData: hookData,
+        );
+      }
+    } catch (e) {
+      evaluationError = _asException(e);
+      _logger.warning('Error evaluating flag $flagKey: $e');
+      if (finalResult == null || finalResult.errorCode == null) {
+        finalResult = _exceptionResult(flagKey, defaultValue, evaluationError);
+      }
+      evaluationDetails ??= _createEvaluationDetails(finalResult);
+      _recordEvaluationError(finalResult.errorCode, evaluationError);
 
       await _hookManager.executeHooks(
-        HookStage.AFTER,
+        HookStage.ERROR,
         flagKey,
         effectiveContext,
-        result: result.value,
+        result: finalResult.value,
+        error: evaluationError,
         evaluationDetails: evaluationDetails,
         clientMetadata: metadata,
         providerMetadata: _provider.metadata,
@@ -157,47 +264,16 @@ class FeatureClient {
         flagValueType: flagValueType,
         hookData: hookData,
       );
-
-      if (result.errorCode != null) {
-        _logger.warning(
-          'Flag evaluation error for $flagKey: ${result.errorMessage}',
-        );
-        _metrics.errorCounts[result.errorCode!.name] =
-            (_metrics.errorCounts[result.errorCode!.name] ?? 0) + 1;
-      }
-
-      return result;
-    } catch (e) {
-      evaluationError = e is Exception ? e : Exception(e.toString());
-      _logger.warning('Error evaluating flag $flagKey: $e');
-      _metrics.errorCounts[e.runtimeType.toString()] =
-          (_metrics.errorCounts[e.runtimeType.toString()] ?? 0) + 1;
-
-      await _hookManager.executeHooks(
-        HookStage.ERROR,
-        flagKey,
-        effectiveContext,
-        error: evaluationError,
-        clientMetadata: metadata,
-        providerMetadata: _provider.metadata,
-        defaultValue: defaultValue,
-        flagValueType: flagValueType,
-        hookData: hookData,
-      );
-
-      return FlagEvaluationResult.error(
-        flagKey,
-        defaultValue,
-        ErrorCode.GENERAL,
-        evaluationError.toString(),
-        evaluatorId: _provider.metadata.name,
-      );
     } finally {
       _metrics.responseTimes.add(DateTime.now().difference(startTime));
+      if (finalResult != null) {
+        evaluationDetails ??= _createEvaluationDetails(finalResult);
+      }
       await _hookManager.executeHooks(
         HookStage.FINALLY,
         flagKey,
         effectiveContext,
+        result: finalResult?.value ?? defaultValue,
         error: evaluationError,
         evaluationDetails: evaluationDetails,
         clientMetadata: metadata,
@@ -207,6 +283,8 @@ class FeatureClient {
         hookData: hookData,
       );
     }
+
+    return finalResult;
   }
 
   /// Generic flag evaluation orchestrator
