@@ -8,18 +8,23 @@ class TestHook implements Hook {
   bool receivedEvaluationDetails = false;
   HookData? beforeHookData;
   HookData? afterHookData;
+  final Map<String, dynamic>? _beforeUpdates;
 
-  TestHook([this._priority = HookPriority.NORMAL]);
+  TestHook([
+    this._priority = HookPriority.NORMAL,
+    this._beforeUpdates,
+  ]);
 
   @override
   HookMetadata get metadata =>
       HookMetadata(name: 'TestHook', priority: _priority);
 
   @override
-  Future<void> before(HookContext context) async {
+  Future<Map<String, dynamic>?> before(HookContext context) async {
     beforeHookData = context.hookData;
     context.hookData.set('fromBefore', true);
     executionOrder.add('before');
+    return _beforeUpdates;
   }
 
   @override
@@ -45,6 +50,90 @@ class TestHook implements Hook {
     }
     if (hints != null) {
       executionOrder.add('with_hints');
+    }
+  }
+}
+
+class NamedHook extends BaseHook {
+  final String name;
+  final List<String> calls;
+
+  NamedHook(this.name, this.calls, HookPriority priority)
+    : super(metadata: HookMetadata(name: name, priority: priority));
+
+  @override
+  Future<Map<String, dynamic>?> before(HookContext context) async {
+    calls.add('before:$name');
+    return null;
+  }
+
+  @override
+  Future<void> after(HookContext context) async {
+    calls.add('after:$name');
+  }
+
+  @override
+  Future<void> error(HookContext context) async {
+    calls.add('error:$name');
+  }
+
+  @override
+  Future<void> finally_(
+    HookContext context,
+    EvaluationDetails? evaluationDetails, [
+    HookHints? hints,
+  ]) async {
+    calls.add('finally:$name');
+  }
+}
+
+class ThrowingHook extends BaseHook {
+  final List<String> calls;
+  final String stageToThrow;
+  final String name;
+  final HookPriority priority;
+
+  ThrowingHook({
+    required this.calls,
+    required this.stageToThrow,
+    required this.name,
+    this.priority = HookPriority.NORMAL,
+  }) : super(metadata: HookMetadata(name: name, priority: priority));
+
+  @override
+  Future<Map<String, dynamic>?> before(HookContext context) async {
+    calls.add('before:$name');
+    if (stageToThrow == 'before') {
+      throw Exception('before failed');
+    }
+    return null;
+  }
+
+  @override
+  Future<void> after(HookContext context) async {
+    calls.add('after:$name');
+    if (stageToThrow == 'after') {
+      throw Exception('after failed');
+    }
+  }
+
+  @override
+  Future<void> error(HookContext context) async {
+    calls.add('error:$name');
+    if (stageToThrow == 'error') {
+      throw Exception('error failed');
+    }
+  }
+
+  @override
+  Future<void> finally_(
+    HookContext context,
+    EvaluationDetails? evaluationDetails, [
+    HookHints? hints,
+  ]) async {
+    calls.add('finally:$name');
+    if (stageToThrow == 'finally') {
+      throw Exception('finally failed');
     }
   }
 }
@@ -152,6 +241,141 @@ void main() {
 
       expect(identical(testHook.beforeHookData, testHook.afterHookData), isTrue);
       expect(testHook.afterHookData?.get('fromBefore'), isTrue);
+    });
+
+    test('runs after, error, and finally hooks in reverse order', () async {
+      final calls = <String>[];
+      final first = NamedHook('first', calls, HookPriority.HIGH);
+      final second = NamedHook('second', calls, HookPriority.LOW);
+      manager
+        ..addHook(first)
+        ..addHook(second);
+
+      await manager.executeHooks(HookStage.AFTER, 'test-flag', {}, result: true);
+      await manager.executeHooks(
+        HookStage.ERROR,
+        'test-flag',
+        {},
+        error: Exception('boom'),
+      );
+      await manager.executeHooks(HookStage.FINALLY, 'test-flag', {});
+
+      expect(
+        calls,
+        equals([
+          'after:second',
+          'after:first',
+          'error:second',
+          'error:first',
+          'finally:second',
+          'finally:first',
+        ]),
+      );
+    });
+
+    test('before hooks can contribute merged evaluation context', () async {
+      final mergingHook = TestHook(
+        HookPriority.NORMAL,
+        {'hook': 'value', 'user': 'hook-user'},
+      );
+      manager.addHook(mergingHook);
+
+      final mergedContext = await manager.executeHooks(
+        HookStage.BEFORE,
+        'test-flag',
+        {'user': 'invocation-user', 'region': 'us'},
+      );
+
+      expect(mergedContext['region'], equals('us'));
+      expect(mergedContext['hook'], equals('value'));
+      expect(mergedContext['user'], equals('hook-user'));
+    });
+
+    test('before and after failures stop the rest of that stage', () async {
+      final calls = <String>[];
+      manager
+        ..addHook(
+          ThrowingHook(
+            calls: calls,
+            stageToThrow: 'before',
+            name: 'first',
+            priority: HookPriority.HIGH,
+          ),
+        )
+        ..addHook(NamedHook('second', calls, HookPriority.LOW));
+
+      expect(
+        () => manager.executeHooks(HookStage.BEFORE, 'test-flag', {}),
+        throwsException,
+      );
+      expect(calls, equals(['before:first']));
+    });
+
+    test('error and finally failures do not stop remaining hooks', () async {
+      final calls = <String>[];
+      manager
+        ..addHook(
+          ThrowingHook(
+            calls: calls,
+            stageToThrow: 'error',
+            name: 'first',
+            priority: HookPriority.HIGH,
+          ),
+        )
+        ..addHook(NamedHook('second', calls, HookPriority.LOW));
+
+      await manager.executeHooks(
+        HookStage.ERROR,
+        'test-flag',
+        {},
+        error: Exception('boom'),
+      );
+
+      expect(calls, equals(['error:second', 'error:first']));
+
+      calls.clear();
+      final finallyManager = HookManager()
+        ..addHook(
+          ThrowingHook(
+            calls: calls,
+            stageToThrow: 'finally',
+            name: 'first',
+            priority: HookPriority.HIGH,
+          ),
+        )
+        ..addHook(NamedHook('second', calls, HookPriority.LOW));
+
+      await finallyManager.executeHooks(HookStage.FINALLY, 'test-flag', {});
+      expect(calls, equals(['finally:second', 'finally:first']));
+    });
+
+    test('hook data is isolated per hook instance', () async {
+      final first = TestHook(HookPriority.HIGH, {'hookId': 'first'});
+      final second = TestHook(HookPriority.LOW, {'hookId': 'second'});
+      manager
+        ..addHook(first)
+        ..addHook(second);
+
+      final sharedHookData = HookData();
+      final mergedContext = await manager.executeHooks(
+        HookStage.BEFORE,
+        'test-flag',
+        {'user': 'test'},
+        hookData: sharedHookData,
+      );
+
+      await manager.executeHooks(
+        HookStage.AFTER,
+        'test-flag',
+        mergedContext,
+        result: true,
+        hookData: sharedHookData,
+      );
+
+      expect(identical(first.beforeHookData, second.beforeHookData), isFalse);
+      expect(identical(first.afterHookData, second.afterHookData), isFalse);
+      expect(identical(first.beforeHookData, first.afterHookData), isTrue);
+      expect(identical(second.beforeHookData, second.afterHookData), isTrue);
     });
   });
 
@@ -312,6 +536,30 @@ void main() {
         otelHook.capturedAttributes[0][OTelFeatureFlagConstants.REASON],
         equals(OTelFeatureFlagConstants.REASON_ERROR),
       );
+    });
+  });
+
+  group('LoggingHook', () {
+    test('serializes non-JSON values safely', () async {
+      final messages = <String>[];
+      final hook = LoggingHook(logger: messages.add, includeContext: true);
+
+      await hook.before(
+        HookContext(
+          flagKey: 'test-flag',
+          evaluationContext: {
+            'when': DateTime.utc(2026, 4, 20),
+            'duration': const Duration(seconds: 5),
+            'setLike': {1, 2, 3},
+          },
+          result: Object(),
+        ),
+      );
+
+      expect(messages, hasLength(1));
+      expect(messages.single, contains('"flagKey":"test-flag"'));
+      expect(messages.single, contains('"duration":5000000'));
+      expect(messages.single, contains('"setLike":[1,2,3]'));
     });
   });
 }

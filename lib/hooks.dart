@@ -76,6 +76,7 @@ class EvaluationDetails {
 /// within a single flag evaluation lifecycle.
 class HookData {
   final Map<String, dynamic> _data = {};
+  final Map<Object, HookData> _scopedData = {};
 
   /// Set a value in hook data
   void set(String key, dynamic value) {
@@ -93,12 +94,15 @@ class HookData {
 
   /// Get all entries as an unmodifiable map
   Map<String, dynamic> toMap() => Map.unmodifiable(_data);
+
+  HookData _scopeFor(Object scopeKey) =>
+      _scopedData.putIfAbsent(scopeKey, HookData.new);
 }
 
 /// Context passed to hooks during execution
 class HookContext {
   final String flagKey;
-  final Map<String, dynamic>? evaluationContext;
+  final Map<String, dynamic> evaluationContext;
   final dynamic result;
   final Exception? error;
   final Map<String, dynamic> metadata;
@@ -110,7 +114,7 @@ class HookContext {
 
   HookContext({
     required this.flagKey,
-    this.evaluationContext,
+    Map<String, dynamic>? evaluationContext,
     this.result,
     this.error,
     this.metadata = const {},
@@ -119,7 +123,10 @@ class HookContext {
     this.defaultValue,
     this.flagValueType,
     HookData? hookData,
-  }) : hookData = hookData ?? HookData();
+  }) : evaluationContext = Map.unmodifiable(
+         Map<String, dynamic>.from(evaluationContext ?? const {}),
+       ),
+       hookData = hookData ?? HookData();
 }
 
 /// Optional hints for hook execution
@@ -134,8 +141,11 @@ abstract class Hook {
   /// Hook metadata and configuration
   HookMetadata get metadata;
 
-  /// Before flag evaluation
-  Future<void> before(HookContext context);
+  /// Before flag evaluation.
+  ///
+  /// Returned context updates are merged into the evaluation context before the
+  /// provider is called and before later before hooks execute.
+  Future<Map<String, dynamic>?> before(HookContext context);
 
   /// After successful evaluation
   Future<void> after(HookContext context);
@@ -154,14 +164,11 @@ abstract class Hook {
 /// Manager for hook registration and execution
 class HookManager {
   final List<Hook> _hooks = [];
-  final bool _failFast;
   final Duration _defaultTimeout;
 
   HookManager({
-    bool failFast = false,
     Duration defaultTimeout = const Duration(seconds: 5),
-  }) : _failFast = failFast,
-       _defaultTimeout = defaultTimeout;
+  }) : _defaultTimeout = defaultTimeout;
 
   /// Register a new hook
   void addHook(Hook hook) {
@@ -169,8 +176,12 @@ class HookManager {
     _sortHooks();
   }
 
+  void removeHook(Hook hook) {
+    _hooks.remove(hook);
+  }
+
   /// Execute hooks for a specific stage
-  Future<void> executeHooks(
+  Future<Map<String, dynamic>> executeHooks(
     HookStage stage,
     String flagKey,
     Map<String, dynamic>? context, {
@@ -184,22 +195,23 @@ class HookManager {
     FlagValueType? flagValueType,
     HookData? hookData,
   }) async {
-    final sharedHookData = hookData ?? HookData();
-    final hookContext = HookContext(
-      flagKey: flagKey,
-      evaluationContext: context,
-      result: result,
-      error: error,
-      clientMetadata: clientMetadata,
-      providerMetadata: providerMetadata,
-      defaultValue: defaultValue,
-      flagValueType: flagValueType,
-      hookData: sharedHookData,
-    );
+    var currentContext = Map<String, dynamic>.from(context ?? const {});
+    final evaluationHookData = hookData ?? HookData();
+    for (final hook in _hooksForStage(stage)) {
+      final hookContext = HookContext(
+        flagKey: flagKey,
+        evaluationContext: currentContext,
+        result: result,
+        error: error,
+        clientMetadata: clientMetadata,
+        providerMetadata: providerMetadata,
+        defaultValue: defaultValue,
+        flagValueType: flagValueType,
+        hookData: evaluationHookData._scopeFor(hook),
+      );
 
-    for (final hook in _hooks) {
       try {
-        await _executeHookWithTimeout(
+        final contextUpdates = await _executeHookWithTimeout(
           hook,
           stage,
           hookContext,
@@ -207,13 +219,21 @@ class HookManager {
           evaluationDetails,
           hints,
         );
+
+        if (stage == HookStage.BEFORE &&
+            contextUpdates != null &&
+            contextUpdates.isNotEmpty) {
+          currentContext = {...currentContext, ...contextUpdates};
+        }
       } catch (e) {
-        if (_failFast || !hook.metadata.config.continueOnError) {
+        if (stage == HookStage.BEFORE || stage == HookStage.AFTER) {
           rethrow;
         }
         print('Error in ${hook.metadata.name} hook: $e');
       }
     }
+
+    return currentContext;
   }
 
   /// Sort hooks by priority
@@ -223,8 +243,15 @@ class HookManager {
     );
   }
 
+  List<Hook> _hooksForStage(HookStage stage) {
+    if (stage == HookStage.BEFORE) {
+      return List.unmodifiable(_hooks);
+    }
+    return _hooks.reversed.toList(growable: false);
+  }
+
   /// Execute a single hook with timeout
-  Future<void> _executeHookWithTimeout(
+  Future<Map<String, dynamic>?> _executeHookWithTimeout(
     Hook hook,
     HookStage stage,
     HookContext context,
@@ -234,23 +261,32 @@ class HookManager {
   ) async {
     final effectiveTimeout = timeout ?? _defaultTimeout;
 
-    Future<void> hookExecution;
+    Future<Map<String, dynamic>?> hookExecution;
     switch (stage) {
       case HookStage.BEFORE:
         hookExecution = hook.before(context);
         break;
       case HookStage.AFTER:
-        hookExecution = hook.after(context);
+        hookExecution = () async {
+          await hook.after(context);
+          return null;
+        }();
         break;
       case HookStage.ERROR:
-        hookExecution = hook.error(context);
+        hookExecution = () async {
+          await hook.error(context);
+          return null;
+        }();
         break;
       case HookStage.FINALLY:
-        hookExecution = hook.finally_(context, evaluationDetails, hints);
+        hookExecution = () async {
+          await hook.finally_(context, evaluationDetails, hints);
+          return null;
+        }();
         break;
     }
 
-    await hookExecution.timeout(
+    return await hookExecution.timeout(
       effectiveTimeout,
       onTimeout: () {
         throw TimeoutException(
@@ -269,7 +305,7 @@ abstract class BaseHook implements Hook {
   BaseHook({required this.metadata});
 
   @override
-  Future<void> before(HookContext context) async {}
+  Future<Map<String, dynamic>?> before(HookContext context) async => null;
 
   @override
   Future<void> after(HookContext context) async {}
@@ -288,11 +324,48 @@ abstract class BaseHook implements Hook {
 /// A lightweight hook that emits structured logs for each lifecycle stage.
 class LoggingHook extends BaseHook {
   final void Function(String message)? logger;
+  final bool includeContext;
 
   LoggingHook({
     this.logger,
+    this.includeContext = false,
     HookPriority priority = HookPriority.NORMAL,
   }) : super(metadata: HookMetadata(name: 'LoggingHook', priority: priority));
+
+  Object? _safeJsonValue(dynamic value) {
+    if (value == null ||
+        value is num ||
+        value is bool ||
+        value is String) {
+      return value;
+    }
+
+    if (value is DateTime) {
+      return value.toIso8601String();
+    }
+
+    if (value is Duration) {
+      return value.inMicroseconds;
+    }
+
+    if (value is Enum) {
+      return value.name;
+    }
+
+    if (value is Map) {
+      final jsonSafeMap = <String, Object?>{};
+      value.forEach((key, nestedValue) {
+        jsonSafeMap[key.toString()] = _safeJsonValue(nestedValue);
+      });
+      return jsonSafeMap;
+    }
+
+    if (value is Iterable) {
+      return value.map(_safeJsonValue).toList(growable: false);
+    }
+
+    return value.toString();
+  }
 
   void _log(String stage, HookContext context, [EvaluationDetails? details]) {
     final payload = jsonEncode({
@@ -300,8 +373,10 @@ class LoggingHook extends BaseHook {
       'flagKey': context.flagKey,
       'provider': context.providerMetadata?.name,
       'client': context.clientMetadata?.name,
-      'context': context.evaluationContext,
-      'result': details?.value ?? context.result,
+      if (includeContext) 'context': _safeJsonValue(context.evaluationContext),
+      if (!includeContext && context.evaluationContext.isNotEmpty)
+        'contextKeys': context.evaluationContext.keys.toList(growable: false),
+      'result': _safeJsonValue(details?.value ?? context.result),
       'reason': details?.reason,
       'error': context.error?.toString(),
     });
@@ -314,7 +389,10 @@ class LoggingHook extends BaseHook {
   }
 
   @override
-  Future<void> before(HookContext context) async => _log('before', context);
+  Future<Map<String, dynamic>?> before(HookContext context) async {
+    _log('before', context);
+    return null;
+  }
 
   @override
   Future<void> after(HookContext context) async => _log('after', context);
