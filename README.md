@@ -53,7 +53,7 @@ favorite feature flag management tool.
 
 ### Requirements
 
-Dart language version: [3.10.7](https://dart.dev/get-dart/archive)
+Dart language version: [3.11.4](https://dart.dev/get-dart/archive)
 
 > [!NOTE]
 > The OpenFeature Dart Server SDK only supports the latest currently maintained
@@ -283,10 +283,10 @@ api.registerProvider(CustomCacheProvider());
 api.bindClientToProvider('cache-domain', 'CustomCacheProvider');
 
 final defaultClient = api.getClient('default-client');
-await defaultClient.getBooleanFlag('my-flag', defaultValue: false);
+await defaultClient.getBooleanFlag('default-flag', defaultValue: false);
 
 final cacheClient = api.getClient('cache-client', domain: 'cache-domain');
-await cacheClient.getBooleanFlag('my-flag', defaultValue: false);
+await cacheClient.getBooleanFlag('cached-flag', defaultValue: false);
 ```
 
 ### Multi-Provider (experimental)
@@ -601,13 +601,13 @@ void main() {
   late OpenFeatureAPI api;
   late InMemoryProvider testProvider;
 
-  setUp(() {
+  setUp(() async {
     api = OpenFeatureAPI();
     testProvider = InMemoryProvider({
       'test-flag': true,
       'string-flag': 'test-value',
     });
-    api.setProvider(testProvider);
+    await api.setProviderAndWait(testProvider);
   });
 
   tearDown(() {
