@@ -65,7 +65,7 @@ Dart language version: [3.11.4](https://dart.dev/get-dart/archive)
 
 ```yaml
 dependencies:
-  openfeature_dart_server_sdk: ^0.0.17
+  openfeature_dart_server_sdk: ^0.0.18
 ```
 
 <!-- x-release-please-end -->
@@ -216,6 +216,9 @@ client.addHook(MyClientHook());
 
 Before hooks may return context updates. Any returned attributes are merged into
 the evaluation context before the provider is called.
+
+> [!NOTE]
+> Invocation-level hooks are not yet supported. Hooks can currently be registered at the global or client level.
 
 ### Tracking
 
