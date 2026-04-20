@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.19](https://github.com/open-feature/dart-server-sdk/compare/v0.0.18...v0.0.19) (2026-04-20)
+
+
+### 🧹 Chore
+
+* align main with development ([#107](https://github.com/open-feature/dart-server-sdk/issues/107)) ([1abd3df](https://github.com/open-feature/dart-server-sdk/commit/1abd3df560f86d8f622a985a3f11a765beeb2cd6))
+
 ## [0.0.18](https://github.com/open-feature/dart-server-sdk/compare/v0.0.17...v0.0.18) (2026-04-15)
 
 

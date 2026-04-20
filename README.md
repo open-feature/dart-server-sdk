@@ -15,12 +15,12 @@
     <img alt="Specification" src="https://img.shields.io/static/v1?label=specification&message=v0.8.0&color=yellow&style=for-the-badge" />
   </a>
   <!-- x-release-please-start-version -->
-  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.17">
-    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.17&color=blue&style=for-the-badge" />
+  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.19">
+    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.19&color=blue&style=for-the-badge" />
 
 
-  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.18">
-    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.18&color=blue&style=for-the-badge" />
+  <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.19">
+    <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.19&color=blue&style=for-the-badge" />
 
   </a>
   <!-- x-release-please-end -->
@@ -70,7 +70,7 @@ Dart language version: [3.11.4](https://dart.dev/get-dart/archive)
 
 ```yaml
 dependencies:
-  openfeature_dart_server_sdk: ^0.0.18
+  openfeature_dart_server_sdk: ^0.0.19
 ```
 
 <!-- x-release-please-end -->
