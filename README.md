@@ -15,7 +15,6 @@
     <img alt="Specification" src="https://img.shields.io/static/v1?label=specification&message=v0.8.0&color=yellow&style=for-the-badge" />
   </a>
   <!-- x-release-please-start-version -->
-<<<<<<< HEAD
   <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.17">
     <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.17&color=blue&style=for-the-badge" />
 =======
@@ -97,13 +96,6 @@ void main() async {
 <<<<<<< HEAD
 =======
 
-  // Register your feature flag provider and wait for it to be ready
-  await api.setProviderAndWait(InMemoryProvider({
-    'new-feature': true,
-    'welcome-message': 'Hello, OpenFeature!'
-  }));
->>>>>>> 34f8c49 (chore: Development to Main (#96))
-
   await api.setProviderAndWait(
     InMemoryProvider({
       'new-feature': true,
@@ -182,24 +174,10 @@ the
 
 ```dart
 final api = OpenFeatureAPI();
-<<<<<<< HEAD
 api.setGlobalContext(
   OpenFeatureEvaluationContext({
     'region': 'us-east-1-iah-1a',
-=======
-api.setGlobalContext(OpenFeatureEvaluationContext({
-  'region': 'us-east-1-iah-1a',
-}));
-
-// Create a client with a client-level default context
-final client = FeatureClient(
-  metadata: ClientMetadata(name: 'my-app'),
-  hookManager: HookManager(),
-  defaultContext: EvaluationContext(attributes: {
-    'version': '1.4.6',
->>>>>>> 34f8c49 (chore: Development to Main (#96))
   }),
-  provider: api.provider,
 );
 
 final client = FeatureClient(
@@ -239,7 +217,6 @@ client level.
 final api = OpenFeatureAPI();
 api.addHooks([MyGlobalHook()]);
 
-<<<<<<< HEAD
 final client = api.getClient('my-app');
 client.addHook(MyClientHook());
 ```
@@ -250,18 +227,6 @@ client.addHook(MyClientHook());
 
 Before hooks may return context updates. Any returned attributes are merged into
 the evaluation context before the provider is called.
-=======
-// Add a hook on this client, to run on all evaluations made by this client
-final hookManager = HookManager();
-hookManager.addHook(MyClientHook());
-
-final client = FeatureClient(
-  metadata: ClientMetadata(name: 'my-app'),
-  hookManager: hookManager,
-  defaultContext: EvaluationContext(attributes: {}),
-  provider: api.provider,
-);
-```
 
 > [!NOTE]
 > Invocation-level hooks are not yet supported. Hooks can currently be registered at the global or client level.
@@ -304,7 +269,6 @@ documentation for details.
 In accordance with the OpenFeature specification, the SDK does not generally log
 messages during flag evaluation.
 
-<<<<<<< HEAD
 The SDK uses the [package:logging](https://pub.dev/packages/logging) structured
 logging API internally. You can configure log levels and listeners to capture
 SDK output for troubleshooting and debugging.
@@ -312,12 +276,6 @@ SDK output for troubleshooting and debugging.
 For lifecycle-level logging, use the built-in `LoggingHook` or
 `OpenTelemetryHook`. `LoggingHook` redacts evaluation-context values by default
 and only emits context keys unless `includeContext: true` is set explicitly.
-=======
-The SDK uses the [package:logging](https://pub.dev/packages/logging) structured logging API internally.
-You can configure log levels and listeners to capture SDK log output for troubleshooting and debugging.
-
-See [hooks](#hooks) for more information on adding custom logging behavior via hooks.
->>>>>>> 34f8c49 (chore: Development to Main (#96))
 
 ### Domains
 
@@ -336,21 +294,11 @@ api.setProvider(InMemoryProvider({'default-flag': true}));
 api.registerProvider(CustomCacheProvider());
 api.bindClientToProvider('cache-domain', 'CustomCacheProvider');
 
-<<<<<<< HEAD
 final defaultClient = api.getClient('default-client');
 await defaultClient.getBooleanFlag('default-flag', defaultValue: false);
 
 final cacheClient = api.getClient('cache-client', domain: 'cache-domain');
 await cacheClient.getBooleanFlag('cached-flag', defaultValue: false);
-=======
-// Client backed by default provider
-final defaultClient = api.getClient('default-client');
-await defaultClient.getBooleanFlag('my-flag', defaultValue: false);
-
-// Client backed by CachedProvider
-final cacheClient = api.getClient('cache-client', domain: 'cache-domain');
-await cacheClient.getBooleanFlag('my-flag', defaultValue: false);
->>>>>>> 34f8c49 (chore: Development to Main (#96))
 ```
 
 ### Multi-Provider (experimental)
@@ -402,10 +350,6 @@ import 'package:openfeature_dart_server_sdk/open_feature_event.dart';
 
 final api = OpenFeatureAPI();
 
-<<<<<<< HEAD
-=======
-// Listen for provider configuration change events
->>>>>>> 34f8c49 (chore: Development to Main (#96))
 api.events.listen((event) {
   if (event.type == OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED) {
     print('Provider configuration changed: ${event.message}');
@@ -413,23 +357,6 @@ api.events.listen((event) {
 });
 <<<<<<< HEAD
 =======
-```
-
-The SDK also provides a global event bus for flag evaluation events:
-
-```dart
-import 'package:openfeature_dart_server_sdk/event_system.dart';
-
-// Listen for flag evaluation events
-OpenFeatureEvents.instance.subscribe(
-  (event) {
-    print('Flag evaluated: ${event.data['flagKey']} = ${event.data['result']}');
-  },
-  filter: EventFilter(
-    types: {OpenFeatureEventType.flagEvaluated},
-  ),
-);
->>>>>>> 34f8c49 (chore: Development to Main (#96))
 ```
 
 Client-scoped handlers are also available. A client only receives events for
@@ -493,10 +420,6 @@ evaluations inside that transaction.
 ```dart
 import 'package:openfeature_dart_server_sdk/transaction_context.dart';
 
-<<<<<<< HEAD
-=======
-// Get the transaction context manager (singleton)
->>>>>>> 34f8c49 (chore: Development to Main (#96))
 final transactionManager = TransactionContextManager();
 
 final context = TransactionContext(
@@ -639,18 +562,10 @@ class MyCustomProvider implements FeatureProvider {
 
 ### Develop a hook
 
-<<<<<<< HEAD
 To develop a hook, create a new project and include the OpenFeature SDK as a
 dependency. This can live in a new repository or in the existing
 [contrib repository](https://github.com/open-feature/dart-server-sdk-contrib).
 Implement your own hook by using the hook interfaces exported by the SDK.
-=======
-To develop a hook, you need to create a new project and include the OpenFeature SDK as a dependency.
-This can be a new repository or included in [the existing contrib repository](https://github.com/open-feature/dart-server-sdk-contrib) available under the OpenFeature organization.
-Implement your own hook by conforming to the [Hook interface](./lib/hooks.dart).
-To satisfy the interface, all methods (`before`/`after`/`finally_`/`error`) need to be defined.
-To avoid defining empty functions, extend the `BaseHook` class (which provides no-op default implementations for all methods).
->>>>>>> 34f8c49 (chore: Development to Main (#96))
 
 ```dart
 import 'package:openfeature_dart_server_sdk/hooks.dart';
@@ -694,13 +609,8 @@ class MyCustomHook extends BaseHook {
 
 ## Testing
 
-<<<<<<< HEAD
 Use the `InMemoryProvider` to set flags for the scope of a test. Use
 `OpenFeatureAPI.resetInstance()` in `tearDown` to clean up between tests.
-=======
-Use the `InMemoryProvider` to set flags for the scope of a test.
-Use `OpenFeatureAPI.resetInstance()` in `tearDown` to clean up between tests.
->>>>>>> 34f8c49 (chore: Development to Main (#96))
 
 ```dart
 import 'package:openfeature_dart_server_sdk/feature_provider.dart';
