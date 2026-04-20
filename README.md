@@ -17,11 +17,11 @@
   <!-- x-release-please-start-version -->
   <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.17">
     <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.17&color=blue&style=for-the-badge" />
-=======
+
 
   <a href="https://github.com/open-feature/dart-server-sdk/releases/tag/v0.0.18">
     <img alt="Release" src="https://img.shields.io/static/v1?label=release&message=v0.0.18&color=blue&style=for-the-badge" />
->>>>>>> 3122790 (chore(main): release 0.0.18 (#98))
+
   </a>
   <!-- x-release-please-end -->
   <a href="https://dart.dev/">
@@ -58,11 +58,7 @@ favorite feature flag management tool.
 
 ### Requirements
 
-<<<<<<< HEAD
 Dart language version: [3.11.4](https://dart.dev/get-dart/archive)
-=======
-Dart language version: [3.10.7](https://dart.dev/get-dart/archive)
->>>>>>> 34f8c49 (chore: Development to Main (#96))
 
 > [!NOTE]
 > The OpenFeature Dart Server SDK only supports the latest currently maintained
@@ -93,8 +89,6 @@ import 'package:openfeature_dart_server_sdk/open_feature_api.dart';
 
 void main() async {
   final api = OpenFeatureAPI();
-<<<<<<< HEAD
-=======
 
   await api.setProviderAndWait(
     InMemoryProvider({
@@ -230,7 +224,6 @@ the evaluation context before the provider is called.
 
 > [!NOTE]
 > Invocation-level hooks are not yet supported. Hooks can currently be registered at the global or client level.
->>>>>>> 34f8c49 (chore: Development to Main (#96))
 
 ### Tracking
 
@@ -355,8 +348,6 @@ api.events.listen((event) {
     print('Provider configuration changed: ${event.message}');
   }
 });
-<<<<<<< HEAD
-=======
 ```
 
 Client-scoped handlers are also available. A client only receives events for
