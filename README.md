@@ -129,19 +129,19 @@ for the complete API documentation.
 
 | Status | Feature | Description |
 | ------ | ------- | ----------- |
-| Implemented | [Providers](#providers) | Integrate with a commercial, open source, or in-house feature management tool. |
-| Implemented | [Targeting](#targeting) | Contextually-aware flag evaluation using [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context). |
-| Implemented | [Hooks](#hooks) | Add functionality to various stages of the flag evaluation life-cycle. |
-| Implemented | [Tracking](#tracking) | Associate user actions with feature flag evaluations for experimentation. |
-| Implemented | [Logging](#logging) | Integrate with popular logging packages. |
-| Implemented | [Domains](#domains) | Logically bind clients with providers. |
-| Experimental | [Multi-Provider](#multi-provider-experimental) | Compose multiple providers behind one SDK-level provider with a selection strategy. |
-| Implemented | [Eventing](#eventing) | React to state changes in the provider or flag management system. |
-| Implemented | [Shutdown](#shutdown) | Gracefully clean up a provider during application shutdown. |
-| Implemented | [Transaction Context Propagation](#transaction-context-propagation) | Set a specific [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context) for a transaction such as an HTTP request or thread. |
-| Implemented | [Extending](#extending) | Extend OpenFeature with custom providers and hooks. |
+| ✅ | [Providers](#providers) | Integrate with a commercial, open source, or in-house feature management tool. |
+| ✅ | [Targeting](#targeting) | Contextually-aware flag evaluation using [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context). |
+| ✅ | [Hooks](#hooks) | Add functionality to various stages of the flag evaluation life-cycle. |
+| ✅ | [Tracking](#tracking) | Associate user actions with feature flag evaluations for experimentation. |
+| ✅ | [Logging](#logging) | Integrate with popular logging packages. |
+| ✅ | [Domains](#domains) | Logically bind clients with providers. |
+| ⚠️ | [Multi-Provider](#multi-provider-experimental) | Compose multiple providers behind one SDK-level provider with a selection strategy. |
+| ✅ | [Eventing](#eventing) | React to state changes in the provider or flag management system. |
+| ✅ | [Shutdown](#shutdown) | Gracefully clean up a provider during application shutdown. |
+| ✅ | [Transaction Context Propagation](#transaction-context-propagation) | Set a specific [evaluation context](https://openfeature.dev/docs/reference/concepts/evaluation-context) for a transaction such as an HTTP request or thread. |
+| ✅ | [Extending](#extending) | Extend OpenFeature with custom providers and hooks. |
 
-<sub>Status values used here: Implemented | Experimental | Not implemented</sub>
+<sub>Implemented: ✅ | Experimental: ⚠️ | Not implemented yet: ❌</sub>
 
 ### Providers
 
