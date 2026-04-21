@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.20](https://github.com/open-feature/dart-server-sdk/compare/v0.0.19...v0.0.20) (2026-04-21)
+
+
+### 🧹 Chore
+
+* development to main ([#110](https://github.com/open-feature/dart-server-sdk/issues/110)) ([5463261](https://github.com/open-feature/dart-server-sdk/commit/5463261b4c82458b65e1b0e7f618f4602f4ff4b7))
+
 ## [0.0.19](https://github.com/open-feature/dart-server-sdk/compare/v0.0.18...v0.0.19) (2026-04-20)
 
 
