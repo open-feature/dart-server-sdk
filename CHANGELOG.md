@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.21](https://github.com/open-feature/dart-server-sdk/compare/v0.0.20...v0.0.21) (2026-04-22)
+
+
+### 🐛 Bug Fixes
+
+* remove duplicate release badge ([#113](https://github.com/open-feature/dart-server-sdk/issues/113)) ([86eea16](https://github.com/open-feature/dart-server-sdk/commit/86eea166b859a68cfc4c9d519c2df8b88367ffb2))
+
 ## [0.0.20](https://github.com/open-feature/dart-server-sdk/compare/v0.0.19...v0.0.20) (2026-04-21)
 
 
