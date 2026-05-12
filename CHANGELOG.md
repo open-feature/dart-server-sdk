@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.22](https://github.com/open-feature/dart-server-sdk/compare/v0.0.21...v0.0.22) (2026-05-12)
+
+
+### 🐛 Bug Fixes
+
+* run parent pipeline without pull_request_target ([#115](https://github.com/open-feature/dart-server-sdk/issues/115)) ([1c5d5ad](https://github.com/open-feature/dart-server-sdk/commit/1c5d5ad57346ccbbd85e1e94bcc612c2fc2636a2))
+
 ## [0.0.21](https://github.com/open-feature/dart-server-sdk/compare/v0.0.20...v0.0.21) (2026-04-22)
 
 
