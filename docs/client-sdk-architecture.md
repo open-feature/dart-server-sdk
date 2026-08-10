@@ -44,6 +44,12 @@ The first monorepo iteration should contain:
 | `openfeature_dart_server_sdk` | Existing dynamic-context SDK | Server Dart; current API remains compatible |
 | `openfeature_dart_client_sdk` | Static-context API, provider lifecycle, hooks, events, and evaluation | Pure Dart; web-compatible; no Flutter dependency |
 
+During the incremental migration, the server package remains at the repository
+root and the client package is added at
+`packages/openfeature_dart_client_sdk/`. Repository-wide validation and release
+automation must explicitly discover both locations until the server package is
+moved in its own compatibility change.
+
 Shared code should be extracted only when both packages require the same stable,
 specification-neutral contract. Candidate types include flag values, provider
 metadata, evaluation details, error codes, and event metadata. Server lifecycle,
@@ -91,10 +97,29 @@ The client SDK must provide:
 - Hook execution and optional tracking without exposing provider internals.
 - An in-memory provider suitable for conformance tests and application tests.
 
-The provider interface should be asynchronous where lifecycle or state
-reconciliation can require I/O. Flag reads may be synchronous from a provider's
-local cache, but the SDK API must not assume that all providers evaluate in the
-same way.
+The client uses synchronous flag-evaluation methods. A provider resolver must
+read only its current in-memory state and must not perform network, file, or
+platform-channel I/O during flag evaluation. Synchronous evaluation preserves
+predictable use in widget builds and other hot paths.
+
+Provider initialization, context reconciliation, and shutdown are asynchronous
+and return `Future<void>`. The API provides both non-awaiting mutators and
+awaitable variants:
+
+- `setProvider` starts initialization and reports completion through status and
+  events; `setProviderAndWait` completes after initialization succeeds or fails.
+- `setEvaluationContext` starts reconciliation and reports completion through
+  status and events; `setEvaluationContextAndWait` completes after all affected
+  providers finish reconciling.
+- Domain-scoped provider and context mutators follow the same naming and waiting
+  semantics.
+
+Non-awaiting mutators must not surface asynchronous failures as uncaught zone
+errors. Awaitable variants may complete with a lifecycle or configuration error
+after the SDK has first updated provider status and run the required event
+handlers. Hooks used during flag evaluation are synchronous. Tracking is a
+non-blocking `void` operation; providers enqueue any I/O and flush or discard
+pending work during asynchronous shutdown.
 
 ## Context Reconciliation
 
@@ -103,14 +128,40 @@ server request context. Updating global or domain-scoped context must:
 
 1. Mark the affected provider as `RECONCILING`.
 2. Invoke the provider's context-change callback with old and new context.
-3. Prevent state from one targeting key from being served to another.
-4. Move the provider to `READY`, `STALE`, `ERROR`, or `FATAL` based on the
-   reconciliation result.
-5. Emit the corresponding lifecycle event.
+3. Prevent state from one targeting key from being served to another while the
+   callback is running.
+4. On normal completion, move the provider to `READY` and run
+   `PROVIDER_CONTEXT_CHANGED` handlers.
+5. On abnormal completion, move the provider to `ERROR`, or to `FATAL` when the
+   lifecycle error code is `PROVIDER_FATAL`, and run `PROVIDER_ERROR` handlers.
+
+`STALE` is not a direct reconciliation result. A provider may independently
+signal `PROVIDER_STALE` when its cached state is no longer current, and the SDK
+then reflects the corresponding status. During `RECONCILING`, evaluation may
+return a value only when the provider can prove it belongs to the new context;
+otherwise the resolver returns an error and the SDK returns the application
+default. Values associated with the previous targeting identity must never be
+served.
 
 Concurrent context changes must be ordered or superseded deterministically.
 Tests must cover sign-in, sign-out, account switching, refresh failure, and
 late responses from a superseded context.
+
+Each context mutation receives a monotonically increasing revision. A response
+for an older revision cannot replace state prepared for a newer revision.
+Awaitable context mutations share a reconciliation barrier: outstanding waits
+complete only after all callbacks in flight have terminated, and their outcome
+reflects the final current revision. Successful completion means the SDK is
+stable on the latest context, not that an earlier superseded context remains
+current.
+
+Lifecycle status is tracked per provider instance, while provider and context
+selection is tracked per domain binding. A provider instance is initialized
+once and is shut down only after its final binding is removed. For the initial
+client release, the SDK must reject binding one provider instance to domains
+with divergent static contexts because the specification's context-change
+callback has no domain parameter. Applications needing different domain
+contexts must register separate provider instances.
 
 ## Remote Evaluation and Authentication
 
@@ -175,11 +226,12 @@ the de facto core architecture.
 ## Repository Workflow
 
 The canonical OpenFeature repository uses public GitHub issues, feature
-branches, and draft pull requests. Architecture and implementation work should
-target the repository's protected default branch through that workflow unless
-the OpenFeature maintainers approve an additional long-lived branch.
+branches, and draft pull requests. During the client SDK beta, architecture and
+implementation pull requests target the protected `development` branch. The
+`main` branch remains the stable release line unless the OpenFeature maintainers
+approve a different promotion policy.
 
-During the beta phase, integration should use exact commit references or
+Beta integration should use exact commit references from `development` or
 published prerelease versions. Floating branch dependencies are not acceptable
 for provider release validation. Provider repositories may use their own
 development and promotion workflows as long as released integrations depend on
