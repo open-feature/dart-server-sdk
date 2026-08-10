@@ -62,7 +62,7 @@ jobs:
         run: ls -al coverage
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV__UPLOAD_TOKEN }} # omit for public repos if you want
           slug: open-feature/dart-server-sdk
