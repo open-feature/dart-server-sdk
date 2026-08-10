@@ -82,6 +82,10 @@ Follow these conventions when creating branches for pull requests:
 <type>/<branch-name>
 ```
 
+Branch names may contain lowercase letters, digits, periods, underscores, and
+hyphens. Periods are useful when the branch name includes a semantic version,
+for example `chore/dart-sdk-3.12.2`.
+
 | **Branch Type** | **Purpose**                                                                                         |
 |-----------------|-----------------------------------------------------------------------------------------------------|
 | `feat`          | For new features under development. Example: `feat/add-auth-module`.                                |
