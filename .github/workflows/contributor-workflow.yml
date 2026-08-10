@@ -4,18 +4,12 @@ name: Contributor Workflow
 
 on:
   workflow_call: # Makes the workflow reusable
-    inputs:
-      branch_name:
-        required: true
-        type: string
-      event_name:
-        required: true
-        type: string
 
 jobs:
   analyze-core:
     name: Analyze Core Dart Server SDK
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout Code
