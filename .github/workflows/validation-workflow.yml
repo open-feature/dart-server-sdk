@@ -26,7 +26,7 @@ jobs:
 
           if [[ "$BRANCH_NAME" =~ ^(qa|development|main|release-please--branches--main--components--openfeature_dart_server_sdk)$ ]]; then
             echo "✅ Branch name '$BRANCH_NAME' is valid for protected branches (qa, development, main)."
-          elif [[ "$BRANCH_NAME" =~ ^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9_-]+$ ]]; then
+          elif [[ "$BRANCH_NAME" =~ ^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9._-]+$ ]]; then
             echo "✅ Branch name '$BRANCH_NAME' follows the naming convention."
           else
             echo "❌ Branch name '$BRANCH_NAME' does not follow the naming convention: <type>/<branch-name>"
@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -88,7 +88,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate Dart SDK versions in all pubspec.yaml files
         run: |
