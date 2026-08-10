@@ -16,6 +16,8 @@ class OpenFeatureEvent {
   final dynamic data;
   final DateTime timestamp;
   final ProviderMetadata? providerMetadata;
+  final FeatureProvider? provider;
+  final String? domain;
   final ErrorCode? errorCode;
 
   OpenFeatureEvent(
@@ -23,6 +25,9 @@ class OpenFeatureEvent {
     this.message, {
     this.data,
     this.providerMetadata,
+    this.provider,
+    this.domain,
     this.errorCode,
-  }) : timestamp = DateTime.now();
+    DateTime? timestamp,
+  }) : timestamp = timestamp ?? DateTime.now();
 }
