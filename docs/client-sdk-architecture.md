@@ -185,16 +185,42 @@ browser integration.
 
 ## Repository Migration
 
-Migration should be incremental:
+Migration follows a phased roadmap:
 
-1. Add this architecture and an API conformance matrix.
-2. Add the client package and its tests without moving the server package.
-3. Add repository-wide CI that discovers and validates every package.
-4. Configure independent publishing and changelog generation.
-5. Move the server package under `packages/` only in a dedicated compatibility
-   change, preserving its package name, imports, and published API.
-6. Rename the repository only after package paths, publishing, and external
-   links have been verified.
+1. **Architecture:** approve this architecture, package boundaries, naming
+   conventions, and API conformance matrix.
+2. **Additive client beta:** add `packages/openfeature_dart_client_sdk/` and its
+   tests without moving or renaming the server package at the repository root.
+3. **Independent automation:** make repository-wide CI discover every package,
+   then configure package-specific versions, changelogs, prereleases, and
+   publishing. Release tags must identify the package, for example
+   `openfeature_dart_server_sdk-v0.0.23` and
+   `openfeature_dart_client_sdk-v0.1.0-beta.1`.
+4. **Server relocation:** move the server source to
+   `packages/openfeature_dart_server_sdk/` in a dedicated compatibility change.
+   Its published name, `package:openfeature_dart_server_sdk/...` imports, and
+   public API remain unchanged.
+5. **Repository rename:** after package discovery, publishing, badges,
+   documentation, provider references, and external links have been verified,
+   rename `open-feature/dart-server-sdk` to `open-feature/dart-sdk`.
+
+The final repository layout is:
+
+```text
+dart-sdk/
+|-- packages/
+|   |-- openfeature_dart_server_sdk/
+|   `-- openfeature_dart_client_sdk/
+|-- docs/
+`-- repository-level CI and release configuration
+```
+
+The repository rename and server relocation are roadmap commitments, not
+prerequisites for the additive client beta. Each phase requires its own pull
+request and must leave the previously published server package consumable. A
+shared package is introduced only when both SDKs require the same proven,
+specification-neutral contract; it is not created solely to complete the
+directory migration.
 
 This sequence keeps client development moving without coupling it to a risky
 server package relocation.
