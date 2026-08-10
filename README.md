@@ -53,7 +53,7 @@ favorite feature flag management tool.
 
 ### Requirements
 
-Dart language version: [3.11.4](https://dart.dev/get-dart/archive)
+Dart language version: [3.12.2](https://dart.dev/get-dart/archive)
 
 > [!NOTE]
 > The OpenFeature Dart Server SDK only supports the latest currently maintained
