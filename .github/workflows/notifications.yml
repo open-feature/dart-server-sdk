@@ -3,19 +3,17 @@ name: Notifications
 on:
   push:
     branches:
-     - main
-     - qa
-     - development
+      - main
+      - development
 
 jobs:
   notify:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write'
     
     steps:
       - name: Notify Google Chat
-        uses: SimonScholz/google-chat-action@main
+        uses: SimonScholz/google-chat-action@e90269b18c270452c57f8f6c6eebabc49ab27943
         with:
           webhookUrl: '${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}'

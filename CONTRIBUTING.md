@@ -173,22 +173,22 @@ We follow [Conventional Commits](https://www.conventionalcommits.org) to ensure 
 
 ---
 
-### **Branching Rules and Protection**
+### **Branching and Release Flow**
 
-To maintain consistency and ensure stability, we enforce the following **branch protection rules**:
+The repository currently uses two long-lived branches:
 
-#### **Protected Branches**
+- `development` is the integration and QA branch.
+- `main` is the protected production and release branch.
 
-- **Branches**: `main`, `qa`, `development`
+There is no `qa` branch. Validate changes on `development` before promoting
+them to `main`.
 
-- **Rules**:
-  - Direct **pushes** are not allowed.
-  - Changes must go through a **pull request** and pass all required checks before merging.
-  - At least **1 reviewer** must approve pull requests.
-  - Status checks:
-    - **Branch name validation** must pass.
-    - **Commit message validation** must pass.
-    - Relevant workflows (e.g., `main-workflow`, `qa-workflow`) must pass.
+The normal change path is:
+
+1. Open a pull request from a short-lived branch into `development`.
+2. Complete automated checks and development QA.
+3. Promote the tested `development` commit to `main` through a pull request.
+4. Satisfy the `main` ruleset, including its required status checks and review.
 
 #### **Unprotected Branches**
 - Feature and other short-lived branches (e.g., `feat/add-auth`, `fix/login-error`) are not protected.
@@ -197,7 +197,7 @@ To maintain consistency and ensure stability, we enforce the following **branch 
 #### **Branch Lifecycle**
 - **Feature, Fix, Hotfix, Test Branches**:
   - Created by developers for specific tasks.
-  - Merged into `main`, `qa`, or `development` branches through pull requests.
+  - Merged into `development` through pull requests.
   - Deleted after merging.
 
 ---
@@ -208,15 +208,15 @@ To maintain consistency and ensure stability, we enforce the following **branch 
    - Example: `feat/add-user-auth`.
    - Pushes to these branches are allowed without restrictions.
 
-2. **Pull Requests into Protected Branches**:
+2. **Pull Requests into Development**:
 
-   - Protected branches (`main`, `qa`, `development`) require pull requests.
+   - Open short-lived branches against `development` for integration and QA.
    - Pull requests trigger workflows for testing and validation.
 
-3. **Validation on Push and Pull Requests**:
+3. **Promotion to Main**:
    - Short-lived branches are validated when a pull request is opened or updated.
-   - `main`, `qa`, and `development` are validated again after merged changes are pushed.
-   - Protected branches also enforce workflow checks and reviews.
+   - `development` is validated again after merged changes are pushed.
+   - Only tested `development` changes are promoted to protected `main`.
 
 ---
 
@@ -365,7 +365,7 @@ Pull requests often receive feedback. Follow these steps to address requested ch
 3. **Rebase and Squash Commits**:
    - If your branch has multiple commits and needs to be cleaned up:
      ```bash
-     git rebase -i origin/qa
+     git rebase -i origin/development
      git push --force-with-lease
      ```
 
