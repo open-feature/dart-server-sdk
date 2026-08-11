@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:test/test.dart';
 import '../lib/open_feature_api.dart';
 import '../lib/feature_provider.dart';
@@ -140,6 +142,25 @@ class TestProvider implements FeatureProvider {
     Map<String, dynamic> defaultValue, {
     Map<String, dynamic>? context,
   }) async => throw UnimplementedError();
+}
+
+class DelayedTestProvider extends TestProvider {
+  final Completer<void> initializationStarted = Completer<void>();
+  final Completer<void> allowInitialization = Completer<void>();
+
+  DelayedTestProvider(
+    Map<String, dynamic> flags, {
+    required String providerName,
+  }) : super(flags, providerName: providerName);
+
+  @override
+  Future<void> initialize([Map<String, dynamic>? config]) async {
+    if (!initializationStarted.isCompleted) {
+      initializationStarted.complete();
+    }
+    await allowInitialization.future;
+    await super.initialize(config);
+  }
 }
 
 class TestHook extends OpenFeatureHook {
@@ -307,6 +328,29 @@ void main() {
         client.provider.metadata.name,
         equals(secondaryProvider.metadata.name),
       );
+    });
+
+    test('latest concurrent domain binding request wins', () async {
+      final api = OpenFeatureAPI();
+      final slowProvider = DelayedTestProvider({
+        'test': true,
+      }, providerName: 'slow-provider');
+      final fastProvider = TestProvider({
+        'test': false,
+      }, providerName: 'fast-provider');
+      api.registerProvider(slowProvider, providerId: 'slow');
+      api.registerProvider(fastProvider, providerId: 'fast');
+
+      final slowBinding = api.bindClientToProviderAndWait('checkout', 'slow');
+      await slowProvider.initializationStarted.future;
+      await api.bindClientToProviderAndWait('checkout', 'fast');
+
+      slowProvider.allowInitialization.complete();
+      await slowBinding;
+
+      final client = api.getClient('checkout', domain: 'checkout');
+      expect(identical(client.provider, fastProvider), isTrue);
+      expect(await client.getBooleanFlag('test'), isFalse);
     });
 
     test('emits events on provider change', () async {

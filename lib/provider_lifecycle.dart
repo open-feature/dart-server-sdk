@@ -32,11 +32,12 @@ class ProviderLifecycleEvent {
 /// Optional capability for providers that own their v0.9 lifecycle events.
 ///
 /// Providers implementing this interface must emit
-/// [ProviderLifecycleEventType.PROVIDER_READY] before initialization returns
-/// normally and [ProviderLifecycleEventType.PROVIDER_ERROR] before it returns
-/// abnormally. Providers that do not implement this interface use the
-/// deprecated legacy lifecycle adapter, which derives events from lifecycle
-/// return values.
+/// [ProviderLifecycleEventType.PROVIDER_READY] when initialization completes
+/// normally and [ProviderLifecycleEventType.PROVIDER_ERROR] when it completes
+/// abnormally. The event may be emitted during initialization or delivered
+/// asynchronously within the SDK's bounded lifecycle-event timeout afterward.
+/// Providers that do not implement this interface use the deprecated legacy
+/// lifecycle adapter, which derives events from lifecycle return values.
 abstract interface class ProviderEventSource {
   Stream<ProviderLifecycleEvent> get providerEvents;
 }
