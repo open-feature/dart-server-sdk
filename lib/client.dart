@@ -81,7 +81,15 @@ class FeatureClient {
        _transactionManager = transactionManager ?? TransactionContextManager() {
     if (_providerResolver == null &&
         providerStatus == ProviderState.NOT_READY) {
-      this.provider.initialize();
+      unawaited(
+        this.provider.initialize().catchError((Object error, StackTrace stack) {
+          _logger.severe(
+            'Provider initialization failed: $error',
+            error,
+            stack,
+          );
+        }),
+      );
     }
 
     if (eventStream != null) {
@@ -144,6 +152,7 @@ class FeatureClient {
         evaluationProvider.state;
     switch (state) {
       case ProviderState.NOT_READY:
+      case ProviderState.SHUTDOWN:
         throw const ProviderException(
           'Provider is not ready.',
           code: ErrorCode.PROVIDER_NOT_READY,
@@ -453,10 +462,10 @@ class FeatureClient {
     TrackingEventDetails? trackingDetails,
   }) async {
     _metrics.trackingEvents++;
-    final effectiveContext = _buildEffectiveContext(context);
-    final trackingProvider = provider;
 
     try {
+      final effectiveContext = _buildEffectiveContext(context);
+      final trackingProvider = provider;
       await trackingProvider.track(
         trackingEventName,
         evaluationContext: effectiveContext,

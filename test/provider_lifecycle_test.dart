@@ -163,12 +163,14 @@ class _EventProvider extends _LegacyProvider implements ProviderEventSource {
       StreamController<ProviderLifecycleEvent>.broadcast();
   final bool emitReady;
   final bool failInitialization;
+  final Duration readyEventDelay;
 
   _EventProvider(
     super.flags, {
     super.providerName,
     this.emitReady = true,
     this.failInitialization = false,
+    this.readyEventDelay = Duration.zero,
   });
 
   @override
@@ -194,12 +196,17 @@ class _EventProvider extends _LegacyProvider implements ProviderEventSource {
 
     _state = ProviderState.READY;
     if (emitReady) {
-      _events.add(
+      void emitReadyEvent() => _events.add(
         ProviderLifecycleEvent(
           ProviderLifecycleEventType.PROVIDER_READY,
           'Provider is ready.',
         ),
       );
+      if (readyEventDelay == Duration.zero) {
+        emitReadyEvent();
+      } else {
+        unawaited(Future<void>.delayed(readyEventDelay, emitReadyEvent));
+      }
     }
   }
 
@@ -214,13 +221,11 @@ class _DomainScopedProvider extends _EventProvider
 void main() {
   group('OpenFeature v0.9 provider lifecycle', () {
     setUp(() async {
-      OpenFeatureAPI.resetInstance();
-      await Future<void>.delayed(Duration.zero);
+      await OpenFeatureAPI.resetInstance();
     });
 
     tearDown(() async {
-      OpenFeatureAPI.resetInstance();
-      await Future<void>.delayed(Duration.zero);
+      await OpenFeatureAPI.resetInstance();
     });
 
     test('provider event updates status before API handlers run', () async {
@@ -246,7 +251,7 @@ void main() {
     });
 
     test(
-      'event-capable provider must emit before initialize returns',
+      'event-capable provider must emit within the lifecycle timeout',
       () async {
         final api = OpenFeatureAPI();
         final provider = _EventProvider({'flag': true}, emitReady: false);
@@ -263,7 +268,7 @@ void main() {
             isA<ProviderException>().having(
               (error) => error.message,
               'message',
-              contains('did not emit a lifecycle event'),
+              contains('did not emit a lifecycle event within'),
             ),
           ),
         );
@@ -298,6 +303,21 @@ void main() {
       expect(events.single.errorCode, ErrorCode.PROVIDER_FATAL);
       await subscription.cancel();
     });
+
+    test(
+      'accepts a lifecycle event emitted shortly after initialize',
+      () async {
+        final api = OpenFeatureAPI();
+        final provider = _EventProvider({
+          'flag': true,
+        }, readyEventDelay: const Duration(milliseconds: 20));
+
+        await api.setProviderAndWait(provider);
+
+        expect(api.providerStatus, ProviderState.READY);
+        expect(provider.initializeCount, 1);
+      },
+    );
 
     test(
       'legacy providers retain synthesized lifecycle compatibility',
@@ -432,6 +452,90 @@ void main() {
         expect(replacement.shutdownCount, 0);
       },
     );
+
+    test('event provider can be rebound after final shutdown', () async {
+      final api = OpenFeatureAPI();
+      final provider = _EventProvider({'flag': true}, providerName: 'first');
+      final replacement = _EventProvider({
+        'flag': false,
+      }, providerName: 'replacement');
+
+      await api.setProviderAndWait(provider);
+      await api.setProviderAndWait(replacement);
+      await api.setProviderAndWait(provider);
+
+      expect(provider.initializeCount, 2);
+      expect(provider.shutdownCount, 1);
+      expect(api.providerStatus, ProviderState.READY);
+    });
+
+    test('legacy provider can be rebound after final shutdown', () async {
+      final api = OpenFeatureAPI();
+      final provider = _LegacyProvider({'flag': true}, providerName: 'first');
+      final replacement = _LegacyProvider({
+        'flag': false,
+      }, providerName: 'replacement');
+
+      await api.setProviderAndWait(provider);
+      await api.setProviderAndWait(replacement);
+      await api.setProviderAndWait(provider);
+
+      expect(provider.initializeCount, 2);
+      expect(provider.shutdownCount, 1);
+      expect(api.providerStatus, ProviderState.READY);
+    });
+
+    test('shut-down providers stop forwarding lifecycle events', () async {
+      final api = OpenFeatureAPI();
+      final provider = _EventProvider({'flag': true}, providerName: 'first');
+      final replacement = _EventProvider({
+        'flag': false,
+      }, providerName: 'replacement');
+      final forwarded = <OpenFeatureEvent>[];
+      final subscription = api.events.listen((event) {
+        if (identical(event.provider, provider)) {
+          forwarded.add(event);
+        }
+      });
+
+      await api.setProviderAndWait(provider);
+      await api.setProviderAndWait(replacement);
+      forwarded.clear();
+      provider.emit(
+        ProviderLifecycleEvent(
+          ProviderLifecycleEventType.PROVIDER_STALE,
+          'Stale after shutdown.',
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(forwarded, isEmpty);
+      await subscription.cancel();
+    });
+
+    test('non-wait binding activates only after provider readiness', () async {
+      final api = OpenFeatureAPI();
+      final provider = _EventProvider(
+        {'flag': true},
+        providerName: 'delayed',
+        readyEventDelay: const Duration(milliseconds: 20),
+      );
+      api.registerProvider(provider, providerId: 'delayed');
+      final client = api.getClient('checkout', domain: 'checkout');
+      final configured = api.events.firstWhere(
+        (event) =>
+            event.type == OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED &&
+            event.domain == 'checkout',
+      );
+
+      api.bindClientToProvider('checkout', 'delayed');
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+
+      expect(identical(client.provider, provider), isFalse);
+      await configured;
+      expect(identical(client.provider, provider), isTrue);
+      expect(client.providerStatus, ProviderState.READY);
+    });
 
     test('domain-scoped provider rejects a second domain', () async {
       final api = OpenFeatureAPI();

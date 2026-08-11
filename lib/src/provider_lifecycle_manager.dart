@@ -13,6 +13,8 @@ typedef ProviderLifecycleEventHandler =
 /// Providers without that capability are supported by a deprecated compatibility
 /// path that derives ready/error events from lifecycle return values and state.
 class ProviderLifecycleManager {
+  static const Duration _lifecycleEventTimeout = Duration(seconds: 1);
+
   final ProviderLifecycleEventHandler _onProviderEvent;
   final HashMap<FeatureProvider, _ProviderLifecycleRecord> _records =
       HashMap.identity();
@@ -41,6 +43,12 @@ class ProviderLifecycleManager {
 
   bool usesLegacyLifecycle(FeatureProvider provider) =>
       _recordFor(provider).usesLegacyLifecycle;
+
+  /// Starts lifecycle tracking without relying on a status lookup for its
+  /// side effect.
+  void track(FeatureProvider provider) {
+    _recordFor(provider);
+  }
 
   void bindDefault(FeatureProvider provider) {
     _recordFor(provider).defaultBinding = true;
@@ -100,7 +108,7 @@ class ProviderLifecycleManager {
   ) async {
     var errorEventEmitted = false;
     try {
-      if (provider.state == ProviderState.NOT_READY) {
+      if (_normalizeState(provider.state) == ProviderState.NOT_READY) {
         await provider.initialize();
       }
 
@@ -158,7 +166,7 @@ class ProviderLifecycleManager {
     FeatureProvider provider,
     _ProviderLifecycleRecord record,
   ) async {
-    if (provider.state != ProviderState.NOT_READY) {
+    if (_normalizeState(provider.state) != ProviderState.NOT_READY) {
       throw ProviderException(
         'Provider is not ready for initialization: ${record.status.name}',
         code: _errorCodeForState(record.status) ?? ErrorCode.PROVIDER_NOT_READY,
@@ -177,16 +185,15 @@ class ProviderLifecycleManager {
       initializationStack = stackTrace;
     }
 
-    // Provider events can use an asynchronous stream controller. Yield once so
-    // an event emitted before initialize returned can reach the SDK listener.
-    await Future<void>.delayed(Duration.zero);
-    record.initializationSignal = null;
-
-    if (!signal.isCompleted) {
+    ProviderLifecycleEvent event;
+    try {
+      event = await signal.future.timeout(_lifecycleEventTimeout);
+    } on TimeoutException {
       Error.throwWithStackTrace(
         ProviderException(
           'Provider ${provider.metadata.name} did not emit a lifecycle event '
-          'before initialization completed.',
+          'within ${_lifecycleEventTimeout.inMilliseconds}ms of '
+          'initialization.',
           code: ErrorCode.GENERAL,
           details: {
             'expected': initializationError == null
@@ -198,9 +205,11 @@ class ProviderLifecycleManager {
         ),
         initializationStack ?? StackTrace.current,
       );
+    } finally {
+      if (identical(record.initializationSignal, signal)) {
+        record.initializationSignal = null;
+      }
     }
-
-    final event = await signal.future;
     if (initializationError != null) {
       if (event.type != ProviderLifecycleEventType.PROVIDER_ERROR) {
         throw ProviderException(
@@ -273,9 +282,18 @@ class ProviderLifecycleManager {
     FeatureProvider provider,
     _ProviderLifecycleRecord record,
   ) async {
-    await provider.shutdown();
-    // Shutdown is the one lifecycle transition inferred by the SDK in v0.9.
-    record.status = ProviderState.NOT_READY;
+    try {
+      await provider.shutdown();
+      // Shutdown is the one lifecycle transition inferred by the SDK in v0.9.
+      record.status = ProviderState.NOT_READY;
+    } finally {
+      await record.eventSubscription?.cancel();
+      record.eventSubscription = null;
+      record.lifecycleObserved = false;
+      if (identical(_records[provider], record)) {
+        _records.remove(provider);
+      }
+    }
   }
 
   Future<void> dispose() async {

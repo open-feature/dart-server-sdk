@@ -159,19 +159,28 @@ class TestHook extends OpenFeatureHook {
 void main() {
   group('OpenFeatureAPI', () {
     setUp(() async {
-      OpenFeatureAPI.resetInstance();
-      await Future.delayed(Duration(milliseconds: 1));
+      await OpenFeatureAPI.resetInstance();
     });
 
     tearDown(() async {
-      OpenFeatureAPI.resetInstance();
-      await Future.delayed(Duration(milliseconds: 1));
+      await OpenFeatureAPI.resetInstance();
     });
 
     test('singleton instance', () {
       final api1 = OpenFeatureAPI();
       final api2 = OpenFeatureAPI();
       expect(identical(api1, api2), isTrue);
+    });
+
+    test('reset awaits disposal before creating a replacement', () async {
+      final original = OpenFeatureAPI();
+      final eventsDone = original.events.drain<void>();
+
+      await OpenFeatureAPI.resetInstance();
+      await eventsDone;
+      final replacement = OpenFeatureAPI();
+
+      expect(identical(original, replacement), isFalse);
     });
 
     test('sets and gets provider', () async {
@@ -285,7 +294,13 @@ void main() {
 
       await api.setProvider(defaultProvider);
       api.registerProvider(secondaryProvider);
+      final configured = api.events.firstWhere(
+        (event) =>
+            event.type == OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED &&
+            event.domain == 'checkout',
+      );
       api.bindClientToProvider('checkout', secondaryProvider.metadata.name);
+      await configured;
 
       final client = api.getClient('checkout', domain: 'checkout');
       expect(
