@@ -8,6 +8,8 @@ class TestProvider implements FeatureProvider {
   final String _providerName;
   ProviderState _state;
   final bool _shouldFailInitialization;
+  Map<String, dynamic>? lastEvaluationContext;
+  int booleanEvaluationCount = 0;
 
   TestProvider(
     this._flags, {
@@ -69,6 +71,8 @@ class TestProvider implements FeatureProvider {
     bool defaultValue, {
     Map<String, dynamic>? context,
   }) async {
+    booleanEvaluationCount++;
+    lastEvaluationContext = context == null ? null : {...context};
     if (_state != ProviderState.READY) {
       return FlagEvaluationResult.error(
         flagKey,
@@ -198,6 +202,41 @@ void main() {
       expect(merged.attributes['local'], equals('value'));
     });
 
+    test(
+      'existing clients use later global context and targeting-key changes',
+      () async {
+        final api = OpenFeatureAPI();
+        final provider = TestProvider({'test-flag': true});
+        await api.setProviderAndWait(provider);
+        api.setGlobalContext(
+          OpenFeatureEvaluationContext({
+            'version': 'first',
+          }, targetingKey: 'first-user'),
+        );
+        final client = api.getClient('test-client');
+
+        await client.getBooleanFlag('test-flag');
+        expect(provider.lastEvaluationContext?['version'], equals('first'));
+        expect(
+          provider.lastEvaluationContext?['targetingKey'],
+          equals('first-user'),
+        );
+
+        api.setGlobalContext(
+          OpenFeatureEvaluationContext({
+            'version': 'second',
+          }, targetingKey: 'second-user'),
+        );
+        await client.getBooleanFlag('test-flag');
+
+        expect(provider.lastEvaluationContext?['version'], equals('second'));
+        expect(
+          provider.lastEvaluationContext?['targetingKey'],
+          equals('second-user'),
+        );
+      },
+    );
+
     test('evaluates boolean flag with hooks using new API', () async {
       final api = OpenFeatureAPI();
       final provider = TestProvider({'test-flag': true});
@@ -237,14 +276,12 @@ void main() {
 
     test('routes domain-bound clients to registered providers', () async {
       final api = OpenFeatureAPI();
-      final defaultProvider = TestProvider(
-        {'test': true},
-        providerName: 'default-provider',
-      );
-      final secondaryProvider = TestProvider(
-        {'test': false},
-        providerName: 'secondary-provider',
-      );
+      final defaultProvider = TestProvider({
+        'test': true,
+      }, providerName: 'default-provider');
+      final secondaryProvider = TestProvider({
+        'test': false,
+      }, providerName: 'secondary-provider');
 
       await api.setProvider(defaultProvider);
       api.registerProvider(secondaryProvider);

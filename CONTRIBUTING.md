@@ -82,6 +82,10 @@ Follow these conventions when creating branches for pull requests:
 <type>/<branch-name>
 ```
 
+Branch names may contain lowercase letters, digits, periods, underscores, and
+hyphens. Periods are useful when the branch name includes a semantic version,
+for example `chore/dart-sdk-3.12.2`.
+
 | **Branch Type** | **Purpose**                                                                                         |
 |-----------------|-----------------------------------------------------------------------------------------------------|
 | `feat`          | For new features under development. Example: `feat/add-auth-module`.                                |
@@ -90,6 +94,9 @@ Follow these conventions when creating branches for pull requests:
 | `chore`         | For maintenance tasks, such as dependency updates or refactoring. Example: `chore/update-dependencies`. |
 | `release`       | For preparing release branches with versioned changes. Example: `release/v1.2.0`.                   |
 | `test`          | For testing-related changes, such as adding or modifying test cases. Example: `test/add-unit-tests`.|
+| `docs`          | For documentation-only changes. Example: `docs/update-installation`.                               |
+| `ci`            | For CI and workflow maintenance. Example: `ci/dedupe-validation`.                                  |
+| `admin`         | For administrative maintenance. Example: `admin/update-policy`.                                   |
 
 ---
 
@@ -103,6 +110,9 @@ Follow these conventions when creating branches for pull requests:
 | `chore`           | `chore/upgrade-dependencies`       |
 | `test`            | `test/add-integration-tests`       |
 | `release`         | `release/v1.2.0`                   |
+| `docs`            | `docs/update-installation`         |
+| `ci`              | `ci/dedupe-validation`             |
+| `admin`           | `admin/update-policy`              |
 
 ---
 
@@ -131,6 +141,9 @@ We follow [Conventional Commits](https://www.conventionalcommits.org) to ensure 
 | `test`        | `test`                 | Adds or updates tests. Example: `test(api): add integration tests`.            |
 | `refactor`    | `refactor`             | Code restructuring without functional changes. Example: `refactor(ui): improve layout`. |
 | `release`     | `release`              | Prepares a versioned release. Example: `release: v1.2.0`.                      |
+| `docs`        | `docs`                 | Updates documentation. Example: `docs(api): clarify evaluation context`.      |
+| `ci`          | `ci`                   | Updates CI or automation. Example: `ci: cancel stale validation runs`.         |
+| `admin`       | `admin`                | Administrative maintenance. Example: `admin: update repository policy`.       |
 
 ---
 
@@ -201,7 +214,8 @@ To maintain consistency and ensure stability, we enforce the following **branch 
    - Pull requests trigger workflows for testing and validation.
 
 3. **Validation on Push and Pull Requests**:
-   - Branch name and commit message validations are run on all branches during pushes.
+   - Short-lived branches are validated when a pull request is opened or updated.
+   - `main`, `qa`, and `development` are validated again after merged changes are pushed.
    - Protected branches also enforce workflow checks and reviews.
 
 ---
@@ -315,7 +329,7 @@ To certify your contribution, you must add a `Signed-off-by` line to your commit
 
 6. **Open a Pull Request**:
    - Navigate to the repository on GitHub.
-   - Open a pull request targeting the `qa` branch.
+   - Open a pull request targeting the `development` branch.
    - Provide a clear title and description summarizing your changes, including:
      - The problem your changes solve.
      - The approach you used.
