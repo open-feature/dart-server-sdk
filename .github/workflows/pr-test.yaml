@@ -43,3 +43,23 @@ jobs:
 
       - name: Run tests
         run: dart test
+
+  minimum-dependencies:
+    name: minimum dependencies
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        with:
+          sdk: 3.12.2
+
+      - name: Install minimum dependencies
+        run: dart pub downgrade
+
+      - name: Analyze
+        run: dart analyze
+
+      - name: Run tests
+        run: dart test
