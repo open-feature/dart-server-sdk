@@ -11,13 +11,23 @@ import 'provider_lifecycle.dart';
 import 'src/provider_lifecycle_manager.dart';
 
 class OpenFeatureEvaluationContext {
+  final String? targetingKey;
   final Map<String, dynamic> attributes;
 
-  OpenFeatureEvaluationContext(this.attributes);
+  OpenFeatureEvaluationContext(
+    Map<String, dynamic> attributes, {
+    this.targetingKey,
+  }) : attributes = Map.unmodifiable(Map.of(attributes));
 
   OpenFeatureEvaluationContext merge(OpenFeatureEvaluationContext other) {
-    return OpenFeatureEvaluationContext({...attributes, ...other.attributes});
+    return OpenFeatureEvaluationContext({
+      ...attributes,
+      ...other.attributes,
+    }, targetingKey: other.targetingKey ?? targetingKey);
   }
+
+  EvaluationContext toEvaluationContext() =>
+      EvaluationContext(targetingKey: targetingKey, attributes: attributes);
 }
 
 abstract class OpenFeatureHook {
@@ -370,6 +380,9 @@ class OpenFeatureAPI {
     FeatureProvider resolveProvider() =>
         _resolveProviderForClient(name, domain);
     final selectedProvider = resolveProvider();
+    EvaluationContext resolveApiContext() =>
+        _globalContext?.toEvaluationContext() ??
+        const EvaluationContext(attributes: {});
 
     final hookManager = HookManager();
     for (final hook in _hooks) {
@@ -379,9 +392,8 @@ class OpenFeatureAPI {
     return FeatureClient(
       metadata: ClientMetadata(name: name),
       hookManager: hookManager,
-      apiContext: _globalContext != null
-          ? EvaluationContext(attributes: _globalContext!.attributes)
-          : const EvaluationContext(attributes: {}),
+      apiContext: resolveApiContext(),
+      apiContextResolver: resolveApiContext,
       defaultContext: const EvaluationContext(attributes: {}),
       provider: selectedProvider,
       providerResolver: resolveProvider,

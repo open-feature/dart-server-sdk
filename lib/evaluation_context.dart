@@ -169,6 +169,23 @@ class EvaluationContext {
     this.cacheDuration = const Duration(minutes: 5),
   });
 
+  /// Return the complete context in the legacy provider-map representation.
+  ///
+  /// Parent fields have the lowest precedence. The targeting key is emitted as
+  /// `targetingKey` so providers using the map-based compatibility interface do
+  /// not lose the subject of the evaluation.
+  Map<String, dynamic> toProviderContext() {
+    final result = <String, dynamic>{
+      ...parent?.toProviderContext() ?? const <String, dynamic>{},
+      ...attributes,
+    };
+    final effectiveTargetingKey = targetingKey ?? parent?.targetingKey;
+    if (effectiveTargetingKey != null) {
+      result['targetingKey'] = effectiveTargetingKey;
+    }
+    return result;
+  }
+
   /// Get an attribute value, checking parent context if not found
   dynamic getAttribute(String key) {
     return attributes[key] ?? parent?.getAttribute(key);

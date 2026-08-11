@@ -50,6 +50,7 @@ class FeatureClient {
   final HookManager _hookManager;
   final EvaluationContext _defaultContext;
   final EvaluationContext _apiContext;
+  final EvaluationContext Function()? _apiContextResolver;
   final FeatureProvider _fallbackProvider;
   final FeatureProvider Function()? _providerResolver;
   final ProviderState Function(FeatureProvider)? _providerStatusResolver;
@@ -64,6 +65,7 @@ class FeatureClient {
     required HookManager hookManager,
     required EvaluationContext defaultContext,
     EvaluationContext? apiContext,
+    EvaluationContext Function()? apiContextResolver,
     FeatureProvider? provider,
     FeatureProvider Function()? providerResolver,
     ProviderState Function(FeatureProvider)? providerStatusResolver,
@@ -72,6 +74,7 @@ class FeatureClient {
   }) : _hookManager = hookManager,
        _defaultContext = defaultContext,
        _apiContext = apiContext ?? const EvaluationContext(attributes: {}),
+       _apiContextResolver = apiContextResolver,
        _fallbackProvider = provider ?? InMemoryProvider({}),
        _providerResolver = providerResolver,
        _providerStatusResolver = providerStatusResolver,
@@ -125,13 +128,34 @@ class FeatureClient {
     _hookManager.removeHook(hook);
   }
 
-  Map<String, dynamic> _buildEffectiveContext(Map<String, dynamic>? context) {
+  Map<String, dynamic> _buildEffectiveContext(EvaluationContext? context) {
+    final apiContext = _apiContextResolver?.call() ?? _apiContext;
     return {
-      ..._apiContext.attributes,
+      ...apiContext.toProviderContext(),
       ..._transactionManager.currentContext?.effectiveAttributes ?? {},
-      ..._defaultContext.attributes,
-      ...context ?? {},
+      ..._defaultContext.toProviderContext(),
+      ...context?.toProviderContext() ?? {},
     };
+  }
+
+  void _ensureProviderCanEvaluate(FeatureProvider evaluationProvider) {
+    final state =
+        _providerStatusResolver?.call(evaluationProvider) ??
+        evaluationProvider.state;
+    switch (state) {
+      case ProviderState.NOT_READY:
+        throw const ProviderException(
+          'Provider is not ready.',
+          code: ErrorCode.PROVIDER_NOT_READY,
+        );
+      case ProviderState.FATAL:
+        throw const ProviderException(
+          'Provider is in an irrecoverable error state.',
+          code: ErrorCode.PROVIDER_FATAL,
+        );
+      default:
+        return;
+    }
   }
 
   FlagValueType _inferFlagValueType<T>(T defaultValue) {
@@ -202,10 +226,10 @@ class FeatureClient {
     T defaultValue,
     Future<FlagEvaluationResult<T>> Function(Map<String, dynamic>?) evaluator, {
     required FeatureProvider evaluationProvider,
-    Map<String, dynamic>? context,
+    EvaluationContext? context,
   }) async {
     final startTime = DateTime.now();
-    var effectiveContext = _buildEffectiveContext(context);
+    var effectiveContext = <String, dynamic>{};
     final hookData = HookData();
     final flagValueType = _inferFlagValueType(defaultValue);
     FlagEvaluationResult<T>? finalResult;
@@ -214,6 +238,7 @@ class FeatureClient {
     _metrics.flagEvaluations++;
 
     try {
+      effectiveContext = _buildEffectiveContext(context);
       effectiveContext = await _hookManager.executeHooks(
         HookStage.BEFORE,
         flagKey,
@@ -225,6 +250,7 @@ class FeatureClient {
         hookData: hookData,
       );
 
+      _ensureProviderCanEvaluate(evaluationProvider);
       finalResult = await evaluator(effectiveContext);
       evaluationDetails = _createEvaluationDetails(finalResult);
 
@@ -318,7 +344,7 @@ class FeatureClient {
     T defaultValue,
     Future<FlagEvaluationResult<T>> Function(Map<String, dynamic>?) evaluator, {
     required FeatureProvider evaluationProvider,
-    Map<String, dynamic>? context,
+    EvaluationContext? context,
   }) async {
     final result = await _evaluateFlagResult(
       flagKey,
@@ -346,7 +372,7 @@ class FeatureClient {
         context: ctx,
       ),
       evaluationProvider: evaluationProvider,
-      context: context?.attributes,
+      context: context,
     );
   }
 
@@ -363,7 +389,7 @@ class FeatureClient {
       (ctx) =>
           evaluationProvider.getStringFlag(flagKey, defaultValue, context: ctx),
       evaluationProvider: evaluationProvider,
-      context: context?.attributes,
+      context: context,
     );
   }
 
@@ -383,7 +409,7 @@ class FeatureClient {
         context: ctx,
       ),
       evaluationProvider: evaluationProvider,
-      context: context?.attributes,
+      context: context,
     );
   }
 
@@ -400,7 +426,7 @@ class FeatureClient {
       (ctx) =>
           evaluationProvider.getDoubleFlag(flagKey, defaultValue, context: ctx),
       evaluationProvider: evaluationProvider,
-      context: context?.attributes,
+      context: context,
     );
   }
 
@@ -416,7 +442,7 @@ class FeatureClient {
       (ctx) =>
           evaluationProvider.getObjectFlag(flagKey, defaultValue, context: ctx),
       evaluationProvider: evaluationProvider,
-      context: context?.attributes,
+      context: context,
     );
   }
 
@@ -427,7 +453,7 @@ class FeatureClient {
     TrackingEventDetails? trackingDetails,
   }) async {
     _metrics.trackingEvents++;
-    final effectiveContext = _buildEffectiveContext(context?.attributes);
+    final effectiveContext = _buildEffectiveContext(context);
     final trackingProvider = provider;
 
     try {
@@ -475,7 +501,7 @@ extension ClientEvaluationDetails on FeatureClient {
         context: ctx,
       ),
       evaluationProvider: evaluationProvider,
-      context: context?.attributes,
+      context: context,
     );
 
     return FlagEvaluationDetails.fromResult(result);
@@ -494,7 +520,7 @@ extension ClientEvaluationDetails on FeatureClient {
       (ctx) =>
           evaluationProvider.getStringFlag(flagKey, defaultValue, context: ctx),
       evaluationProvider: evaluationProvider,
-      context: context?.attributes,
+      context: context,
     );
 
     return FlagEvaluationDetails.fromResult(result);
@@ -516,7 +542,7 @@ extension ClientEvaluationDetails on FeatureClient {
         context: ctx,
       ),
       evaluationProvider: evaluationProvider,
-      context: context?.attributes,
+      context: context,
     );
 
     return FlagEvaluationDetails.fromResult(result);
@@ -535,7 +561,7 @@ extension ClientEvaluationDetails on FeatureClient {
       (ctx) =>
           evaluationProvider.getDoubleFlag(flagKey, defaultValue, context: ctx),
       evaluationProvider: evaluationProvider,
-      context: context?.attributes,
+      context: context,
     );
 
     return FlagEvaluationDetails.fromResult(result);
@@ -554,7 +580,7 @@ extension ClientEvaluationDetails on FeatureClient {
       (ctx) =>
           evaluationProvider.getObjectFlag(flagKey, defaultValue, context: ctx),
       evaluationProvider: evaluationProvider,
-      context: context?.attributes,
+      context: context,
     );
 
     return FlagEvaluationDetails.fromResult(result);
