@@ -10,8 +10,10 @@ void main() {
     });
 
     test('evaluates IN_LIST operator', () {
-      final rule = TargetingRule(
-          'role', TargetingOperator.IN_LIST, ['admin', 'superuser']);
+      final rule = TargetingRule('role', TargetingOperator.IN_LIST, [
+        'admin',
+        'superuser',
+      ]);
       expect(rule.evaluate({'role': 'admin'}), isTrue);
       expect(rule.evaluate({'role': 'user'}), isFalse);
     });
@@ -36,9 +38,30 @@ void main() {
   });
 
   group('EvaluationContext', () {
+    test(
+      'provider context preserves inherited targeting key and attributes',
+      () {
+        final parent = EvaluationContext(
+          targetingKey: 'parent-user',
+          attributes: {'region': 'us', 'shared': 'parent'},
+        );
+        final child = parent.createChild({'shared': 'child'});
+
+        expect(
+          child.toProviderContext(),
+          equals({
+            'region': 'us',
+            'shared': 'child',
+            'targetingKey': 'parent-user',
+          }),
+        );
+      },
+    );
+
     test('retrieves attributes from parent context', () {
-      final parent =
-          EvaluationContext(attributes: {'env': 'prod', 'shared': 'parent'});
+      final parent = EvaluationContext(
+        attributes: {'env': 'prod', 'shared': 'parent'},
+      );
 
       final child = EvaluationContext(
         attributes: {'region': 'EU', 'shared': 'child'},
