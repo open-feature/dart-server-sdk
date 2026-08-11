@@ -27,7 +27,7 @@ enum ExtensionState {
   ACTIVE,
   ERROR,
   DISABLED,
-  UNREGISTERED
+  UNREGISTERED,
 }
 
 /// Extension metadata
@@ -62,8 +62,8 @@ class ExtensionEvent {
     required this.state,
     String? message,
     this.error,
-  })  : timestamp = DateTime.now(),
-        message = message ?? 'Extension state changed to ${state.name}';
+  }) : timestamp = DateTime.now(),
+       message = message ?? 'Extension state changed to ${state.name}';
 }
 
 /// Abstract extension interface
@@ -206,11 +206,9 @@ class ExtensionRegistry {
   List<String> getRegisteredExtensions() => List.unmodifiable(_extensions.keys);
 
   void _emitEvent(String id, ExtensionState state, {Object? error}) {
-    _eventController.add(ExtensionEvent(
-      extensionId: id,
-      state: state,
-      error: error,
-    ));
+    _eventController.add(
+      ExtensionEvent(extensionId: id, state: state, error: error),
+    );
   }
 
   Future<void> dispose() async {

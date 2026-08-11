@@ -38,10 +38,7 @@ class Domain {
 
   Map<String, dynamic> get effectiveSettings {
     final parentSettings = parent?.effectiveSettings ?? {};
-    return {
-      ...parentSettings,
-      ...config.settings,
-    };
+    return {...parentSettings, ...config.settings};
   }
 
   bool isChildOf(Domain other) {

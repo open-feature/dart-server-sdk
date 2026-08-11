@@ -22,10 +22,7 @@ void main() {
     });
 
     test('handles cleanup timer', () async {
-      final context = TransactionContext(
-        transactionId: 'test',
-        attributes: {},
-      );
+      final context = TransactionContext(transactionId: 'test', attributes: {});
 
       context.scheduleCleanup(Duration(milliseconds: 100));
       await Future.delayed(Duration(milliseconds: 150));
@@ -107,10 +104,7 @@ void main() {
 
       manager.pushContext(parent);
 
-      final child = manager.createChildContext(
-        'child',
-        {'child': 'value'},
-      );
+      final child = manager.createChildContext('child', {'child': 'value'});
 
       expect(child.parent, equals(parent));
       expect(child.effectiveAttributes['parent'], equals('value'));
@@ -118,15 +112,13 @@ void main() {
     });
 
     test('cleans up all contexts', () {
-      manager.pushContext(TransactionContext(
-        transactionId: 'tx1',
-        attributes: {},
-      ));
+      manager.pushContext(
+        TransactionContext(transactionId: 'tx1', attributes: {}),
+      );
 
-      manager.pushContext(TransactionContext(
-        transactionId: 'tx2',
-        attributes: {},
-      ));
+      manager.pushContext(
+        TransactionContext(transactionId: 'tx2', attributes: {}),
+      );
 
       manager.cleanup();
       expect(manager.currentContext, isNull);

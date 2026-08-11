@@ -34,9 +34,7 @@ void main() {
 
   group('EventFilter', () {
     test('matches event based on type', () {
-      final filter = EventFilter(
-        types: {OpenFeatureEventType.flagEvaluated},
-      );
+      final filter = EventFilter(types: {OpenFeatureEventType.flagEvaluated});
 
       final matchingEvent = OpenFeatureEvent(
         id: 'test-1',
@@ -107,21 +105,27 @@ void main() {
     });
 
     test('respects max queue size', () {
-      eventBus.publish(OpenFeatureEvent(
-        id: '1',
-        type: OpenFeatureEventType.flagEvaluated,
-        data: {},
-      ));
-      eventBus.publish(OpenFeatureEvent(
-        id: '2',
-        type: OpenFeatureEventType.flagEvaluated,
-        data: {},
-      ));
-      eventBus.publish(OpenFeatureEvent(
-        id: '3',
-        type: OpenFeatureEventType.flagEvaluated,
-        data: {},
-      ));
+      eventBus.publish(
+        OpenFeatureEvent(
+          id: '1',
+          type: OpenFeatureEventType.flagEvaluated,
+          data: {},
+        ),
+      );
+      eventBus.publish(
+        OpenFeatureEvent(
+          id: '2',
+          type: OpenFeatureEventType.flagEvaluated,
+          data: {},
+        ),
+      );
+      eventBus.publish(
+        OpenFeatureEvent(
+          id: '3',
+          type: OpenFeatureEventType.flagEvaluated,
+          data: {},
+        ),
+      );
 
       final history = eventBus.getEventHistory();
       expect(history.length, equals(2));
@@ -133,20 +137,24 @@ void main() {
       final events = [];
       final subId = eventBus.subscribe((event) => events.add(event));
 
-      eventBus.publish(OpenFeatureEvent(
-        id: 'test-1',
-        type: OpenFeatureEventType.flagEvaluated,
-        data: {},
-      ));
+      eventBus.publish(
+        OpenFeatureEvent(
+          id: 'test-1',
+          type: OpenFeatureEventType.flagEvaluated,
+          data: {},
+        ),
+      );
 
       await Future.delayed(Duration.zero);
       eventBus.unsubscribe(subId);
 
-      eventBus.publish(OpenFeatureEvent(
-        id: 'test-2',
-        type: OpenFeatureEventType.flagEvaluated,
-        data: {},
-      ));
+      eventBus.publish(
+        OpenFeatureEvent(
+          id: 'test-2',
+          type: OpenFeatureEventType.flagEvaluated,
+          data: {},
+        ),
+      );
 
       await Future.delayed(Duration.zero);
       expect(events.length, equals(1));

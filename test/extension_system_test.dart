@@ -8,11 +8,11 @@ class TestExtension implements Extension {
 
   @override
   ExtensionMetadata get metadata => ExtensionMetadata(
-        id: 'test-extension',
-        version: '1.0.0',
-        author: 'Test Author',
-        description: 'Test Extension',
-      );
+    id: 'test-extension',
+    version: '1.0.0',
+    author: 'Test Author',
+    description: 'Test Extension',
+  );
 
   @override
   Future<void> initialize(ExtensionConfig config) async {
@@ -42,10 +42,7 @@ void main() {
     setUp(() {
       registry = ExtensionRegistry();
       extension = TestExtension();
-      config = ExtensionConfig(
-        id: 'test-extension',
-        version: '1.0.0',
-      );
+      config = ExtensionConfig(id: 'test-extension', version: '1.0.0');
     });
 
     test('registers and initializes extension', () async {
@@ -54,7 +51,9 @@ void main() {
       expect(extension.initialized, isTrue);
       expect(extension.started, isTrue);
       expect(
-          registry.getState('test-extension'), equals(ExtensionState.ACTIVE));
+        registry.getState('test-extension'),
+        equals(ExtensionState.ACTIVE),
+      );
 
       // Clean up
       await registry.unregister('test-extension');
@@ -64,17 +63,23 @@ void main() {
       await registry.register(extension, config);
 
       expect(
-          registry.getState('test-extension'), equals(ExtensionState.ACTIVE));
+        registry.getState('test-extension'),
+        equals(ExtensionState.ACTIVE),
+      );
 
       await registry.disableExtension('test-extension');
       expect(extension.started, isFalse);
       expect(
-          registry.getState('test-extension'), equals(ExtensionState.DISABLED));
+        registry.getState('test-extension'),
+        equals(ExtensionState.DISABLED),
+      );
 
       await registry.enableExtension('test-extension');
       expect(extension.started, isTrue);
       expect(
-          registry.getState('test-extension'), equals(ExtensionState.ACTIVE));
+        registry.getState('test-extension'),
+        equals(ExtensionState.ACTIVE),
+      );
 
       // Clean up
       await registry.unregister('test-extension');
@@ -115,8 +120,9 @@ void main() {
 
     test('emits events', () async {
       final events = <ExtensionState>[];
-      final subscription =
-          registry.events.listen((event) => events.add(event.state));
+      final subscription = registry.events.listen(
+        (event) => events.add(event.state),
+      );
 
       await registry.register(extension, config);
       await registry.disableExtension('test-extension');
@@ -125,13 +131,14 @@ void main() {
       await Future.delayed(Duration(milliseconds: 100));
 
       expect(
-          events,
-          containsAllInOrder([
-            ExtensionState.REGISTERED,
-            ExtensionState.LOADING,
-            ExtensionState.ACTIVE,
-            ExtensionState.DISABLED,
-          ]));
+        events,
+        containsAllInOrder([
+          ExtensionState.REGISTERED,
+          ExtensionState.LOADING,
+          ExtensionState.ACTIVE,
+          ExtensionState.DISABLED,
+        ]),
+      );
 
       // Clean up
       await subscription.cancel();
