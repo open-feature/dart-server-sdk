@@ -51,6 +51,10 @@ jobs:
           echo "Checking for outdated dependencies..."
           dart pub outdated || true
 
+      - name: Verify Dart Formatting
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: dart format --output=none --set-exit-if-changed .
+
       - name: Run Static Analysis (capture and show)
         id: analyze
         working-directory: ${{ steps.pkg.outputs.dir }}
@@ -59,7 +63,7 @@ jobs:
           set -o pipefail
           echo "Running static analysis for core SDK..."
           set +e
-          { dart analyze lib/ | tee analysis_report.txt; } 2> >(tee error_log.txt >&2)
+          { dart analyze | tee analysis_report.txt; } 2> >(tee error_log.txt >&2)
           STATUS=${PIPESTATUS[0]}
           set -e
           echo "status=$STATUS" >> "$GITHUB_OUTPUT"

@@ -53,20 +53,18 @@ void main() {
 
   group('LoggerFactory', () {
     test('throws when no configuration found', () {
-      expect(
-        () => LoggerFactory.getLogger('unknown'),
-        throwsStateError,
-      );
+      expect(() => LoggerFactory.getLogger('unknown'), throwsStateError);
     });
 
     test('configures logger with custom handler', () {
       final entries = <StructuredLogEntry>[];
       LoggerFactory.configure(
-          'test',
-          LoggerConfig(
-            level: Level.INFO,
-            customHandler: (entry) => entries.add(entry),
-          ));
+        'test',
+        LoggerConfig(
+          level: Level.INFO,
+          customHandler: (entry) => entries.add(entry),
+        ),
+      );
 
       final logger = LoggerFactory.getLogger('test');
       final testEntry = StructuredLogEntry(

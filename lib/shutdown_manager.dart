@@ -8,7 +8,7 @@ enum ShutdownPhase {
   RESOURCE_CLEANUP,
   CONTEXT_CLEANUP,
   EVENT_CLEANUP,
-  FINAL_CLEANUP
+  FINAL_CLEANUP,
 }
 
 class ShutdownHook {
@@ -75,7 +75,8 @@ class ShutdownManager {
           hook.timeout,
           onTimeout: () {
             throw TimeoutException(
-                'Hook ${hook.name} timed out after ${hook.timeout.inSeconds}s');
+              'Hook ${hook.name} timed out after ${hook.timeout.inSeconds}s',
+            );
           },
         );
       } catch (e, stack) {
@@ -90,7 +91,9 @@ class ShutdownManager {
 
     if (errors.isNotEmpty) {
       throw ShutdownError(
-          'Phase $phase completed with ${errors.length} errors', errors);
+        'Phase $phase completed with ${errors.length} errors',
+        errors,
+      );
     }
   }
 
@@ -130,8 +133,9 @@ class ShutdownManager {
             await hook.execute().timeout(const Duration(seconds: 1));
           } catch (e) {
             _logger.severe(
-                'Critical hook ${hook.name} failed during emergency shutdown',
-                e);
+              'Critical hook ${hook.name} failed during emergency shutdown',
+              e,
+            );
           }
         }
       }
