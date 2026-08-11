@@ -2,17 +2,11 @@ name: Coverage Workflow
 
 on:
   workflow_call:
-    inputs:
-      branch_name:
-        required: true
-        type: string
-      event_name:
-        required: true
-        type: string
 
 jobs:
   test-and-upload:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -31,12 +25,9 @@ jobs:
           mkdir -p coverage
           dart test --coverage=coverage
 
-      - name: Activate coverage package
-        run: dart pub global activate coverage
-
       - name: Generate LCOV report
         run: |
-          dart pub global run coverage:format_coverage \
+          dart run coverage:format_coverage \
             --in=coverage \
             --out=coverage/lcov.info \
             --lcov \
@@ -47,7 +38,7 @@ jobs:
         run: ls -al coverage
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage/lcov.info
@@ -55,13 +46,14 @@ jobs:
   upload-coverage:
     runs-on: ubuntu-latest
     needs: test-and-upload
+    timeout-minutes: 5
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
 
       - name: Download coverage artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: coverage-report
           path: coverage
@@ -70,7 +62,7 @@ jobs:
         run: ls -al coverage
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV__UPLOAD_TOKEN }} # omit for public repos if you want
           slug: open-feature/dart-server-sdk
