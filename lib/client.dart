@@ -106,6 +106,12 @@ class FeatureClient {
       return;
     }
 
+    // Provider names are not unique. A dynamically bound client must not
+    // infer an event's source from metadata when no provider identity exists.
+    if (_providerResolver != null && event.providerMetadata != null) {
+      return;
+    }
+
     final eventProvider = event.providerMetadata?.name;
     if (eventProvider == null ||
         eventProvider == currentProvider.metadata.name) {

@@ -83,6 +83,13 @@ class ProviderLifecycleManager {
 
   Future<void> initialize(FeatureProvider provider) {
     final record = _recordFor(provider);
+    final activeShutdown = record.shutdown;
+    if (activeShutdown != null) {
+      // A provider cannot be initialized safely until its prior binding has
+      // finished shutting down and its lifecycle record has been discarded.
+      return activeShutdown.then((_) => initialize(provider));
+    }
+
     if (record.status == ProviderState.READY &&
         (!record.usesLegacyLifecycle || record.lifecycleObserved)) {
       return Future.value();

@@ -507,6 +507,66 @@ void main() {
     });
 
     test(
+      'dynamic same-name clients reject ambiguous metadata-only events',
+      () async {
+        final controller = StreamController<OpenFeatureEvent>.broadcast();
+        final firstProvider = MockProvider({'test-flag': true});
+        final secondProvider = MockProvider({'test-flag': false});
+        final firstReceived = <OpenFeatureEvent>[];
+        final secondReceived = <OpenFeatureEvent>[];
+        final firstClient = FeatureClient(
+          metadata: ClientMetadata(name: 'first-client'),
+          hookManager: hookManager,
+          defaultContext: context,
+          provider: firstProvider,
+          providerResolver: () => firstProvider,
+          eventStream: controller.stream,
+        );
+        final secondClient = FeatureClient(
+          metadata: ClientMetadata(name: 'second-client'),
+          hookManager: hookManager,
+          defaultContext: context,
+          provider: secondProvider,
+          providerResolver: () => secondProvider,
+          eventStream: controller.stream,
+        );
+        final firstSub = firstClient.addHandler(firstReceived.add);
+        final secondSub = secondClient.addHandler(secondReceived.add);
+
+        controller.add(
+          OpenFeatureEvent(
+            OpenFeatureEventType.PROVIDER_STALE,
+            'ambiguous',
+            providerMetadata: firstProvider.metadata,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(firstReceived, isEmpty);
+        expect(secondReceived, isEmpty);
+
+        controller.add(
+          OpenFeatureEvent(
+            OpenFeatureEventType.PROVIDER_STALE,
+            'identified',
+            provider: firstProvider,
+            providerMetadata: firstProvider.metadata,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        expect(firstReceived, hasLength(1));
+        expect(secondReceived, isEmpty);
+
+        await firstSub.cancel();
+        await secondSub.cancel();
+        await firstClient.dispose();
+        await secondClient.dispose();
+        await controller.close();
+      },
+    );
+
+    test(
       'provider error result triggers error hooks instead of after hooks',
       () async {
         final lifecycleHook = LifecycleHook();

@@ -213,6 +213,23 @@ class _EventProvider extends _LegacyProvider implements ProviderEventSource {
   void emit(ProviderLifecycleEvent event) => _events.add(event);
 }
 
+class _DelayedShutdownEventProvider extends _EventProvider {
+  final Completer<void> shutdownStarted = Completer<void>();
+  final Completer<void> allowShutdown = Completer<void>();
+
+  _DelayedShutdownEventProvider(super.flags);
+
+  @override
+  Future<void> shutdown() async {
+    shutdownCount++;
+    if (!shutdownStarted.isCompleted) {
+      shutdownStarted.complete();
+    }
+    await allowShutdown.future;
+    _state = ProviderState.SHUTDOWN;
+  }
+}
+
 class _DomainScopedProvider extends _EventProvider
     implements DomainScopedProvider {
   _DomainScopedProvider(super.flags);
@@ -376,6 +393,32 @@ void main() {
       expect(identical(client.provider, second), isTrue);
       expect(client.providerStatus, ProviderState.READY);
       expect(await client.getBooleanFlag('flag'), isFalse);
+    });
+
+    test('rebinding waits for an in-progress provider shutdown', () async {
+      final api = OpenFeatureAPI();
+      final first = _DelayedShutdownEventProvider({'flag': true});
+      final second = _EventProvider({'flag': false});
+
+      await api.setProviderAndWait(first);
+      final replacement = api.setProviderAndWait(second);
+      await first.shutdownStarted.future;
+
+      var rebindCompleted = false;
+      final rebind = api.setProviderAndWait(first).then((_) {
+        rebindCompleted = true;
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      expect(rebindCompleted, isFalse);
+      expect(first.initializeCount, 1);
+
+      first.allowShutdown.complete();
+      await Future.wait([replacement, rebind]);
+
+      expect(first.initializeCount, 2);
+      expect(identical(api.provider, first), isTrue);
+      expect(api.providerStatus, ProviderState.READY);
     });
 
     test('same-name instances remain isolated by provider ID', () async {
