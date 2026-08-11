@@ -78,7 +78,7 @@ Here's the updated **Branching and Commit Guidelines** section with the adjustme
 ### **Branch Naming Conventions**
 
 Follow these conventions when creating branches for pull requests:
-```
+```text
 <type>/<branch-name>
 ```
 

@@ -202,6 +202,18 @@ class StateProvider extends MockProvider {
   ProviderState get state => providerState;
 }
 
+class FailingInitializationProvider extends MockProvider {
+  FailingInitializationProvider(super.flags);
+
+  @override
+  ProviderState get state => ProviderState.NOT_READY;
+
+  @override
+  Future<void> initialize([Map<String, dynamic>? config]) async {
+    throw StateError('initialization failed');
+  }
+}
+
 enum ThrowingHookStage { before, after }
 
 class ThrowingHook extends BaseHook {
@@ -396,9 +408,11 @@ void main() {
         client = FeatureClient(
           metadata: ClientMetadata(name: 'test-client'),
           hookManager: hookManager,
-          apiContext: const EvaluationContext(attributes: {'global': 'value'}),
+          apiContext: const EvaluationContext(
+            attributes: {'global': 'value', 'layer': 'api'},
+          ),
           defaultContext: const EvaluationContext(
-            attributes: {'client': 'value'},
+            attributes: {'client': 'value', 'layer': 'client'},
           ),
           provider: trackingProvider,
           transactionManager: transactionManager,
@@ -406,11 +420,13 @@ void main() {
 
         await transactionManager.withContext(
           'tx',
-          {'requestId': '123'},
+          {'requestId': '123', 'layer': 'transaction'},
           () async {
             await client.track(
               'checkout',
-              context: const EvaluationContext(attributes: {'userId': 'u-1'}),
+              context: const EvaluationContext(
+                attributes: {'userId': 'u-1', 'layer': 'invocation'},
+              ),
             );
           },
         );
@@ -428,8 +444,38 @@ void main() {
           equals('value'),
         );
         expect(trackingProvider.lastTrackingContext?['userId'], equals('u-1'));
+        expect(
+          trackingProvider.lastTrackingContext?['layer'],
+          equals('invocation'),
+        );
       },
     );
+
+    test('tracking contains resolver failures', () async {
+      client = FeatureClient(
+        metadata: ClientMetadata(name: 'test-client'),
+        hookManager: hookManager,
+        defaultContext: context,
+        provider: provider,
+        providerResolver: () => throw StateError('provider lookup failed'),
+      );
+
+      await expectLater(client.track('checkout'), completes);
+      expect(client.getMetrics().trackingEvents, equals(1));
+    });
+
+    test('tracking contains context resolver failures', () async {
+      client = FeatureClient(
+        metadata: ClientMetadata(name: 'test-client'),
+        hookManager: hookManager,
+        defaultContext: context,
+        apiContextResolver: () => throw StateError('context lookup failed'),
+        provider: provider,
+      );
+
+      await expectLater(client.track('checkout'), completes);
+      expect(client.getMetrics().trackingEvents, equals(1));
+    });
 
     test('client handlers receive forwarded events', () async {
       final controller = StreamController<OpenFeatureEvent>.broadcast();
@@ -513,6 +559,7 @@ void main() {
 
     for (final testCase in <(ProviderState, ErrorCode)>[
       (ProviderState.NOT_READY, ErrorCode.PROVIDER_NOT_READY),
+      (ProviderState.SHUTDOWN, ErrorCode.PROVIDER_NOT_READY),
       (ProviderState.FATAL, ErrorCode.PROVIDER_FATAL),
     ]) {
       test(
@@ -585,6 +632,38 @@ void main() {
         () => details.flagMetadata['new'] = 'value',
         throwsUnsupportedError,
       );
+    });
+
+    test('directly constructed details copy immutable flag metadata', () {
+      final metadata = <String, dynamic>{'source': 'provider'};
+      final details = FlagEvaluationDetails<bool>(
+        flagKey: 'test-flag',
+        value: true,
+        flagMetadata: metadata,
+      );
+
+      metadata['source'] = 'caller';
+      expect(details.flagMetadata['source'], equals('provider'));
+      expect(
+        () => details.flagMetadata['new'] = 'value',
+        throwsUnsupportedError,
+      );
+    });
+
+    test('direct initialization failures do not escape the zone', () async {
+      final uncaughtErrors = <Object>[];
+
+      await runZonedGuarded(() async {
+        client = FeatureClient(
+          metadata: ClientMetadata(name: 'test-client'),
+          hookManager: hookManager,
+          defaultContext: context,
+          provider: FailingInitializationProvider({'test-flag': true}),
+        );
+        await Future<void>.delayed(Duration.zero);
+      }, (error, stack) => uncaughtErrors.add(error));
+
+      expect(uncaughtErrors, isEmpty);
     });
 
     test(
