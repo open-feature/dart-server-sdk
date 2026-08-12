@@ -311,7 +311,7 @@ class OpenFeatureAPI {
         .where(
           (entry) =>
               entry.value == providerId &&
-              !_domainProviderBindings.containsKey(entry.key),
+              !identical(_domainProviderBindings[entry.key], provider),
         )
         .map((entry) => entry.key)
         .toList();
