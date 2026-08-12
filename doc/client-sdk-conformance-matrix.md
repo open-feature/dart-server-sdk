@@ -44,7 +44,7 @@ signal.
 | API shutdown and reset | Hardening | Requirements 1.6.1 and 1.6.2 | `Future<void> shutdown()` | Every registered provider shuts down once; providers, hooks, handlers, context, and propagators reset; API is reusable with a no-op provider |
 | Provider status | Hardening | Requirements 1.7.1 through 1.7.6, including conditional requirement 1.7.2.1 | `ProviderStatus` and client status accessor | `NOT_READY`, `READY`, `RECONCILING`, `STALE`, `ERROR`, and `FATAL`; status updates before handlers; shutdown becomes `NOT_READY` |
 | Isolated API instances | Experimental | Requirements 1.8.1 through 1.8.4 | Factory exposed from a deliberate secondary library/import path | Providers, context, hooks, events, clients, and shutdown are isolated from the singleton and other instances; warn or reject simultaneous cross-instance provider reuse |
-| Typed evaluation | Hardening | Conditional requirements 1.3.2.1, 1.3.3.1, 1.4.2.1; requirements 1.3.4 and 1.4.3 through 1.4.15.1 | Synchronous boolean, string, integer, double, and structured value/details methods with required defaults and optional evaluation options | Correct types; default on abnormal execution; no escaping exception; details preserve key, value, reason, variant, error, and immutable metadata |
+| Typed evaluation | Hardening | Conditional requirements 1.3.2.1, 1.3.3.1, 1.4.2.1; requirements 1.3.4 and 1.4.3 through 1.4.15.1 | Synchronous boolean, string, integer, double, and structured value/details methods with required defaults and optional evaluation options; non-null immutable `flagMetadata` with an empty record when omitted by the provider | Correct types; default on abnormal execution; no escaping exception; details preserve key, value, reason, variant, and error; provider omission produces empty `flagMetadata`; mutation throws `UnsupportedError` |
 | Evaluation options | Stable | Requirement 1.5.1 | Immutable evaluation options carrying invocation hooks and hints | Invocation hooks join the required order without adding invocation context; hints are immutable |
 | Provider resolution | Stable | Requirements 2.2.1 through 2.2.10 | Synchronous typed resolver methods returning `ResolutionDetails<T>` | Current active static context reaches provider; normal and abnormal result shapes; provider reports `PROVIDER_NOT_READY` and `PROVIDER_FATAL`; SDK status alone does not skip resolution |
 | Provider metadata and hooks | Stable | Requirements 2.1.1, 2.2.10, and 2.3.1 through 2.3.3 | Immutable `ProviderMetadata`, immutable flag metadata, optional provider hooks | Metadata survives evaluation; invalid metadata values rejected; provider hooks join lifecycle order; normal results omit error details |
@@ -94,6 +94,9 @@ Dart project gate rather than a single normative requirement:
    shared.
 10. Late completion from an older revision cannot replace the active context or
     cached values belonging to a newer revision.
+11. Evaluation details always expose non-null flag metadata; provider omission
+    yields an empty record, and mutation throws `UnsupportedError` as the Dart
+    enforcement of requirements 1.4.14 and 1.4.15.1.
 
 ## Platform Matrix
 

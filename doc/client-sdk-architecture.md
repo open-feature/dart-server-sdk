@@ -216,7 +216,10 @@ its cache is no longer current.
 
 Lifecycle status is tracked per provider instance, while provider and context
 selection is tracked per domain binding. A provider instance is initialized
-once and shut down only after its final binding is removed.
+once per active lifecycle and shut down only after its final binding is
+removed. After shutdown, that instance may begin a new lifecycle only when the
+provider supports reinitialization; the SDK completes that initialization
+before making a new binding active.
 
 A provider declaring itself domain-scoped can be bound to at most one domain,
 regardless of whether multiple domains currently have equal contexts. The SDK
