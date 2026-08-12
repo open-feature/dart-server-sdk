@@ -1,0 +1,4 @@
+# Preserve shared branch history while allowing commit authors to repair an
+# omitted or mismatched sign-off in a later, explicitly signed commit.
+allowRemediationCommits:
+  individual: true
