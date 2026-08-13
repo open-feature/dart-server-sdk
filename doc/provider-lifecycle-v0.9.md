@@ -43,10 +43,12 @@ Future<void> initialize([Map<String, dynamic>? config]) async {
 }
 ```
 
-The ready event must be emitted before `initialize` returns normally. The error
-event must be emitted before `initialize` terminates abnormally. The SDK does
-not synthesize a missing event for a provider that implements
-`ProviderEventSource`; `setProviderAndWait` fails with a contract error instead.
+The SDK subscribes before calling `initialize`. The corresponding ready or
+error event may be emitted during that call or delivered asynchronously within
+the SDK's bounded lifecycle-event timeout after it completes. The SDK does not
+synthesize a missing event for a provider that implements `ProviderEventSource`;
+`setProviderAndWait` fails with a contract error when the expected event does
+not arrive in time.
 
 Providers that do not implement `ProviderEventSource` continue to work through
 the legacy lifecycle adapter. That path derives ready/error events from

@@ -154,6 +154,7 @@ class OpenFeatureAPI {
   final Map<String, FeatureProvider> _providerRegistry = {};
   final Map<String, FeatureProvider> _domainProviderBindings = {};
   final Map<String, String> _domainProviderIds = {};
+  final Map<String, int> _domainBindingGenerations = {};
   final DomainManager _domainManager = DomainManager();
   late final ProviderLifecycleManager _lifecycleManager;
   final List<OpenFeatureHook> _hooks = [];
@@ -310,7 +311,7 @@ class OpenFeatureAPI {
         .where(
           (entry) =>
               entry.value == providerId &&
-              !_domainProviderBindings.containsKey(entry.key),
+              !identical(_domainProviderBindings[entry.key], provider),
         )
         .map((entry) => entry.key)
         .toList();
@@ -444,10 +445,10 @@ class OpenFeatureAPI {
 
   void bindClientToProvider(String clientId, String providerId) {
     final provider = _providerRegistry[providerId];
+    _recordDomainBindingRequest(clientId, providerId);
     if (provider == null) {
       // Preserve the legacy name-first binding flow. Once a provider is
       // registered under this identifier, clients resolve it dynamically.
-      _domainProviderIds[clientId] = providerId;
       _domainManager.bindClientToProvider(clientId, providerId);
       _emitEvent(
         OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED,
@@ -477,6 +478,7 @@ class OpenFeatureAPI {
       throw ArgumentError.value(providerId, 'providerId', 'is not registered');
     }
 
+    _recordDomainBindingRequest(clientId, providerId);
     await _initializeAndBindDomainProvider([clientId], providerId, provider);
   }
 
@@ -486,7 +488,14 @@ class OpenFeatureAPI {
     String? providerId,
   }) async {
     final id = registerProvider(provider, providerId: providerId);
+    _recordDomainBindingRequest(domain, id);
     await _initializeAndBindDomainProvider([domain], id, provider);
+  }
+
+  void _recordDomainBindingRequest(String domain, String providerId) {
+    _domainProviderIds[domain] = providerId;
+    _domainBindingGenerations[domain] =
+        (_domainBindingGenerations[domain] ?? 0) + 1;
   }
 
   Future<void> _initializeAndBindDomainProvider(
@@ -494,9 +503,18 @@ class OpenFeatureAPI {
     String providerId,
     FeatureProvider provider,
   ) async {
+    final requestGenerations = <String, int>{
+      for (final domain in domains)
+        domain: _domainBindingGenerations[domain] ?? 0,
+    };
     await _lifecycleManager.initialize(provider);
-    for (final domain in domains) {
-      await _bindDomainProvider(domain, providerId, provider);
+    for (final request in requestGenerations.entries) {
+      await _bindDomainProvider(
+        request.key,
+        providerId,
+        provider,
+        request.value,
+      );
     }
   }
 
@@ -504,7 +522,14 @@ class OpenFeatureAPI {
     String domain,
     String providerId,
     FeatureProvider provider,
+    int requestGeneration,
   ) async {
+    if (_domainProviderIds[domain] != providerId ||
+        _domainBindingGenerations[domain] != requestGeneration ||
+        !identical(_providerRegistry[providerId], provider)) {
+      return;
+    }
+
     final previousProvider = _domainProviderBindings[domain];
     _lifecycleManager.bindDomain(provider, domain);
     _domainProviderBindings[domain] = provider;
