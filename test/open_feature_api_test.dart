@@ -12,6 +12,7 @@ class TestProvider implements FeatureProvider {
   final bool _shouldFailInitialization;
   Map<String, dynamic>? lastEvaluationContext;
   int booleanEvaluationCount = 0;
+  int shutdownCount = 0;
 
   TestProvider(
     this._flags, {
@@ -53,6 +54,7 @@ class TestProvider implements FeatureProvider {
 
   @override
   Future<void> shutdown() async {
+    shutdownCount++;
     _state = ProviderState.SHUTDOWN;
   }
 
@@ -418,10 +420,12 @@ void main() {
 
         slowProvider.allowInitialization.complete();
         await slowProvider.initializationCompleted.future;
+        await Future<void>.delayed(Duration.zero);
 
         final client = api.getClient('checkout', domain: 'checkout');
         expect(identical(client.provider, replacementProvider), isTrue);
         expect(await client.getBooleanFlag('test'), isFalse);
+        expect(slowProvider.shutdownCount, 1);
       },
     );
 

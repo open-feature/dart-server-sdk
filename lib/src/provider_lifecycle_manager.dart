@@ -18,10 +18,14 @@ class ProviderLifecycleManager {
   final ProviderLifecycleEventHandler _onProviderEvent;
   final HashMap<FeatureProvider, _ProviderLifecycleRecord> _records =
       HashMap.identity();
+  bool _disposed = false;
 
   ProviderLifecycleManager(this._onProviderEvent);
 
   _ProviderLifecycleRecord _recordFor(FeatureProvider provider) {
+    if (_disposed) {
+      throw StateError('ProviderLifecycleManager has been disposed.');
+    }
     return _records.putIfAbsent(provider, () {
       final record = _ProviderLifecycleRecord(
         status: _normalizeState(provider.state),
@@ -39,7 +43,7 @@ class ProviderLifecycleManager {
   }
 
   ProviderState statusOf(FeatureProvider provider) =>
-      _recordFor(provider).status;
+      _disposed ? ProviderState.NOT_READY : _recordFor(provider).status;
 
   bool usesLegacyLifecycle(FeatureProvider provider) =>
       _recordFor(provider).usesLegacyLifecycle;
@@ -70,14 +74,46 @@ class ProviderLifecycleManager {
   }
 
   Future<void> unbindDefault(FeatureProvider provider) async {
-    final record = _recordFor(provider);
+    final record = _records[provider];
+    if (record == null) {
+      return;
+    }
     record.defaultBinding = false;
     await _shutdownAfterFinalUse(provider, record);
   }
 
   Future<void> unbindDomain(FeatureProvider provider, String domain) async {
-    final record = _recordFor(provider);
+    final record = _records[provider];
+    if (record == null) {
+      return;
+    }
     record.domains.remove(domain);
+    await _shutdownAfterFinalUse(provider, record);
+  }
+
+  /// Shuts down a tracked provider when it has no active bindings.
+  Future<void> shutdownIfUnused(
+    FeatureProvider provider, {
+    bool Function()? isExternallyInUse,
+  }) async {
+    final record = _records[provider];
+    if (record == null || (isExternallyInUse?.call() ?? false)) {
+      return;
+    }
+    final activeInitialization = record.initialization;
+    if (activeInitialization != null) {
+      try {
+        await activeInitialization;
+      } catch (_) {
+        // Failed initialization does not make an unbound provider live.
+      }
+      if (!identical(_records[provider], record)) {
+        return;
+      }
+    }
+    if (isExternallyInUse?.call() ?? false) {
+      return;
+    }
     await _shutdownAfterFinalUse(provider, record);
   }
 
@@ -87,7 +123,7 @@ class ProviderLifecycleManager {
     if (activeShutdown != null) {
       // A provider cannot be initialized safely until its prior binding has
       // finished shutting down and its lifecycle record has been discarded.
-      return activeShutdown.then((_) => initialize(provider));
+      return _initializeAfterShutdown(provider, activeShutdown);
     }
 
     if (record.status == ProviderState.READY &&
@@ -109,18 +145,34 @@ class ProviderLifecycleManager {
     });
   }
 
+  Future<void> _initializeAfterShutdown(
+    FeatureProvider provider,
+    Future<void> activeShutdown,
+  ) async {
+    try {
+      await activeShutdown;
+    } catch (_) {
+      // A failed shutdown still retires the old lifecycle record. Rebinding
+      // must create and initialize a fresh record instead of inheriting the
+      // prior shutdown failure.
+    }
+    _recordFor(provider).status = ProviderState.NOT_READY;
+    await initialize(provider);
+  }
+
   Future<void> _initializeLegacyProvider(
     FeatureProvider provider,
     _ProviderLifecycleRecord record,
   ) async {
     var errorEventEmitted = false;
     try {
-      if (_normalizeState(provider.state) == ProviderState.NOT_READY) {
+      if (record.status == ProviderState.NOT_READY) {
         await provider.initialize();
       }
 
-      record.status = _normalizeState(provider.state);
-      if (record.status == ProviderState.READY) {
+      final observedStatus = _normalizeState(provider.state);
+      record.status = observedStatus;
+      if (observedStatus == ProviderState.READY) {
         _onProviderEvent(
           provider,
           ProviderLifecycleEvent(
@@ -132,7 +184,7 @@ class ProviderLifecycleManager {
         return;
       }
 
-      final errorCode = _errorCodeForState(record.status);
+      final errorCode = _errorCodeForState(observedStatus);
       record.status = errorCode == ErrorCode.PROVIDER_FATAL
           ? ProviderState.FATAL
           : ProviderState.ERROR;
@@ -141,14 +193,14 @@ class ProviderLifecycleManager {
         ProviderLifecycleEvent(
           ProviderLifecycleEventType.PROVIDER_ERROR,
           'Provider not ready: ${provider.name}',
-          data: {'state': record.status.name, 'legacyLifecycle': true},
+          data: {'state': observedStatus.name, 'legacyLifecycle': true},
           errorCode: errorCode,
         ),
       );
       record.lifecycleObserved = true;
       errorEventEmitted = true;
       throw ProviderException(
-        'Provider failed to reach READY state: ${record.status.name}',
+        'Provider failed to reach READY state: ${observedStatus.name}',
         code: errorCode ?? ErrorCode.PROVIDER_NOT_READY,
       );
     } catch (error) {
@@ -173,7 +225,7 @@ class ProviderLifecycleManager {
     FeatureProvider provider,
     _ProviderLifecycleRecord record,
   ) async {
-    if (_normalizeState(provider.state) != ProviderState.NOT_READY) {
+    if (record.status != ProviderState.NOT_READY) {
       throw ProviderException(
         'Provider is not ready for initialization: ${record.status.name}',
         code: _errorCodeForState(record.status) ?? ErrorCode.PROVIDER_NOT_READY,
@@ -251,6 +303,9 @@ class ProviderLifecycleManager {
     _ProviderLifecycleRecord record,
     ProviderLifecycleEvent event,
   ) {
+    if (_disposed || !identical(_records[provider], record)) {
+      return;
+    }
     record.status = _statusForEvent(event, record.status);
     record.lifecycleObserved = true;
     final signal = record.initializationSignal;
@@ -289,25 +344,61 @@ class ProviderLifecycleManager {
     FeatureProvider provider,
     _ProviderLifecycleRecord record,
   ) async {
+    Object? firstError;
+    StackTrace? firstStack;
     try {
       await provider.shutdown();
-      // Shutdown is the one lifecycle transition inferred by the SDK in v0.9.
-      record.status = ProviderState.NOT_READY;
+    } catch (error, stackTrace) {
+      firstError = error;
+      firstStack = stackTrace;
     } finally {
-      await record.eventSubscription?.cancel();
+      // Shutdown is the one lifecycle transition inferred by the SDK in v0.9,
+      // regardless of whether the provider's shutdown future succeeds.
+      record.status = ProviderState.NOT_READY;
+      try {
+        await record.eventSubscription?.cancel();
+      } catch (error, stackTrace) {
+        firstError ??= error;
+        firstStack ??= stackTrace;
+      }
       record.eventSubscription = null;
       record.lifecycleObserved = false;
       if (identical(_records[provider], record)) {
         _records.remove(provider);
       }
     }
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError, firstStack ?? StackTrace.current);
+    }
   }
 
   Future<void> dispose() async {
-    for (final record in _records.values) {
-      await record.eventSubscription?.cancel();
+    if (_disposed) {
+      return;
+    }
+    _disposed = true;
+    Object? firstError;
+    StackTrace? firstStack;
+    for (final record in _records.values.toList()) {
+      final signal = record.initializationSignal;
+      if (signal != null && !signal.isCompleted) {
+        signal.completeError(
+          StateError('Provider lifecycle manager was disposed.'),
+          StackTrace.current,
+        );
+      }
+      try {
+        await record.eventSubscription?.cancel();
+      } catch (error, stackTrace) {
+        firstError ??= error;
+        firstStack ??= stackTrace;
+      }
+      record.eventSubscription = null;
     }
     _records.clear();
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError, firstStack ?? StackTrace.current);
+    }
   }
 
   static ProviderState _normalizeState(ProviderState state) {

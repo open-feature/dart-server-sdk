@@ -88,6 +88,7 @@ class FlagEvaluationResult<T> {
   final String? variant;
   final ErrorCode? errorCode;
   final String? errorMessage;
+  final Map<String, dynamic> flagMetadata;
   final Map<String, dynamic>? details;
   final DateTime evaluatedAt;
   final String evaluatorId;
@@ -99,6 +100,7 @@ class FlagEvaluationResult<T> {
     this.variant,
     this.errorCode,
     this.errorMessage,
+    this.flagMetadata = const {},
     this.details,
     required this.evaluatedAt,
     this.evaluatorId = '',
@@ -143,8 +145,9 @@ class FlagEvaluationDetails<T> {
     this.reason,
     this.variant,
     Map<String, dynamic> flagMetadata = const {},
+    DateTime? timestamp,
   }) : flagMetadata = Map.unmodifiable(flagMetadata),
-       timestamp = DateTime.now();
+       timestamp = timestamp ?? DateTime.now();
 
   factory FlagEvaluationDetails.fromResult(FlagEvaluationResult<T> result) {
     return FlagEvaluationDetails(
@@ -154,7 +157,8 @@ class FlagEvaluationDetails<T> {
       errorMessage: result.errorMessage,
       reason: result.reason,
       variant: result.variant,
-      flagMetadata: result.details ?? const {},
+      flagMetadata: result.flagMetadata,
+      timestamp: result.evaluatedAt,
     );
   }
 }

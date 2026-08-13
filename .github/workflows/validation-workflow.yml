@@ -15,10 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate Branch Name
+        env:
+          BRANCH_NAME: ${{ inputs.branch_name }}
         run: |
           set -euo pipefail
           echo "Validating branch name..."
-          BRANCH_NAME="${{ inputs.branch_name }}"
           echo "Branch name: $BRANCH_NAME"
 
           if [[ "$BRANCH_NAME" =~ ^(development|main|release-please--branches--main--components--openfeature_dart_server_sdk)$ ]]; then

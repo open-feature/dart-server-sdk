@@ -6,6 +6,7 @@ import '../lib/feature_provider.dart';
 import '../lib/open_feature_api.dart';
 import '../lib/open_feature_event.dart';
 import '../lib/provider_lifecycle.dart';
+import '../lib/src/provider_lifecycle_manager.dart';
 
 class _LegacyProvider implements FeatureProvider {
   final String providerName;
@@ -230,6 +231,104 @@ class _DelayedShutdownEventProvider extends _EventProvider {
   }
 }
 
+class _FailingShutdownEventProvider extends _EventProvider {
+  final Completer<void> shutdownStarted = Completer<void>();
+  final Completer<void> allowShutdown = Completer<void>();
+
+  _FailingShutdownEventProvider(super.flags);
+
+  @override
+  Future<void> shutdown() async {
+    shutdownCount++;
+    if (!shutdownStarted.isCompleted) {
+      shutdownStarted.complete();
+    }
+    await allowShutdown.future;
+    throw StateError('shutdown failed');
+  }
+}
+
+class _CancelFailureEventProvider extends _EventProvider {
+  final StreamController<ProviderLifecycleEvent> _cancelFailureEvents =
+      StreamController<ProviderLifecycleEvent>.broadcast();
+
+  _CancelFailureEventProvider(super.flags);
+
+  @override
+  Stream<ProviderLifecycleEvent> get providerEvents =>
+      _CancelFailureStream(_cancelFailureEvents.stream);
+
+  @override
+  Future<void> initialize([Map<String, dynamic>? config]) async {
+    initializeCount++;
+    _state = ProviderState.READY;
+    _cancelFailureEvents.add(
+      ProviderLifecycleEvent(
+        ProviderLifecycleEventType.PROVIDER_READY,
+        'Provider is ready.',
+      ),
+    );
+  }
+
+  Future<void> closeEvents() => _cancelFailureEvents.close();
+}
+
+class _CancelFailureStream extends Stream<ProviderLifecycleEvent> {
+  final Stream<ProviderLifecycleEvent> _delegate;
+
+  const _CancelFailureStream(this._delegate);
+
+  @override
+  StreamSubscription<ProviderLifecycleEvent> listen(
+    void Function(ProviderLifecycleEvent event)? onData, {
+    Function? onError,
+    void Function()? onDone,
+    bool? cancelOnError,
+  }) => _CancelFailureSubscription(
+    _delegate.listen(
+      onData,
+      onError: onError,
+      onDone: onDone,
+      cancelOnError: cancelOnError,
+    ),
+  );
+}
+
+class _CancelFailureSubscription
+    implements StreamSubscription<ProviderLifecycleEvent> {
+  final StreamSubscription<ProviderLifecycleEvent> _delegate;
+
+  _CancelFailureSubscription(this._delegate);
+
+  @override
+  Future<void> cancel() async {
+    await _delegate.cancel();
+    throw StateError('subscription cancellation failed');
+  }
+
+  @override
+  void onData(void Function(ProviderLifecycleEvent data)? handleData) =>
+      _delegate.onData(handleData);
+
+  @override
+  void onError(Function? handleError) => _delegate.onError(handleError);
+
+  @override
+  void onDone(void Function()? handleDone) => _delegate.onDone(handleDone);
+
+  @override
+  void pause([Future<void>? resumeSignal]) => _delegate.pause(resumeSignal);
+
+  @override
+  void resume() => _delegate.resume();
+
+  @override
+  bool get isPaused => _delegate.isPaused;
+
+  @override
+  Future<E> asFuture<E>([E? futureValue]) => _delegate.asFuture(futureValue);
+}
+
 class _DomainScopedProvider extends _EventProvider
     implements DomainScopedProvider {
   _DomainScopedProvider(super.flags);
@@ -266,6 +365,31 @@ void main() {
       expect(observedStatuses, [ProviderState.READY]);
       await subscription.cancel();
     });
+
+    test(
+      'existing clients receive readiness for a newly bound provider',
+      () async {
+        final api = OpenFeatureAPI();
+        final client = api.getClient('client');
+        final provider = _EventProvider({'flag': true});
+        final events = <OpenFeatureEvent>[];
+        final subscription = client.events.listen(events.add);
+
+        await api.setProviderAndWait(provider);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(
+          events.where(
+            (event) =>
+                event.type == OpenFeatureEventType.PROVIDER_READY &&
+                identical(event.provider, provider),
+          ),
+          hasLength(1),
+        );
+        await subscription.cancel();
+        await client.dispose();
+      },
+    );
 
     test(
       'event-capable provider must emit within the lifecycle timeout',
@@ -322,7 +446,7 @@ void main() {
     });
 
     test(
-      'accepts a lifecycle event emitted shortly after initialize',
+      'temporarily tolerates a legacy event delivered after initialize',
       () async {
         final api = OpenFeatureAPI();
         final provider = _EventProvider({
@@ -355,6 +479,28 @@ void main() {
         expect(events, hasLength(1));
         expect(events.single.type, OpenFeatureEventType.PROVIDER_READY);
         await subscription.cancel();
+      },
+    );
+
+    test(
+      'legacy error events preserve the provider state they observed',
+      () async {
+        final provider = _LegacyProvider({
+          'flag': true,
+        }, initialState: ProviderState.CONNECTING);
+        ProviderLifecycleEvent? observedEvent;
+        final manager = ProviderLifecycleManager((source, event) {
+          observedEvent = event;
+        });
+
+        await expectLater(
+          manager.initialize(provider),
+          throwsA(isA<ProviderException>()),
+        );
+
+        expect(observedEvent?.data, containsPair('state', 'CONNECTING'));
+        expect(manager.statusOf(provider), ProviderState.ERROR);
+        await manager.dispose();
       },
     );
 
@@ -421,6 +567,106 @@ void main() {
       expect(api.providerStatus, ProviderState.READY);
     });
 
+    test('rebinding recovers after an in-progress shutdown fails', () async {
+      final api = OpenFeatureAPI();
+      final first = _FailingShutdownEventProvider({'flag': true});
+      final replacement = _EventProvider({
+        'flag': false,
+      }, providerName: 'replacement');
+
+      await api.setProviderAndWait(first);
+      final replacementBinding = api.setProviderAndWait(replacement);
+      await first.shutdownStarted.future;
+
+      final rebind = api.setProviderAndWait(first);
+      first.allowShutdown.complete();
+      await Future.wait([replacementBinding, rebind]);
+
+      expect(first.initializeCount, 2);
+      expect(identical(api.provider, first), isTrue);
+      expect(api.providerStatus, ProviderState.READY);
+    });
+
+    test('latest concurrent default provider request wins', () async {
+      final api = OpenFeatureAPI();
+      final slow = _EventProvider(
+        {'flag': true},
+        providerName: 'slow',
+        readyEventDelay: const Duration(milliseconds: 30),
+      );
+      final fast = _EventProvider({'flag': false}, providerName: 'fast');
+
+      final slowBinding = api.setProviderAndWait(slow);
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await api.setProviderAndWait(fast);
+      await slowBinding;
+
+      expect(identical(api.provider, fast), isTrue);
+      expect(await api.getClient('client').getBooleanFlag('flag'), isFalse);
+      expect(slow.shutdownCount, 1);
+    });
+
+    test('a superseded default remains live when still registered', () async {
+      final api = OpenFeatureAPI();
+      final slow = _EventProvider(
+        {'flag': true},
+        providerName: 'slow',
+        readyEventDelay: const Duration(milliseconds: 30),
+      );
+      final fast = _EventProvider({'flag': false}, providerName: 'fast');
+      api.registerProvider(slow, providerId: 'registered-slow');
+
+      final slowBinding = api.setProviderAndWait(slow);
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await api.setProviderAndWait(fast);
+      await slowBinding;
+
+      expect(identical(api.provider, fast), isTrue);
+      expect(slow.shutdownCount, isZero);
+      await api.bindClientToProviderAndWait('registered', 'registered-slow');
+      expect(
+        identical(api.getClient('client', domain: 'registered').provider, slow),
+        isTrue,
+      );
+    });
+
+    test(
+      'concurrent requests for the same default do not shut it down',
+      () async {
+        final api = OpenFeatureAPI();
+        final provider = _EventProvider({
+          'flag': true,
+        }, readyEventDelay: const Duration(milliseconds: 20));
+
+        final firstBinding = api.setProviderAndWait(provider);
+        final secondBinding = api.setProviderAndWait(provider);
+        await Future.wait([firstBinding, secondBinding]);
+
+        expect(identical(api.provider, provider), isTrue);
+        expect(provider.initializeCount, 1);
+        expect(provider.shutdownCount, isZero);
+        expect(api.providerStatus, ProviderState.READY);
+      },
+    );
+
+    test('shutdown supersedes an in-flight default provider request', () async {
+      final api = OpenFeatureAPI();
+      final slow = _EventProvider(
+        {'flag': true},
+        providerName: 'slow',
+        readyEventDelay: const Duration(milliseconds: 30),
+      );
+
+      final binding = api.setProviderAndWait(slow);
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await api.shutdownProvider();
+      await binding;
+
+      expect(api.provider.metadata.name, 'InMemoryProvider');
+      expect(api.providerStatus, ProviderState.READY);
+      expect(slow.shutdownCount, 1);
+    });
+
     test('same-name instances remain isolated by provider ID', () async {
       final api = OpenFeatureAPI();
       final first = _EventProvider({'flag': true}, providerName: 'shared');
@@ -456,6 +702,38 @@ void main() {
       await greenSubscription.cancel();
       await blue.dispose();
       await green.dispose();
+    });
+
+    test('domain clients receive global context change events', () async {
+      final api = OpenFeatureAPI();
+      final defaultProvider = _EventProvider({
+        'flag': true,
+      }, providerName: 'default');
+      final domainProvider = _EventProvider({
+        'flag': false,
+      }, providerName: 'domain');
+      await api.setProviderAndWait(defaultProvider);
+      await api.setProviderForDomainAndWait(
+        'checkout',
+        domainProvider,
+        providerId: 'domain',
+      );
+      final client = api.getClient('client', domain: 'checkout');
+      final events = <OpenFeatureEvent>[];
+      final subscription = client.events.listen(events.add);
+
+      api.setGlobalContext(OpenFeatureEvaluationContext({'tenant': 'new'}));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(
+        events.where(
+          (event) =>
+              event.type == OpenFeatureEventType.PROVIDER_CONTEXT_CHANGED,
+        ),
+        hasLength(1),
+      );
+      await subscription.cancel();
+      await client.dispose();
     });
 
     test('legacy name-first binding activates after registration', () async {
@@ -597,6 +875,102 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('failed domain binding restores the prior pending binding', () async {
+      final api = OpenFeatureAPI();
+      final scoped = _DomainScopedProvider({'flag': true});
+      final pending = _EventProvider({'flag': false}, providerName: 'pending');
+      api.bindClientToProvider('domain-b', 'pending');
+      await api.registerProviderAndWait(scoped, providerId: 'scoped');
+      await api.bindClientToProviderAndWait('domain-a', 'scoped');
+
+      await expectLater(
+        api.bindClientToProviderAndWait('domain-b', 'scoped'),
+        throwsA(
+          isA<ProviderException>().having(
+            (error) => error.code,
+            'code',
+            ErrorCode.INVALID_CONTEXT,
+          ),
+        ),
+      );
+
+      await api.registerProviderAndWait(pending, providerId: 'pending');
+      final client = api.getClient('client', domain: 'domain-b');
+      expect(identical(client.provider, pending), isTrue);
+      expect(await client.getBooleanFlag('flag'), isFalse);
+    });
+
+    test('disposed APIs do not re-arm provider lifecycle tracking', () async {
+      final api = OpenFeatureAPI();
+      final provider = _EventProvider({'flag': true});
+      await api.setProviderAndWait(provider);
+      final client = api.getClient('client');
+      await OpenFeatureAPI.resetInstance();
+      final uncaughtErrors = <Object>[];
+
+      await runZonedGuarded(() async {
+        expect(
+          await client.getBooleanFlag('flag', defaultValue: false),
+          isFalse,
+        );
+        provider.emit(
+          ProviderLifecycleEvent(
+            ProviderLifecycleEventType.PROVIDER_STALE,
+            'Late stale event.',
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+      }, (error, stack) => uncaughtErrors.add(error));
+
+      expect(uncaughtErrors, isEmpty);
+      await client.dispose();
+    });
+
+    test(
+      'reset cancels an in-flight provider binding without late commits',
+      () async {
+        final api = OpenFeatureAPI();
+        final provider = _EventProvider({
+          'flag': true,
+        }, readyEventDelay: const Duration(milliseconds: 30));
+        final binding = api.setProviderAndWait(provider);
+        final bindingExpectation = expectLater(binding, throwsStateError);
+
+        await OpenFeatureAPI.resetInstance();
+
+        await bindingExpectation;
+        expect(identical(OpenFeatureAPI(), api), isFalse);
+        await Future<void>.delayed(const Duration(milliseconds: 35));
+      },
+    );
+
+    test(
+      'reset releases the singleton even when disposal reports an error',
+      () async {
+        final original = OpenFeatureAPI();
+        final provider = _CancelFailureEventProvider({'flag': true});
+        await original.setProviderAndWait(provider);
+
+        await expectLater(OpenFeatureAPI.resetInstance(), throwsStateError);
+
+        expect(identical(OpenFeatureAPI(), original), isFalse);
+        await provider.closeEvents();
+      },
+    );
+
+    test('unbinding an untracked provider is a no-op', () async {
+      final provider = _LegacyProvider({
+        'flag': true,
+      }, initialState: ProviderState.READY);
+      final manager = ProviderLifecycleManager((provider, event) {});
+
+      await manager.unbindDefault(provider);
+      await manager.unbindDomain(provider, 'unknown');
+
+      expect(provider.shutdownCount, isZero);
+      await manager.dispose();
     });
   });
 }

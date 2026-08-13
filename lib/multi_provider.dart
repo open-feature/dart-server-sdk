@@ -237,6 +237,7 @@ class MultiProvider implements FeatureProvider {
       variant: result.variant,
       errorCode: result.errorCode,
       errorMessage: result.errorMessage,
+      flagMetadata: result.flagMetadata,
       details: result.details,
       evaluatedAt: result.evaluatedAt,
       evaluatorId: name,

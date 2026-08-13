@@ -43,12 +43,14 @@ Future<void> initialize([Map<String, dynamic>? config]) async {
 }
 ```
 
-The SDK subscribes before calling `initialize`. The corresponding ready or
-error event may be emitted during that call or delivered asynchronously within
-the SDK's bounded lifecycle-event timeout after it completes. The SDK does not
-synthesize a missing event for a provider that implements `ProviderEventSource`;
-`setProviderAndWait` fails with a contract error when the expected event does
-not arrive in time.
+The SDK subscribes before calling `initialize`. OpenFeature v0.9 requires the
+corresponding ready or error event to be emitted before that call terminates.
+The SDK currently accepts delivery for a bounded interval afterward only as a
+migration tolerance for legacy asynchronous event sources. That grace period is
+not part of the provider contract and providers must not depend on it. The SDK
+does not synthesize a missing event for a provider that implements
+`ProviderEventSource`; `setProviderAndWait` fails with a contract error when the
+expected event does not arrive in time.
 
 Providers that do not implement `ProviderEventSource` continue to work through
 the legacy lifecycle adapter. That path derives ready/error events from

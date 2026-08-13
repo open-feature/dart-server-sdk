@@ -34,8 +34,10 @@ class ProviderLifecycleEvent {
 /// Providers implementing this interface must emit
 /// [ProviderLifecycleEventType.PROVIDER_READY] when initialization completes
 /// normally and [ProviderLifecycleEventType.PROVIDER_ERROR] when it completes
-/// abnormally. The event may be emitted during initialization or delivered
-/// asynchronously within the SDK's bounded lifecycle-event timeout afterward.
+/// abnormally. OpenFeature v0.9 requires the corresponding event to be emitted
+/// before `initialize` terminates. The SDK temporarily tolerates delivery
+/// shortly afterward to ease migration of legacy asynchronous event sources;
+/// providers must not rely on that compatibility grace period.
 /// Providers that do not implement this interface use the deprecated legacy
 /// lifecycle adapter, which derives events from lifecycle return values.
 abstract interface class ProviderEventSource {
