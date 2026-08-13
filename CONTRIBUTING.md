@@ -307,17 +307,33 @@ To certify your contribution, you must add a `Signed-off-by` line to your commit
      ```
 
 3. **Forgot to Sign Off?**:
-   - If you forgot to sign off a commit, you can fix it by amending the commit:
+   - Before a commit is shared, fix it by amending the commit:
      ```bash
      git commit --amend --signoff
      git push --force-with-lease
      ```
 
-   - For multiple commits, rebase with `--signoff`:
+   - For multiple unshared commits, rebase with `--signoff`:
      ```bash
      git rebase --signoff HEAD~<number-of-commits>
      git push --force-with-lease
      ```
+
+   - Do not rewrite shared `development` or protected `main` history. If a DCO
+     mismatch reaches a shared branch, use the repository's individual DCO
+     remediation support and the exact remediation text reported by the DCO
+     check.
+
+4. **Match the Commit Author**:
+   - The sign-off name and email must match the final commit author. In
+     particular, when GitHub creates a squash commit as
+     `ABC2015 <6826984+ABC2015@users.noreply.github.com>`, include this trailer
+     in the squash commit message:
+     ```text
+     Signed-off-by: ABC2015 <6826984+ABC2015@users.noreply.github.com>
+     ```
+   - An additional contributor sign-off may be retained, but it does not
+     replace the matching author sign-off.
 
 ---
 
