@@ -49,6 +49,19 @@ favorite feature flag management tool.
 
 <!-- x-hide-in-docs-end -->
 
+## Dart client SDK proposal
+
+This repository also contains the design proposal for a separate, pure-Dart
+OpenFeature client SDK intended for Dart VM, Dart web, and Flutter consumers.
+The client SDK is not implemented or published yet. The existing server SDK
+remains independently versioned and published.
+
+- Read the [client SDK architecture](doc/client-sdk-architecture.md).
+- Review the
+  [client SDK conformance matrix](doc/client-sdk-conformance-matrix.md).
+- Follow [issue #117](https://github.com/open-feature/dart-server-sdk/issues/117)
+  for implementation progress.
+
 ## Quick start
 
 ### Requirements
@@ -148,7 +161,7 @@ exist yet, see [Develop a provider](#develop-a-provider).
 
 ```dart
 final api = OpenFeatureAPI();
-api.setProvider(MyProvider());
+await api.setProviderAndWait(MyProvider());
 ```
 
 ### Targeting
@@ -217,9 +230,6 @@ client.addHook(MyClientHook());
 Before hooks may return context updates. Any returned attributes are merged into
 the evaluation context before the provider is called.
 
-> [!NOTE]
-> Invocation-level hooks are not yet supported. Hooks can currently be registered at the global or client level.
-
 ### Tracking
 
 The
@@ -277,10 +287,12 @@ import 'package:openfeature_dart_server_sdk/open_feature_api.dart';
 
 final api = OpenFeatureAPI();
 
-api.setProvider(InMemoryProvider({'default-flag': true}));
+await api.setProviderAndWait(InMemoryProvider({'default-flag': true}));
 
-api.registerProvider(CustomCacheProvider());
-api.bindClientToProvider('cache-domain', 'CustomCacheProvider');
+final cacheProviderId = await api.registerProviderAndWait(
+  CustomCacheProvider(),
+);
+await api.bindClientToProviderAndWait('cache-domain', cacheProviderId);
 
 final defaultClient = api.getClient('default-client');
 await defaultClient.getBooleanFlag('default-flag', defaultValue: false);
@@ -616,8 +628,8 @@ void main() {
     await api.setProviderAndWait(testProvider);
   });
 
-  tearDown(() {
-    OpenFeatureAPI.resetInstance();
+  tearDown(() async {
+    await OpenFeatureAPI.resetInstance();
   });
 
   test('evaluates boolean flag correctly', () async {
