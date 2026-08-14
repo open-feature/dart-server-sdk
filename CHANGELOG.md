@@ -1,5 +1,73 @@
 # Changelog
 
+## [0.0.23](https://github.com/open-feature/dart-server-sdk/compare/v0.0.22...v0.0.23) (2026-08-14)
+
+This release contains the first lifecycle and evaluation-safety work toward
+OpenFeature v0.9.0. It does not claim complete v0.9 conformance; remaining
+requirements are tracked in
+[#121](https://github.com/open-feature/dart-server-sdk/issues/121).
+
+### Notable compatibility changes
+
+- Raise the minimum supported Dart SDK from 3.11.4 to 3.12.2
+  ([#123](https://github.com/open-feature/dart-server-sdk/pull/123)).
+- Make `OpenFeatureAPI.resetInstance()` asynchronous so callers can await
+  provider and controller teardown before creating a replacement API instance
+  ([#138](https://github.com/open-feature/dart-server-sdk/pull/138)).
+- Make `FlagEvaluationDetails.flagMetadata` non-nullable and immutable. Missing
+  metadata now defaults to an empty map, and mutation attempts throw
+  `UnsupportedError`
+  ([#126](https://github.com/open-feature/dart-server-sdk/pull/126),
+  [#132](https://github.com/open-feature/dart-server-sdk/pull/132)).
+
+### Features
+
+- Add provider-owned lifecycle events and per-instance lifecycle coordination,
+  including dynamic client rebinding, domain-scoped providers, final-binding
+  shutdown, and explicit wait-for-readiness APIs
+  ([#124](https://github.com/open-feature/dart-server-sdk/pull/124)).
+
+### Bug fixes
+
+- Contain provider, hook, and context-resolution failures while preserving
+  targeting keys and caller defaults
+  ([#126](https://github.com/open-feature/dart-server-sdk/pull/126)).
+- Preserve the latest concurrent provider and domain binding request, serialize
+  rebinding with provider shutdown, and prevent late initialization from
+  restoring stale bindings
+  ([#132](https://github.com/open-feature/dart-server-sdk/pull/132),
+  [#133](https://github.com/open-feature/dart-server-sdk/pull/133),
+  [#134](https://github.com/open-feature/dart-server-sdk/pull/134),
+  [#138](https://github.com/open-feature/dart-server-sdk/pull/138)).
+
+### Documentation
+
+- Add the server v0.9 conformance matrix and provider-lifecycle compatibility
+  contract
+  ([#122](https://github.com/open-feature/dart-server-sdk/pull/122)).
+- Add the proposed pure-Dart client SDK architecture and conformance matrix;
+  the client SDK is not implemented or published in this release
+  ([#118](https://github.com/open-feature/dart-server-sdk/pull/118),
+  [#136](https://github.com/open-feature/dart-server-sdk/pull/136)).
+- Clarify the public README's asynchronous lifecycle examples and client SDK
+  proposal status
+  ([#143](https://github.com/open-feature/dart-server-sdk/pull/143),
+  [#144](https://github.com/open-feature/dart-server-sdk/pull/144)).
+
+### CI and release maintenance
+
+- Publish each version once and harden release, validation, coverage, branch,
+  formatting, and minimum-dependency workflows
+  ([#119](https://github.com/open-feature/dart-server-sdk/pull/119),
+  [#125](https://github.com/open-feature/dart-server-sdk/pull/125),
+  [#127](https://github.com/open-feature/dart-server-sdk/pull/127),
+  [#128](https://github.com/open-feature/dart-server-sdk/pull/128),
+  [#130](https://github.com/open-feature/dart-server-sdk/pull/130)).
+- Use the conventional `doc/` package layout and add DCO remediation support
+  for shared-branch squash commits
+  ([#129](https://github.com/open-feature/dart-server-sdk/pull/129),
+  [#135](https://github.com/open-feature/dart-server-sdk/pull/135)).
+
 ## [0.0.22](https://github.com/open-feature/dart-server-sdk/compare/v0.0.21...v0.0.22) (2026-05-12)
 
 
