@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:test/test.dart';
 import '../lib/open_feature_api.dart';
 import '../lib/feature_provider.dart';
@@ -8,6 +10,9 @@ class TestProvider implements FeatureProvider {
   final String _providerName;
   ProviderState _state;
   final bool _shouldFailInitialization;
+  Map<String, dynamic>? lastEvaluationContext;
+  int booleanEvaluationCount = 0;
+  int shutdownCount = 0;
 
   TestProvider(
     this._flags, {
@@ -49,6 +54,7 @@ class TestProvider implements FeatureProvider {
 
   @override
   Future<void> shutdown() async {
+    shutdownCount++;
     _state = ProviderState.SHUTDOWN;
   }
 
@@ -69,6 +75,8 @@ class TestProvider implements FeatureProvider {
     bool defaultValue, {
     Map<String, dynamic>? context,
   }) async {
+    booleanEvaluationCount++;
+    lastEvaluationContext = context == null ? null : {...context};
     if (_state != ProviderState.READY) {
       return FlagEvaluationResult.error(
         flagKey,
@@ -138,6 +146,29 @@ class TestProvider implements FeatureProvider {
   }) async => throw UnimplementedError();
 }
 
+class DelayedTestProvider extends TestProvider {
+  final Completer<void> initializationStarted = Completer<void>();
+  final Completer<void> allowInitialization = Completer<void>();
+  final Completer<void> initializationCompleted = Completer<void>();
+
+  DelayedTestProvider(
+    Map<String, dynamic> flags, {
+    required String providerName,
+  }) : super(flags, providerName: providerName);
+
+  @override
+  Future<void> initialize([Map<String, dynamic>? config]) async {
+    if (!initializationStarted.isCompleted) {
+      initializationStarted.complete();
+    }
+    await allowInitialization.future;
+    await super.initialize(config);
+    if (!initializationCompleted.isCompleted) {
+      initializationCompleted.complete();
+    }
+  }
+}
+
 class TestHook extends OpenFeatureHook {
   final List<String> calls = [];
 
@@ -155,19 +186,28 @@ class TestHook extends OpenFeatureHook {
 void main() {
   group('OpenFeatureAPI', () {
     setUp(() async {
-      OpenFeatureAPI.resetInstance();
-      await Future.delayed(Duration(milliseconds: 1));
+      await OpenFeatureAPI.resetInstance();
     });
 
     tearDown(() async {
-      OpenFeatureAPI.resetInstance();
-      await Future.delayed(Duration(milliseconds: 1));
+      await OpenFeatureAPI.resetInstance();
     });
 
     test('singleton instance', () {
       final api1 = OpenFeatureAPI();
       final api2 = OpenFeatureAPI();
       expect(identical(api1, api2), isTrue);
+    });
+
+    test('reset awaits disposal before creating a replacement', () async {
+      final original = OpenFeatureAPI();
+      final eventsDone = original.events.drain<void>();
+
+      await OpenFeatureAPI.resetInstance();
+      await eventsDone;
+      final replacement = OpenFeatureAPI();
+
+      expect(identical(original, replacement), isFalse);
     });
 
     test('sets and gets provider', () async {
@@ -197,6 +237,41 @@ void main() {
       expect(merged.attributes['global'], equals('value'));
       expect(merged.attributes['local'], equals('value'));
     });
+
+    test(
+      'existing clients use later global context and targeting-key changes',
+      () async {
+        final api = OpenFeatureAPI();
+        final provider = TestProvider({'test-flag': true});
+        await api.setProviderAndWait(provider);
+        api.setGlobalContext(
+          OpenFeatureEvaluationContext({
+            'version': 'first',
+          }, targetingKey: 'first-user'),
+        );
+        final client = api.getClient('test-client');
+
+        await client.getBooleanFlag('test-flag');
+        expect(provider.lastEvaluationContext?['version'], equals('first'));
+        expect(
+          provider.lastEvaluationContext?['targetingKey'],
+          equals('first-user'),
+        );
+
+        api.setGlobalContext(
+          OpenFeatureEvaluationContext({
+            'version': 'second',
+          }, targetingKey: 'second-user'),
+        );
+        await client.getBooleanFlag('test-flag');
+
+        expect(provider.lastEvaluationContext?['version'], equals('second'));
+        expect(
+          provider.lastEvaluationContext?['targetingKey'],
+          equals('second-user'),
+        );
+      },
+    );
 
     test('evaluates boolean flag with hooks using new API', () async {
       final api = OpenFeatureAPI();
@@ -237,18 +312,22 @@ void main() {
 
     test('routes domain-bound clients to registered providers', () async {
       final api = OpenFeatureAPI();
-      final defaultProvider = TestProvider(
-        {'test': true},
-        providerName: 'default-provider',
-      );
-      final secondaryProvider = TestProvider(
-        {'test': false},
-        providerName: 'secondary-provider',
-      );
+      final defaultProvider = TestProvider({
+        'test': true,
+      }, providerName: 'default-provider');
+      final secondaryProvider = TestProvider({
+        'test': false,
+      }, providerName: 'secondary-provider');
 
       await api.setProvider(defaultProvider);
       api.registerProvider(secondaryProvider);
+      final configured = api.events.firstWhere(
+        (event) =>
+            event.type == OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED &&
+            event.domain == 'checkout',
+      );
       api.bindClientToProvider('checkout', secondaryProvider.metadata.name);
+      await configured;
 
       final client = api.getClient('checkout', domain: 'checkout');
       expect(
@@ -256,6 +335,99 @@ void main() {
         equals(secondaryProvider.metadata.name),
       );
     });
+
+    test('latest concurrent domain binding request wins', () async {
+      final api = OpenFeatureAPI();
+      final slowProvider = DelayedTestProvider({
+        'test': true,
+      }, providerName: 'slow-provider');
+      final fastProvider = TestProvider({
+        'test': false,
+      }, providerName: 'fast-provider');
+      api.registerProvider(slowProvider, providerId: 'slow');
+      api.registerProvider(fastProvider, providerId: 'fast');
+
+      final slowBinding = api.bindClientToProviderAndWait('checkout', 'slow');
+      await slowProvider.initializationStarted.future;
+      await api.bindClientToProviderAndWait('checkout', 'fast');
+
+      slowProvider.allowInitialization.complete();
+      await slowBinding;
+
+      final client = api.getClient('checkout', domain: 'checkout');
+      expect(identical(client.provider, fastProvider), isTrue);
+      expect(await client.getBooleanFlag('test'), isFalse);
+    });
+
+    test(
+      'activates a pending provider over an existing domain binding',
+      () async {
+        final api = OpenFeatureAPI();
+        final originalProvider = TestProvider({
+          'test': true,
+        }, providerName: 'original-provider');
+        final replacementProvider = TestProvider({
+          'test': false,
+        }, providerName: 'replacement-provider');
+        api.registerProvider(originalProvider, providerId: 'original');
+        await api.bindClientToProviderAndWait('checkout', 'original');
+
+        api.bindClientToProvider('checkout', 'replacement');
+        final replacementBound = api.events.firstWhere(
+          (event) =>
+              event.type ==
+                  OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED &&
+              event.domain == 'checkout' &&
+              identical(event.provider, replacementProvider),
+        );
+        api.registerProvider(replacementProvider, providerId: 'replacement');
+        await replacementBound;
+
+        final client = api.getClient('checkout', domain: 'checkout');
+        expect(identical(client.provider, replacementProvider), isTrue);
+        expect(await client.getBooleanFlag('test'), isFalse);
+      },
+    );
+
+    test(
+      'latest registered provider instance wins during initialization',
+      () async {
+        final api = OpenFeatureAPI();
+        final originalProvider = TestProvider({
+          'test': true,
+        }, providerName: 'original-provider');
+        final slowProvider = DelayedTestProvider({
+          'test': true,
+        }, providerName: 'slow-provider');
+        final replacementProvider = TestProvider({
+          'test': false,
+        }, providerName: 'replacement-provider');
+        api.registerProvider(originalProvider, providerId: 'original');
+        await api.bindClientToProviderAndWait('checkout', 'original');
+        api.registerProvider(slowProvider, providerId: 'replacement');
+
+        api.bindClientToProvider('checkout', 'replacement');
+        await slowProvider.initializationStarted.future;
+        final replacementBound = api.events.firstWhere(
+          (event) =>
+              event.type ==
+                  OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED &&
+              event.domain == 'checkout' &&
+              identical(event.provider, replacementProvider),
+        );
+        api.registerProvider(replacementProvider, providerId: 'replacement');
+        await replacementBound;
+
+        slowProvider.allowInitialization.complete();
+        await slowProvider.initializationCompleted.future;
+        await Future<void>.delayed(Duration.zero);
+
+        final client = api.getClient('checkout', domain: 'checkout');
+        expect(identical(client.provider, replacementProvider), isTrue);
+        expect(await client.getBooleanFlag('test'), isFalse);
+        expect(slowProvider.shutdownCount, 1);
+      },
+    );
 
     test('emits events on provider change', () async {
       final api = OpenFeatureAPI();

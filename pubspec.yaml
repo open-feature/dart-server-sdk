@@ -16,7 +16,7 @@ version: 0.0.22
 
 homepage: https://github.com/open-feature/dart-server-sdk
 environment:
-  sdk: ^3.11.4
+  sdk: ^3.12.2
 
 dependencies:
   # Core dependencies
@@ -27,6 +27,10 @@ dependencies:
 dev_dependencies:
   # For testing
   coverage: ^1.15.0 # For Code Coverage Reports
+  # Dart 3.12 removed the legacy frontend_server.dart.snapshot layout used by
+  # frontend_server_client 3.x. Keep minimum-dependency test runs on the
+  # SDK-layout-aware client.
+  frontend_server_client: ^4.0.0
   git_hooks: ^1.0.2 # Provides hooks for locla ddevelopment
   lints: ^6.0.0 # Recommended lints for maintaining code quality
   mockito: ^5.5.1 # For mocking objects in unit tests

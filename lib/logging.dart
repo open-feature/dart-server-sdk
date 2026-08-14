@@ -20,13 +20,13 @@ class StructuredLogEntry {
   });
 
   Map<String, dynamic> toJson() => {
-        'level': level.name,
-        'message': message,
-        'timestamp': timestamp.toIso8601String(),
-        'context': context,
-        if (error != null) 'error': error,
-        if (stackTrace != null) 'stackTrace': stackTrace.toString(),
-      };
+    'level': level.name,
+    'message': message,
+    'timestamp': timestamp.toIso8601String(),
+    'context': context,
+    if (error != null) 'error': error,
+    if (stackTrace != null) 'stackTrace': stackTrace.toString(),
+  };
 
   @override
   String toString() => jsonEncode(toJson());

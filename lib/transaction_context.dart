@@ -100,26 +100,20 @@ class TransactionContextManager {
     final zoneContexts = Map<String, TransactionContext>.from(_contexts);
     final zoneStack = List<String>.from(_contextStack);
 
-    return await runZoned(
-      () async {
-        final context = TransactionContext(
-          transactionId: transactionId,
-          attributes: attributes,
-          parent: currentContext,
-        );
+    return await runZoned(() async {
+      final context = TransactionContext(
+        transactionId: transactionId,
+        attributes: attributes,
+        parent: currentContext,
+      );
 
-        pushContext(context);
-        try {
-          return await operation();
-        } finally {
-          popContext();
-        }
-      },
-      zoneValues: {
-        _zoneContextsKey: zoneContexts,
-        _zoneStackKey: zoneStack,
-      },
-    );
+      pushContext(context);
+      try {
+        return await operation();
+      } finally {
+        popContext();
+      }
+    }, zoneValues: {_zoneContextsKey: zoneContexts, _zoneStackKey: zoneStack});
   }
 
   void cleanup() {

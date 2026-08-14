@@ -78,9 +78,13 @@ Here's the updated **Branching and Commit Guidelines** section with the adjustme
 ### **Branch Naming Conventions**
 
 Follow these conventions when creating branches for pull requests:
-```
+```text
 <type>/<branch-name>
 ```
+
+Branch names may contain lowercase letters, digits, periods, underscores, and
+hyphens. Periods are useful when the branch name includes a semantic version,
+for example `chore/dart-sdk-3.12.2`.
 
 | **Branch Type** | **Purpose**                                                                                         |
 |-----------------|-----------------------------------------------------------------------------------------------------|
@@ -88,8 +92,12 @@ Follow these conventions when creating branches for pull requests:
 | `fix`           | For bug fixes. Example: `fix/login-error`.                                                          |
 | `hotfix`        | For urgent production fixes requiring immediate attention. Example: `hotfix/critical-db-error`.     |
 | `chore`         | For maintenance tasks, such as dependency updates or refactoring. Example: `chore/update-dependencies`. |
+| `refactor`      | For code restructuring without behavior changes. Example: `refactor/provider-lifecycle`.             |
 | `release`       | For preparing release branches with versioned changes. Example: `release/v1.2.0`.                   |
 | `test`          | For testing-related changes, such as adding or modifying test cases. Example: `test/add-unit-tests`.|
+| `docs`          | For documentation-only changes. Example: `docs/update-installation`.                               |
+| `ci`            | For CI and workflow maintenance. Example: `ci/dedupe-validation`.                                  |
+| `admin`         | For administrative maintenance. Example: `admin/update-policy`.                                   |
 
 ---
 
@@ -101,8 +109,12 @@ Follow these conventions when creating branches for pull requests:
 | `fix`             | `fix/payment-gateway-bug`          |
 | `hotfix`          | `hotfix/critical-db-error`         |
 | `chore`           | `chore/upgrade-dependencies`       |
+| `refactor`        | `refactor/provider-lifecycle`      |
 | `test`            | `test/add-integration-tests`       |
 | `release`         | `release/v1.2.0`                   |
+| `docs`            | `docs/update-installation`         |
+| `ci`              | `ci/dedupe-validation`             |
+| `admin`           | `admin/update-policy`              |
 
 ---
 
@@ -131,6 +143,9 @@ We follow [Conventional Commits](https://www.conventionalcommits.org) to ensure 
 | `test`        | `test`                 | Adds or updates tests. Example: `test(api): add integration tests`.            |
 | `refactor`    | `refactor`             | Code restructuring without functional changes. Example: `refactor(ui): improve layout`. |
 | `release`     | `release`              | Prepares a versioned release. Example: `release: v1.2.0`.                      |
+| `docs`        | `docs`                 | Updates documentation. Example: `docs(api): clarify evaluation context`.      |
+| `ci`          | `ci`                   | Updates CI or automation. Example: `ci: cancel stale validation runs`.         |
+| `admin`       | `admin`                | Administrative maintenance. Example: `admin: update repository policy`.       |
 
 ---
 
@@ -160,22 +175,22 @@ We follow [Conventional Commits](https://www.conventionalcommits.org) to ensure 
 
 ---
 
-### **Branching Rules and Protection**
+### **Branching and Release Flow**
 
-To maintain consistency and ensure stability, we enforce the following **branch protection rules**:
+The repository currently uses two long-lived branches:
 
-#### **Protected Branches**
+- `development` is the integration and QA branch.
+- `main` is the protected production and release branch.
 
-- **Branches**: `main`, `qa`, `development`
+There is no `qa` branch. Validate changes on `development` before promoting
+them to `main`.
 
-- **Rules**:
-  - Direct **pushes** are not allowed.
-  - Changes must go through a **pull request** and pass all required checks before merging.
-  - At least **1 reviewer** must approve pull requests.
-  - Status checks:
-    - **Branch name validation** must pass.
-    - **Commit message validation** must pass.
-    - Relevant workflows (e.g., `main-workflow`, `qa-workflow`) must pass.
+The normal change path is:
+
+1. Open a pull request from a short-lived branch into `development`.
+2. Complete automated checks and development QA.
+3. Promote the tested `development` commit to `main` through a pull request.
+4. Satisfy the `main` ruleset, including its required status checks and review.
 
 #### **Unprotected Branches**
 - Feature and other short-lived branches (e.g., `feat/add-auth`, `fix/login-error`) are not protected.
@@ -184,7 +199,7 @@ To maintain consistency and ensure stability, we enforce the following **branch 
 #### **Branch Lifecycle**
 - **Feature, Fix, Hotfix, Test Branches**:
   - Created by developers for specific tasks.
-  - Merged into `main`, `qa`, or `development` branches through pull requests.
+  - Merged into `development` through pull requests.
   - Deleted after merging.
 
 ---
@@ -195,14 +210,15 @@ To maintain consistency and ensure stability, we enforce the following **branch 
    - Example: `feat/add-user-auth`.
    - Pushes to these branches are allowed without restrictions.
 
-2. **Pull Requests into Protected Branches**:
+2. **Pull Requests into Development**:
 
-   - Protected branches (`main`, `qa`, `development`) require pull requests.
+   - Open short-lived branches against `development` for integration and QA.
    - Pull requests trigger workflows for testing and validation.
 
-3. **Validation on Push and Pull Requests**:
-   - Branch name and commit message validations are run on all branches during pushes.
-   - Protected branches also enforce workflow checks and reviews.
+3. **Promotion to Main**:
+   - Short-lived branches are validated when a pull request is opened or updated.
+   - `development` is validated again after merged changes are pushed.
+   - Only tested `development` changes are promoted to protected `main`.
 
 ---
 
@@ -293,17 +309,41 @@ To certify your contribution, you must add a `Signed-off-by` line to your commit
      ```
 
 3. **Forgot to Sign Off?**:
-   - If you forgot to sign off a commit, you can fix it by amending the commit:
+   - Before a commit is shared, fix it by amending the commit:
      ```bash
      git commit --amend --signoff
      git push --force-with-lease
      ```
 
-   - For multiple commits, rebase with `--signoff`:
+   - For multiple unshared commits, rebase with `--signoff`:
      ```bash
      git rebase --signoff HEAD~<number-of-commits>
      git push --force-with-lease
      ```
+
+   - Do not rewrite shared `development` or protected `main` history. If a DCO
+     mismatch reaches a shared branch, use the repository's individual DCO
+     remediation support and the exact remediation text reported by the DCO
+     check.
+   - When that shared branch is itself the open pull request head, add the
+     non-empty remediation commit directly to that branch. Do not route it
+     through another squash merge: GitHub replaces the source commit message,
+     which can discard the remediation text and author-matching trailer.
+
+4. **Match the Commit Author**:
+   - The sign-off name and email must match the final commit author. In
+     particular, when GitHub creates a squash commit as
+     `ABC2015 <6826984+ABC2015@users.noreply.github.com>`, include this trailer
+     in the squash commit message:
+     ```text
+     Signed-off-by: ABC2015 <6826984+ABC2015@users.noreply.github.com>
+     ```
+   - An additional contributor sign-off may be retained, but it does not
+     replace the matching author sign-off.
+   - A green DCO check on the source pull request does not guarantee that a
+     GitHub-generated squash commit will pass DCO. Before selecting **Squash
+     and merge**, inspect the generated commit message and add the trailer for
+     the GitHub account that will author the squash commit.
 
 ---
 
@@ -315,7 +355,7 @@ To certify your contribution, you must add a `Signed-off-by` line to your commit
 
 6. **Open a Pull Request**:
    - Navigate to the repository on GitHub.
-   - Open a pull request targeting the `qa` branch.
+   - Open a pull request targeting the `development` branch.
    - Provide a clear title and description summarizing your changes, including:
      - The problem your changes solve.
      - The approach you used.
@@ -351,7 +391,7 @@ Pull requests often receive feedback. Follow these steps to address requested ch
 3. **Rebase and Squash Commits**:
    - If your branch has multiple commits and needs to be cleaned up:
      ```bash
-     git rebase -i origin/qa
+     git rebase -i origin/development
      git push --force-with-lease
      ```
 

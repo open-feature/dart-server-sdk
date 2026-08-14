@@ -22,8 +22,11 @@ void main() {
     test('handles parent-child domain relationships', () {
       manager.bindClientToProvider('parent', 'provider1');
 
-      manager.bindClientToProvider('child', 'provider2',
-          parentDomainId: 'parent');
+      manager.bindClientToProvider(
+        'child',
+        'provider2',
+        parentDomainId: 'parent',
+      );
 
       final childDomains = manager.getChildDomains('parent');
       expect(childDomains.length, equals(1));
@@ -42,14 +45,20 @@ void main() {
 
     test('throws on invalid configuration', () {
       expect(
-          () => manager.bindClientToProvider('client1', 'provider1',
-              config: DomainConfiguration(name: '')),
-          throwsA(isA<DomainValidationException>()));
+        () => manager.bindClientToProvider(
+          'client1',
+          'provider1',
+          config: DomainConfiguration(name: ''),
+        ),
+        throwsA(isA<DomainValidationException>()),
+      );
     });
 
     test('emits domain updates', () async {
-      expect(manager.domainUpdates,
-          emits(predicate<Domain>((d) => d.clientId == 'client1')));
+      expect(
+        manager.domainUpdates,
+        emits(predicate<Domain>((d) => d.clientId == 'client1')),
+      );
 
       manager.bindClientToProvider('client1', 'provider1');
     });

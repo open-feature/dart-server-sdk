@@ -4,57 +4,55 @@ name: Parent Pipeline
 
 on:
   push:
-    branches-ignore:
-      - test
+    branches:
+      - main
+      - development
 
   pull_request:
     types:
       - opened
-      - edited
+      - reopened
       - synchronize
+      - ready_for_review
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  determine-workflow:
-    name: Determine Workflow Context
-    runs-on: ubuntu-latest
-    outputs:
-      branch_name: ${{ steps.determine.outputs.branch_name }}
-      event_name: ${{ steps.determine.outputs.event_name }}
-    steps:
-      - id: determine
-        name: Extract Branch and Event
-        env:
-          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          echo "Extracting branch and event context..."
-          echo "Branch Name: $BRANCH_NAME"
-          echo "Event Name: $EVENT_NAME"
-          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
-          echo "event_name=$EVENT_NAME" >> "$GITHUB_OUTPUT"
   trigger-validation:
     name: Trigger Validation Workflow
-    needs: determine-workflow
+    # A development -> main promotion already has same-SHA push validation.
+    # Skip only that duplicate PR event; all contributor PRs still run here.
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.draft == false &&
+       !(github.event.pull_request.base.ref == 'main' &&
+         github.event.pull_request.head.ref == 'development' &&
+         github.event.pull_request.head.repo.full_name == github.repository))
     uses: ./.github/workflows/validation-workflow.yml
     with:
-      branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
-      event_name: ${{ needs.determine-workflow.outputs.event_name }}
+      branch_name: ${{ github.head_ref || github.ref_name }}
 
   trigger-coverage:
     name: Trigger Coverage Workflow
-    needs: determine-workflow
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.draft == false &&
+       !(github.event.pull_request.base.ref == 'main' &&
+         github.event.pull_request.head.ref == 'development' &&
+         github.event.pull_request.head.repo.full_name == github.repository))
     uses: ./.github/workflows/coverage-workflow.yml
-    with:
-      branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
-      event_name: ${{ needs.determine-workflow.outputs.event_name }}
 
   contributor-workflow:
     name: Trigger Contributor Workflow
-    needs: determine-workflow
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.draft == false &&
+       !(github.event.pull_request.base.ref == 'main' &&
+         github.event.pull_request.head.ref == 'development' &&
+         github.event.pull_request.head.repo.full_name == github.repository))
     uses: ./.github/workflows/contributor-workflow.yml
-    with:
-      branch_name: ${{ needs.determine-workflow.outputs.branch_name }}
-      event_name: ${{ needs.determine-workflow.outputs.event_name }}

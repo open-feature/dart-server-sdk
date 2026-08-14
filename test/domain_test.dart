@@ -31,8 +31,12 @@ void main() {
       final parent = Domain('parent-id', 'provider1', config: parentConfig);
 
       final childConfig = DomainConfiguration(name: 'child');
-      final child =
-          Domain('child-id', 'provider2', config: childConfig, parent: parent);
+      final child = Domain(
+        'child-id',
+        'provider2',
+        config: childConfig,
+        parent: parent,
+      );
 
       expect(parent.children, contains(child));
       expect(child.isChildOf(parent), isTrue);
@@ -40,13 +44,21 @@ void main() {
 
     test('merges settings correctly', () {
       final parentConfig = DomainConfiguration(
-          name: 'parent', settings: {'key1': 'parent', 'shared': 'parent'});
+        name: 'parent',
+        settings: {'key1': 'parent', 'shared': 'parent'},
+      );
       final parent = Domain('parent-id', 'provider1', config: parentConfig);
 
       final childConfig = DomainConfiguration(
-          name: 'child', settings: {'key2': 'child', 'shared': 'child'});
-      final child =
-          Domain('child-id', 'provider2', config: childConfig, parent: parent);
+        name: 'child',
+        settings: {'key2': 'child', 'shared': 'child'},
+      );
+      final child = Domain(
+        'child-id',
+        'provider2',
+        config: childConfig,
+        parent: parent,
+      );
 
       final settings = child.effectiveSettings;
       expect(settings['key1'], equals('parent'));

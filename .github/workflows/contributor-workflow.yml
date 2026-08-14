@@ -4,25 +4,19 @@ name: Contributor Workflow
 
 on:
   workflow_call: # Makes the workflow reusable
-    inputs:
-      branch_name:
-        required: true
-        type: string
-      event_name:
-        required: true
-        type: string
 
 jobs:
   analyze-core:
     name: Analyze Core Dart Server SDK
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Dart
-        uses: dart-lang/setup-dart@v1
+        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
         # with:
         #   sdk: stable   # (optional; stable is the default)
 
@@ -57,26 +51,23 @@ jobs:
           echo "Checking for outdated dependencies..."
           dart pub outdated || true
 
-      # - name: Run Static Analysis (capture & show)
-      #   id: analyze
-      #   working-directory: ${{ steps.pkg.outputs.dir }}
-      #   shell: bash
-      #   run: |
-      #     set -o pipefail
-      #     echo "Running static analysis for core SDK..."
-      #     # Write both stdout and stderr to files while also echoing to the log.
-      #     # Keep stdout and stderr separate so we can categorize later.
-      #     # stdout -> analysis_report.txt, stderr -> error_log.txt
-      #     { dart analyze lib/ | tee analysis_report.txt; } 2> >(tee error_log.txt >&2)
-      #     STATUS=${PIPESTATUS[0]}
-      #     if [[ $STATUS -ne 0 ]]; then
-      #       echo "❌ Static analysis failed. See error_log.txt below:"
-      #       sed -n '1,200p' error_log.txt || true
-      #     else
-      #       echo "✅ Static analysis completed successfully. No critical errors found."
-      #     fi
-      #     echo "status=$STATUS" >> "$GITHUB_OUTPUT"
-      #     exit $STATUS || true  # Don’t fail the step here; allow categorization + artifacts.
+      - name: Verify Dart Formatting
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Run Static Analysis (capture and show)
+        id: analyze
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        shell: bash
+        run: |
+          set -o pipefail
+          echo "Running static analysis for core SDK..."
+          set +e
+          { dart analyze | tee analysis_report.txt; } 2> >(tee error_log.txt >&2)
+          STATUS=${PIPESTATUS[0]}
+          set -e
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Categorize and Count Analysis Results
         if: always()
@@ -137,7 +128,7 @@ jobs:
 
       - name: Upload Analysis Artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: core-sdk-analysis
           path: |
@@ -150,7 +141,7 @@ jobs:
 
       # Fail the job if the analyzer actually failed.
       - name: Fail if analyzer failed
-        if: ${{ steps.analyze.outputs.status != '0' }}
+        if: ${{ always() && steps.analyze.outputs.status != '0' }}
         run: |
-          echo "❌ Failing job because the analyzer returned a non-zero exit code."
+          echo "Failing job because the analyzer returned a non-zero exit code."
           exit 1

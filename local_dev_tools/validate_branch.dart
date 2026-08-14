@@ -14,9 +14,11 @@ void main(List<String> args) {
 
   print('Branch name: $branchName');
 
-  final validBranches = RegExp(r'^(qa|development|main)$');
+  final validBranches = RegExp(
+    r'^(development|main|release-please--branches--main--components--openfeature_dart_server_sdk)$',
+  );
   final validFeatureBranch = RegExp(
-    r'^(feat|fix|hotfix|chore|test|refactor|release)/[a-z0-9_-]+$',
+    r'^(feat|fix|hotfix|chore|test|refactor|release|admin|docs|ci)/[a-z0-9._-]+$',
   );
 
   if (validBranches.hasMatch(branchName) ||
@@ -27,7 +29,7 @@ void main(List<String> args) {
       '❌ Branch name does not follow the required convention: <type>/<branch-name>',
     );
     print(
-      'Valid types: feat, fix, hotfix, chore, test, refactor, release, qa, development, main',
+      'Valid types: feat, fix, hotfix, chore, test, refactor, release, admin, docs, ci, development, main',
     );
     exit(1);
   }

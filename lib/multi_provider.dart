@@ -97,13 +97,11 @@ class MultiProvider implements FeatureProvider {
   @override
   Future<void> initialize([Map<String, dynamic>? config]) async {
     final errors = await _collectErrors(
-      _providers.map(
-        (provider) async {
-          if (provider.state == ProviderState.NOT_READY) {
-            await provider.initialize(config);
-          }
-        },
-      ),
+      _providers.map((provider) async {
+        if (provider.state == ProviderState.NOT_READY) {
+          await provider.initialize(config);
+        }
+      }),
     );
 
     _throwIfNoProviderReady(errors, 'initialize');
@@ -239,15 +237,14 @@ class MultiProvider implements FeatureProvider {
       variant: result.variant,
       errorCode: result.errorCode,
       errorMessage: result.errorMessage,
+      flagMetadata: result.flagMetadata,
       details: result.details,
       evaluatedAt: result.evaluatedAt,
       evaluatorId: name,
     );
   }
 
-  Future<List<Object>> _collectErrors(
-    Iterable<Future<void>> operations,
-  ) async {
+  Future<List<Object>> _collectErrors(Iterable<Future<void>> operations) async {
     final results = await Future.wait<Object?>(
       operations.map((operation) async {
         try {

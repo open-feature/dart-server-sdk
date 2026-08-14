@@ -7,15 +7,27 @@ import 'evaluation_context.dart';
 import 'feature_provider.dart';
 import 'hooks.dart';
 import 'open_feature_event.dart';
+import 'provider_lifecycle.dart';
+import 'src/provider_lifecycle_manager.dart';
 
 class OpenFeatureEvaluationContext {
+  final String? targetingKey;
   final Map<String, dynamic> attributes;
 
-  OpenFeatureEvaluationContext(this.attributes);
+  OpenFeatureEvaluationContext(
+    Map<String, dynamic> attributes, {
+    this.targetingKey,
+  }) : attributes = Map.unmodifiable(Map.of(attributes));
 
   OpenFeatureEvaluationContext merge(OpenFeatureEvaluationContext other) {
-    return OpenFeatureEvaluationContext({...attributes, ...other.attributes});
+    return OpenFeatureEvaluationContext({
+      ...attributes,
+      ...other.attributes,
+    }, targetingKey: other.targetingKey ?? targetingKey);
   }
+
+  EvaluationContext toEvaluationContext() =>
+      EvaluationContext(targetingKey: targetingKey, attributes: attributes);
 }
 
 abstract class OpenFeatureHook {
@@ -140,14 +152,23 @@ class OpenFeatureAPI {
 
   late FeatureProvider _provider;
   final Map<String, FeatureProvider> _providerRegistry = {};
+  final Map<String, FeatureProvider> _domainProviderBindings = {};
+  final Map<String, String> _domainProviderIds = {};
+  final Map<String, int> _domainBindingGenerations = {};
   final DomainManager _domainManager = DomainManager();
+  late final ProviderLifecycleManager _lifecycleManager;
   final List<OpenFeatureHook> _hooks = [];
   OpenFeatureEvaluationContext? _globalContext;
   StreamSubscription<Domain>? _domainSubscription;
+  StreamSubscription<LogRecord>? _logSubscription;
+  int _defaultBindingGeneration = 0;
+  FeatureProvider? _requestedDefaultProvider;
+  bool _disposed = false;
 
   final StreamController<FeatureProvider> _providerStreamController;
   final StreamController<OpenFeatureEvent> _eventStreamController;
   final StreamController<Map<String, String>> _domainUpdatesController;
+  Future<void>? _disposeFuture;
 
   OpenFeatureAPI._internal()
     : _providerStreamController = StreamController<FeatureProvider>.broadcast(),
@@ -155,13 +176,19 @@ class OpenFeatureAPI {
       _domainUpdatesController =
           StreamController<Map<String, String>>.broadcast() {
     _configureLogging();
+    _lifecycleManager = ProviderLifecycleManager(_handleProviderLifecycleEvent);
     _domainSubscription = _domainManager.domainUpdates.listen((domain) {
-      _domainUpdatesController.add({
-        'clientId': domain.clientId,
-        'providerName': domain.providerName,
-      });
+      if (!_disposed) {
+        _domainUpdatesController.add({
+          'clientId': domain.clientId,
+          'providerName': domain.providerName,
+        });
+      }
     });
-    _initializeDefaultProvider();
+    final defaultProvider = _ImmediateReadyProvider();
+    _defaultBindingGeneration++;
+    _requestedDefaultProvider = defaultProvider;
+    _installDefaultProvider(defaultProvider);
   }
 
   factory OpenFeatureAPI() {
@@ -171,7 +198,7 @@ class OpenFeatureAPI {
 
   void _configureLogging() {
     Logger.root.level = Level.ALL;
-    Logger.root.onRecord.listen((record) {
+    _logSubscription = Logger.root.onRecord.listen((record) {
       print(
         '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}',
       );
@@ -196,130 +223,225 @@ class OpenFeatureAPI {
     }
   }
 
-  void _initializeDefaultProvider() {
-    _provider = _ImmediateReadyProvider();
+  void _installDefaultProvider(FeatureProvider provider) {
+    _provider = provider;
     _providerRegistry[_provider.metadata.name] = _provider;
+    _lifecycleManager.bindDefault(_provider);
     _logger.info('Default provider initialized and ready');
     _emitEvent(
       OpenFeatureEventType.PROVIDER_READY,
       'Default provider ready',
+      provider: _provider,
       providerMetadata: _provider.metadata,
     );
   }
 
   Future<void> setProvider(FeatureProvider provider) async {
     _logger.info('Setting provider: ${provider.name}');
-
-    try {
-      if (provider.state == ProviderState.NOT_READY) {
-        await provider.initialize();
-      }
-
-      _provider = provider;
-      _providerRegistry[provider.metadata.name] = provider;
-      _providerStreamController.add(provider);
-
-      if (provider.state == ProviderState.READY) {
-        _emitEvent(
-          OpenFeatureEventType.PROVIDER_READY,
-          'Provider ready: ${provider.name}',
-          providerMetadata: provider.metadata,
-        );
-      } else {
-        _emitEvent(
-          OpenFeatureEventType.PROVIDER_ERROR,
-          'Provider not ready: ${provider.name}',
-          data: {'state': provider.state.name},
-          providerMetadata: provider.metadata,
-          errorCode: _errorCodeFrom(null, state: provider.state),
-        );
-      }
-    } catch (error) {
-      _logger.severe('Failed to initialize provider: $error');
-      _provider = provider;
-      _providerRegistry[provider.metadata.name] = provider;
-      _providerStreamController.add(provider);
-      _emitEvent(
-        OpenFeatureEventType.PROVIDER_ERROR,
-        'Provider initialization failed: ${provider.name}',
-        data: error,
-        providerMetadata: provider.metadata,
-        errorCode: _errorCodeFrom(error),
-      );
-    }
+    await _setDefaultProvider(provider, rethrowInitializationError: false);
   }
 
   /// Set provider and wait for it to be ready
   Future<void> setProviderAndWait(FeatureProvider provider) async {
     _logger.info('Setting provider and waiting: ${provider.name}');
+    await _setDefaultProvider(provider, rethrowInitializationError: true);
+  }
+
+  Future<void> _setDefaultProvider(
+    FeatureProvider provider, {
+    required bool rethrowInitializationError,
+  }) async {
+    final requestGeneration = ++_defaultBindingGeneration;
+    _requestedDefaultProvider = provider;
+    Object? initializationError;
+    StackTrace? initializationStack;
 
     try {
-      if (provider.state == ProviderState.NOT_READY) {
-        await provider.initialize();
-      }
+      await _lifecycleManager.initialize(provider);
+    } catch (error, stackTrace) {
+      initializationError = error;
+      initializationStack = stackTrace;
+      _logger.severe('Failed to initialize provider: $error');
+    }
 
-      if (provider.state != ProviderState.READY) {
-        throw ProviderException(
-          'Provider failed to reach READY state: ${provider.state}',
-          code: ErrorCode.PROVIDER_NOT_READY,
+    if (_disposed) {
+      if (initializationError != null && rethrowInitializationError) {
+        Error.throwWithStackTrace(
+          initializationError,
+          initializationStack ?? StackTrace.current,
         );
       }
+      return;
+    }
 
+    if (requestGeneration != _defaultBindingGeneration) {
+      if (!identical(_provider, provider)) {
+        try {
+          await _lifecycleManager.shutdownIfUnused(
+            provider,
+            isExternallyInUse: () =>
+                identical(_requestedDefaultProvider, provider) ||
+                _providerRegistry.values.any(
+                  (registered) => identical(registered, provider),
+                ),
+          );
+        } catch (error) {
+          _logger.severe(
+            'Failed to shutdown superseded provider '
+            '${provider.metadata.name}: $error',
+          );
+        }
+      }
+      if (initializationError != null && rethrowInitializationError) {
+        Error.throwWithStackTrace(
+          initializationError,
+          initializationStack ?? StackTrace.current,
+        );
+      }
+      return;
+    }
+
+    final previousProvider = _provider;
+    if (!identical(previousProvider, provider)) {
+      _lifecycleManager.bindDefault(provider);
       _provider = provider;
-      _providerRegistry[provider.metadata.name] = provider;
+      final registeredProvider = _providerRegistry[provider.metadata.name];
+      if (registeredProvider == null ||
+          identical(registeredProvider, previousProvider)) {
+        _providerRegistry[provider.metadata.name] = provider;
+        _activatePendingBindings(provider.metadata.name, provider);
+      }
       _providerStreamController.add(provider);
-      _emitEvent(
-        OpenFeatureEventType.PROVIDER_READY,
-        'Provider ready: ${provider.name}',
-        providerMetadata: provider.metadata,
+      try {
+        await _lifecycleManager.unbindDefault(previousProvider);
+      } catch (error) {
+        _logger.severe(
+          'Failed to shutdown replaced provider '
+          '${previousProvider.metadata.name}: $error',
+        );
+        _emitEvent(
+          OpenFeatureEventType.PROVIDER_ERROR,
+          'Replaced provider shutdown failed: ${previousProvider.name}',
+          data: error,
+          provider: previousProvider,
+          providerMetadata: previousProvider.metadata,
+          errorCode: _errorCodeFrom(error),
+        );
+      }
+    }
+
+    if (initializationError != null && rethrowInitializationError) {
+      Error.throwWithStackTrace(
+        initializationError,
+        initializationStack ?? StackTrace.current,
       );
-    } catch (error) {
-      _logger.severe('Failed to initialize provider: $error');
-      _provider = provider;
-      _providerRegistry[provider.metadata.name] = provider;
-      _providerStreamController.add(provider);
-      _emitEvent(
-        OpenFeatureEventType.PROVIDER_ERROR,
-        'Provider initialization failed: ${provider.name}',
-        data: error,
-        providerMetadata: provider.metadata,
-        errorCode: _errorCodeFrom(error),
-      );
-      rethrow;
     }
   }
 
-  void registerProvider(FeatureProvider provider) {
-    _providerRegistry[provider.metadata.name] = provider;
+  /// Register a provider under an SDK identifier.
+  ///
+  /// The identifier defaults to provider metadata for backwards compatibility.
+  /// Callers registering same-name instances must supply distinct identifiers.
+  String registerProvider(FeatureProvider provider, {String? providerId}) {
+    final id = providerId ?? provider.metadata.name;
+    if (id.isEmpty) {
+      throw ArgumentError.value(id, 'providerId', 'must not be empty');
+    }
+    _lifecycleManager.track(provider);
+    final replacedProvider = _providerRegistry[id];
+    _providerRegistry[id] = provider;
+    _activatePendingBindings(id, provider);
+    if (replacedProvider != null && !identical(replacedProvider, provider)) {
+      unawaited(
+        _lifecycleManager
+            .shutdownIfUnused(
+              replacedProvider,
+              isExternallyInUse: () => _providerRegistry.values.any(
+                (registered) => identical(registered, replacedProvider),
+              ),
+            )
+            .catchError((Object error) {
+              _logger.severe(
+                'Failed to retire replaced provider registration $id: $error',
+              );
+            }),
+      );
+    }
+    return id;
   }
 
-  /// Shutdown the current provider (spec v0.8.0: status MUST indicate NOT_READY after shutdown)
+  void _activatePendingBindings(String providerId, FeatureProvider provider) {
+    final pendingDomains = _domainProviderIds.entries
+        .where(
+          (entry) =>
+              entry.value == providerId &&
+              !identical(_domainProviderBindings[entry.key], provider),
+        )
+        .map((entry) => entry.key)
+        .toList();
+
+    if (pendingDomains.isNotEmpty) {
+      unawaited(
+        _initializeAndBindDomainProvider(
+          pendingDomains,
+          providerId,
+          provider,
+        ).catchError((Object error) {
+          _logger.severe('Failed to activate provider $providerId: $error');
+        }),
+      );
+    }
+  }
+
+  Future<String> registerProviderAndWait(
+    FeatureProvider provider, {
+    String? providerId,
+  }) async {
+    final id = registerProvider(provider, providerId: providerId);
+    await _lifecycleManager.initialize(provider);
+    return id;
+  }
+
+  /// Shutdown the current provider after its final binding is removed.
   Future<void> shutdownProvider() async {
     _logger.info('Shutting down provider: ${_provider.name}');
+    final provider = _provider;
+    final replacement = _ImmediateReadyProvider();
+    final requestGeneration = ++_defaultBindingGeneration;
+    _requestedDefaultProvider = replacement;
 
     try {
-      await _provider.shutdown();
-      _emitEvent(
-        OpenFeatureEventType.PROVIDER_STALE,
-        'Provider shutdown: ${_provider.name}',
-        providerMetadata: _provider.metadata,
-      );
+      await _lifecycleManager.unbindDefault(provider);
     } catch (e) {
       _logger.severe('Error during provider shutdown: $e');
       _emitEvent(
         OpenFeatureEventType.PROVIDER_ERROR,
-        'Provider shutdown failed: ${_provider.name}',
+        'Provider shutdown failed: ${provider.name}',
         data: e,
-        providerMetadata: _provider.metadata,
+        provider: provider,
+        providerMetadata: provider.metadata,
         errorCode: _errorCodeFrom(e),
       );
     }
 
-    _initializeDefaultProvider();
+    if (requestGeneration == _defaultBindingGeneration) {
+      _installDefaultProvider(replacement);
+    }
   }
 
   FeatureProvider _resolveProviderForClient(String clientId, String? domain) {
     final bindingKey = domain ?? clientId;
+    final directlyBoundProvider = _domainProviderBindings[bindingKey];
+    if (directlyBoundProvider != null) {
+      return directlyBoundProvider;
+    }
+
+    // A name-first or asynchronous binding is not active until provider
+    // initialization and the direct binding both complete.
+    if (_domainProviderIds.containsKey(bindingKey)) {
+      return _provider;
+    }
+
     final boundProviderName = _domainManager.getProviderForClient(bindingKey);
     if (boundProviderName == null) {
       return _provider;
@@ -330,7 +452,12 @@ class OpenFeatureAPI {
 
   /// Get or create a client
   FeatureClient getClient(String name, {String? domain}) {
-    final selectedProvider = _resolveProviderForClient(name, domain);
+    FeatureProvider resolveProvider() =>
+        _resolveProviderForClient(name, domain);
+    final selectedProvider = resolveProvider();
+    EvaluationContext resolveApiContext() =>
+        _globalContext?.toEvaluationContext() ??
+        const EvaluationContext(attributes: {});
 
     final hookManager = HookManager();
     for (final hook in _hooks) {
@@ -340,11 +467,12 @@ class OpenFeatureAPI {
     return FeatureClient(
       metadata: ClientMetadata(name: name),
       hookManager: hookManager,
-      apiContext: _globalContext != null
-          ? EvaluationContext(attributes: _globalContext!.attributes)
-          : const EvaluationContext(attributes: {}),
+      apiContext: resolveApiContext(),
+      apiContextResolver: resolveApiContext,
       defaultContext: const EvaluationContext(attributes: {}),
       provider: selectedProvider,
+      providerResolver: resolveProvider,
+      providerStatusResolver: _lifecycleManager.statusOf,
       eventStream: events,
     );
   }
@@ -356,13 +484,14 @@ class OpenFeatureAPI {
 
   FeatureProvider get provider => _provider;
 
+  ProviderState get providerStatus => _lifecycleManager.statusOf(_provider);
+
   void setGlobalContext(OpenFeatureEvaluationContext context) {
     _logger.info('Setting global context');
     _globalContext = context;
     _emitEvent(
       OpenFeatureEventType.PROVIDER_CONTEXT_CHANGED,
       'Global context updated',
-      providerMetadata: _provider.metadata,
     );
   }
 
@@ -382,12 +511,160 @@ class OpenFeatureAPI {
       handler.cancel();
 
   void bindClientToProvider(String clientId, String providerId) {
-    _domainManager.bindClientToProvider(clientId, providerId);
+    final provider = _providerRegistry[providerId];
+    final request = _recordDomainBindingRequest(clientId, providerId);
+    if (provider == null) {
+      // Preserve the legacy name-first binding flow. Once a provider is
+      // registered under this identifier, clients resolve it dynamically.
+      _domainManager.bindClientToProvider(clientId, providerId);
+      _emitEvent(
+        OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED,
+        'Domain $clientId bound to pending provider $providerId',
+        domain: clientId,
+      );
+      return;
+    }
+
+    unawaited(
+      _initializeAndBindDomainProvider(
+        [clientId],
+        providerId,
+        provider,
+      ).catchError((Object error) {
+        _rollbackDomainBindingRequest(request);
+        _logger.severe('Failed to bind provider $providerId: $error');
+      }),
+    );
+  }
+
+  Future<void> bindClientToProviderAndWait(
+    String clientId,
+    String providerId,
+  ) async {
+    final provider = _providerRegistry[providerId];
+    if (provider == null) {
+      throw ArgumentError.value(providerId, 'providerId', 'is not registered');
+    }
+
+    final request = _recordDomainBindingRequest(clientId, providerId);
+    try {
+      await _initializeAndBindDomainProvider([clientId], providerId, provider);
+    } catch (_) {
+      _rollbackDomainBindingRequest(request);
+      rethrow;
+    }
+  }
+
+  Future<void> setProviderForDomainAndWait(
+    String domain,
+    FeatureProvider provider, {
+    String? providerId,
+  }) async {
+    final id = registerProvider(provider, providerId: providerId);
+    final request = _recordDomainBindingRequest(domain, id);
+    try {
+      await _initializeAndBindDomainProvider([domain], id, provider);
+    } catch (_) {
+      _rollbackDomainBindingRequest(request);
+      rethrow;
+    }
+  }
+
+  _DomainBindingRequest _recordDomainBindingRequest(
+    String domain,
+    String providerId,
+  ) {
+    final hadPreviousProviderId = _domainProviderIds.containsKey(domain);
+    final previousProviderId = _domainProviderIds[domain];
+    _domainProviderIds[domain] = providerId;
+    final generation = (_domainBindingGenerations[domain] ?? 0) + 1;
+    _domainBindingGenerations[domain] = generation;
+    return _DomainBindingRequest(
+      domain: domain,
+      providerId: providerId,
+      generation: generation,
+      hadPreviousProviderId: hadPreviousProviderId,
+      previousProviderId: previousProviderId,
+    );
+  }
+
+  void _rollbackDomainBindingRequest(_DomainBindingRequest request) {
+    if (_domainProviderIds[request.domain] != request.providerId ||
+        _domainBindingGenerations[request.domain] != request.generation) {
+      return;
+    }
+
+    _domainBindingGenerations[request.domain] = request.generation + 1;
+    if (request.hadPreviousProviderId) {
+      _domainProviderIds[request.domain] = request.previousProviderId!;
+    } else {
+      _domainProviderIds.remove(request.domain);
+    }
+  }
+
+  Future<void> _initializeAndBindDomainProvider(
+    Iterable<String> domains,
+    String providerId,
+    FeatureProvider provider,
+  ) async {
+    final requestGenerations = <String, int>{
+      for (final domain in domains)
+        domain: _domainBindingGenerations[domain] ?? 0,
+    };
+    await _lifecycleManager.initialize(provider);
+    for (final request in requestGenerations.entries) {
+      await _bindDomainProvider(
+        request.key,
+        providerId,
+        provider,
+        request.value,
+      );
+    }
+  }
+
+  Future<void> _bindDomainProvider(
+    String domain,
+    String providerId,
+    FeatureProvider provider,
+    int requestGeneration,
+  ) async {
+    if (_domainProviderIds[domain] != providerId ||
+        _domainBindingGenerations[domain] != requestGeneration ||
+        !identical(_providerRegistry[providerId], provider)) {
+      return;
+    }
+
+    final previousProvider = _domainProviderBindings[domain];
+    _lifecycleManager.bindDomain(provider, domain);
+    _domainProviderBindings[domain] = provider;
+    _domainProviderIds[domain] = providerId;
+    _domainManager.bindClientToProvider(domain, providerId);
     _emitEvent(
       OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED,
-      'Client $clientId bound to provider $providerId',
-      providerMetadata: _providerRegistry[providerId]?.metadata,
+      'Domain $domain bound to provider $providerId',
+      provider: provider,
+      domain: domain,
+      providerMetadata: provider.metadata,
     );
+
+    if (previousProvider != null && !identical(previousProvider, provider)) {
+      try {
+        await _lifecycleManager.unbindDomain(previousProvider, domain);
+      } catch (error) {
+        _logger.severe(
+          'Failed to shutdown provider removed from $domain: $error',
+        );
+        _emitEvent(
+          OpenFeatureEventType.PROVIDER_ERROR,
+          'Provider shutdown failed after removal from $domain',
+          data: error,
+          provider: previousProvider,
+          providerMetadata: previousProvider.metadata,
+          domain: domain,
+          errorCode: _errorCodeFrom(error),
+        );
+      }
+    }
   }
 
   /// @deprecated Use getClient().getBooleanFlag() instead
@@ -406,34 +683,112 @@ class OpenFeatureAPI {
     );
   }
 
+  void _handleProviderLifecycleEvent(
+    FeatureProvider provider,
+    ProviderLifecycleEvent event,
+  ) {
+    if (_disposed) {
+      return;
+    }
+    final eventType = switch (event.type) {
+      ProviderLifecycleEventType.PROVIDER_READY =>
+        OpenFeatureEventType.PROVIDER_READY,
+      ProviderLifecycleEventType.PROVIDER_ERROR =>
+        OpenFeatureEventType.PROVIDER_ERROR,
+      ProviderLifecycleEventType.PROVIDER_CONFIGURATION_CHANGED =>
+        OpenFeatureEventType.PROVIDER_CONFIGURATION_CHANGED,
+      ProviderLifecycleEventType.PROVIDER_STALE =>
+        OpenFeatureEventType.PROVIDER_STALE,
+      ProviderLifecycleEventType.PROVIDER_CONTEXT_CHANGED =>
+        OpenFeatureEventType.PROVIDER_CONTEXT_CHANGED,
+      ProviderLifecycleEventType.PROVIDER_RECONCILING =>
+        OpenFeatureEventType.PROVIDER_RECONCILING,
+    };
+
+    _emitEvent(
+      eventType,
+      event.message,
+      data: event.data,
+      provider: provider,
+      providerMetadata: provider.metadata,
+      errorCode: event.errorCode,
+      timestamp: event.timestamp,
+    );
+  }
+
   void _emitEvent(
     OpenFeatureEventType type,
     String message, {
     dynamic data,
+    FeatureProvider? provider,
     ProviderMetadata? providerMetadata,
+    String? domain,
     ErrorCode? errorCode,
+    DateTime? timestamp,
   }) {
+    if (_disposed) {
+      return;
+    }
     final event = OpenFeatureEvent(
       type,
       message,
       data: data,
+      provider: provider,
       providerMetadata: providerMetadata,
+      domain: domain,
       errorCode: errorCode,
+      timestamp: timestamp,
     );
     _eventStreamController.add(event);
   }
 
-  Future<void> dispose() async {
-    await _domainSubscription?.cancel();
-    _domainManager.dispose();
-    await _providerStreamController.close();
-    await _eventStreamController.close();
-    await _domainUpdatesController.close();
+  Future<void> dispose() => _disposeFuture ??= _dispose();
+
+  Future<void> _dispose() async {
+    _disposed = true;
+    Object? firstError;
+    StackTrace? firstStack;
+
+    Future<void> attempt(FutureOr<void> Function() operation) async {
+      try {
+        await operation();
+      } catch (error, stackTrace) {
+        firstError ??= error;
+        firstStack ??= stackTrace;
+      }
+    }
+
+    final domainSubscription = _domainSubscription;
+    _domainSubscription = null;
+    await attempt(() => domainSubscription?.cancel());
+    final logSubscription = _logSubscription;
+    _logSubscription = null;
+    await attempt(() => logSubscription?.cancel());
+    await attempt(_lifecycleManager.dispose);
+    await attempt(_domainManager.dispose);
+    await attempt(_providerStreamController.close);
+    await attempt(_eventStreamController.close);
+    await attempt(_domainUpdatesController.close);
+
+    if (firstError != null) {
+      Error.throwWithStackTrace(firstError!, firstStack ?? StackTrace.current);
+    }
   }
 
-  static void resetInstance() {
-    _instance?.dispose();
-    _instance = null;
+  /// Disposes the current singleton before allowing a replacement instance.
+  static Future<void> resetInstance() async {
+    final instance = _instance;
+    if (instance == null) {
+      return;
+    }
+
+    try {
+      await instance.dispose();
+    } finally {
+      if (identical(_instance, instance)) {
+        _instance = null;
+      }
+    }
   }
 
   Stream<FeatureProvider> get providerUpdates =>
@@ -441,6 +796,22 @@ class OpenFeatureAPI {
   Stream<OpenFeatureEvent> get events => _eventStreamController.stream;
   Stream<Map<String, String>> get domainUpdates =>
       _domainUpdatesController.stream;
+}
+
+class _DomainBindingRequest {
+  final String domain;
+  final String providerId;
+  final int generation;
+  final bool hadPreviousProviderId;
+  final String? previousProviderId;
+
+  const _DomainBindingRequest({
+    required this.domain,
+    required this.providerId,
+    required this.generation,
+    required this.hadPreviousProviderId,
+    required this.previousProviderId,
+  });
 }
 
 class _OpenFeatureHookAdapter extends BaseHook {
