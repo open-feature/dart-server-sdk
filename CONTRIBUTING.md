@@ -325,6 +325,10 @@ To certify your contribution, you must add a `Signed-off-by` line to your commit
      mismatch reaches a shared branch, use the repository's individual DCO
      remediation support and the exact remediation text reported by the DCO
      check.
+   - When that shared branch is itself the open pull request head, add the
+     non-empty remediation commit directly to that branch. Do not route it
+     through another squash merge: GitHub replaces the source commit message,
+     which can discard the remediation text and author-matching trailer.
 
 4. **Match the Commit Author**:
    - The sign-off name and email must match the final commit author. In
