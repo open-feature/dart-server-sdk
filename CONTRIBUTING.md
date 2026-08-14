@@ -344,6 +344,9 @@ To certify your contribution, you must add a `Signed-off-by` line to your commit
      GitHub-generated squash commit will pass DCO. Before selecting **Squash
      and merge**, inspect the generated commit message and add the trailer for
      the GitHub account that will author the squash commit.
+   - Immediately after merging, verify the final commit author and sign-off
+     before merging another pull request. If they do not match, remediate the
+     shared branch directly before opening or updating a promotion pull request.
 
 ---
 
