@@ -8,9 +8,9 @@ void main(List<String> args) {
     exit(1);
   }
 
-  final commitMessage = File(args[0]).readAsStringSync();
+  final commitMessage = File(args[0]).readAsLinesSync().firstOrNull ?? '';
   final regex = RegExp(
-    r'^(feat|fix|hotfix|chore|test|refactor|release)(\([a-z0-9_-]+\))?: .{1,72}$',
+    r'^(feat|fix|hotfix|chore|test|refactor|release|admin|docs|ci)(\([a-z0-9_-]+\))?: .{1,72}$',
   );
 
   if (!regex.hasMatch(commitMessage)) {

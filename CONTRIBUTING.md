@@ -92,6 +92,7 @@ for example `chore/dart-sdk-3.12.2`.
 | `fix`           | For bug fixes. Example: `fix/login-error`.                                                          |
 | `hotfix`        | For urgent production fixes requiring immediate attention. Example: `hotfix/critical-db-error`.     |
 | `chore`         | For maintenance tasks, such as dependency updates or refactoring. Example: `chore/update-dependencies`. |
+| `refactor`      | For code restructuring without behavior changes. Example: `refactor/provider-lifecycle`.             |
 | `release`       | For preparing release branches with versioned changes. Example: `release/v1.2.0`.                   |
 | `test`          | For testing-related changes, such as adding or modifying test cases. Example: `test/add-unit-tests`.|
 | `docs`          | For documentation-only changes. Example: `docs/update-installation`.                               |
@@ -108,6 +109,7 @@ for example `chore/dart-sdk-3.12.2`.
 | `fix`             | `fix/payment-gateway-bug`          |
 | `hotfix`          | `hotfix/critical-db-error`         |
 | `chore`           | `chore/upgrade-dependencies`       |
+| `refactor`        | `refactor/provider-lifecycle`      |
 | `test`            | `test/add-integration-tests`       |
 | `release`         | `release/v1.2.0`                   |
 | `docs`            | `docs/update-installation`         |

@@ -710,6 +710,25 @@ void main() {
       );
     });
 
+    test('provider flag metadata is distinct from diagnostic details', () {
+      final evaluatedAt = DateTime.utc(2026, 8, 13);
+      final result = FlagEvaluationResult<bool>(
+        flagKey: 'test-flag',
+        value: false,
+        reason: 'ERROR',
+        errorCode: ErrorCode.GENERAL,
+        flagMetadata: const {'source': 'provider'},
+        details: const {'diagnostic': 'connection refused'},
+        evaluatedAt: evaluatedAt,
+      );
+
+      final details = FlagEvaluationDetails.fromResult(result);
+
+      expect(details.flagMetadata, {'source': 'provider'});
+      expect(details.flagMetadata, isNot(contains('diagnostic')));
+      expect(details.timestamp, evaluatedAt);
+    });
+
     test('direct initialization failures do not escape the zone', () async {
       final uncaughtErrors = <Object>[];
 
