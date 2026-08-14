@@ -336,6 +336,10 @@ To certify your contribution, you must add a `Signed-off-by` line to your commit
      ```
    - An additional contributor sign-off may be retained, but it does not
      replace the matching author sign-off.
+   - A green DCO check on the source pull request does not guarantee that a
+     GitHub-generated squash commit will pass DCO. Before selecting **Squash
+     and merge**, inspect the generated commit message and add the trailer for
+     the GitHub account that will author the squash commit.
 
 ---
 
