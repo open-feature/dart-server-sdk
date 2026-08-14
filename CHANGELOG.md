@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.23](https://github.com/open-feature/dart-server-sdk/compare/v0.0.22...v0.0.23) (2026-08-14)
+
+
+### 🧹 Chore
+
+* **dco:** allow individual remediation commits ([#135](https://github.com/open-feature/dart-server-sdk/issues/135)) ([dbdd199](https://github.com/open-feature/dart-server-sdk/commit/dbdd19964789eb802ff43a5ad2d134c72f55909c))
+* promote development to main ([#131](https://github.com/open-feature/dart-server-sdk/issues/131)) ([45aaee4](https://github.com/open-feature/dart-server-sdk/commit/45aaee4f505dfd8588ca92b14066b21dfdea18a5))
+
+
+### 📚 Documentation
+
+* **main:** promote README and contributor guidance ([#144](https://github.com/open-feature/dart-server-sdk/issues/144)) ([ea49b8b](https://github.com/open-feature/dart-server-sdk/commit/ea49b8bd70e4597ecb2e83a2026ded9f00a89f8e))
+
 ## [0.0.22](https://github.com/open-feature/dart-server-sdk/compare/v0.0.21...v0.0.22) (2026-05-12)
 
 
