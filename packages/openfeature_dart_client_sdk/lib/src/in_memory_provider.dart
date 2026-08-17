@@ -101,10 +101,7 @@ final class InMemoryProvider implements FeatureProvider, ProviderEventSource {
     return Map<String, Object>.unmodifiable(
       flags.map((key, value) {
         final copy = immutableValue(value, path: 'flags.$key');
-        if (copy == null) {
-          throw ArgumentError.value(value, 'flags.$key', 'Flag cannot be null');
-        }
-        return MapEntry(key, copy);
+        return MapEntry(key, copy!);
       }),
     );
   }

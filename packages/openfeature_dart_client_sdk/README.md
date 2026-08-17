@@ -5,9 +5,9 @@ applications. It uses the static-context paradigm. It has no Flutter or
 `dart:io` dependency.
 
 The package is in beta. The first beta defines the public client and provider
-contracts. It provides synchronous typed evaluation, hooks, ordered context
-changes, and an in-memory provider. Later beta changes will complete event
-handlers and the remaining conformance work before the first stable release.
+contracts. It provides synchronous typed evaluation, event handlers, hooks,
+ordered context changes, and an in-memory provider. Later beta changes will
+complete the remaining conformance work before the first stable release.
 
 ## Use the client
 

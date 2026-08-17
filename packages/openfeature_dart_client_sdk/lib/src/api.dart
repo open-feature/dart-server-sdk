@@ -31,12 +31,28 @@ final class OpenFeatureAPI {
   final Map<String, EvaluationContext> _domainContexts =
       <String, EvaluationContext>{};
   final List<Hook> _hooks = <Hook>[];
+  final List<_EventHandlerRecord> _eventHandlers = <_EventHandlerRecord>[];
   final Map<FeatureProvider, _ProviderRecord> _providerRecords =
       HashMap<FeatureProvider, _ProviderRecord>.identity();
   Future<void> _mutationQueue = Future<void>.value();
 
   /// Adds API hooks without removing existing hooks.
   void addHooks(Iterable<Hook> hooks) => _hooks.addAll(hooks);
+
+  /// Adds an API-wide handler for [eventType].
+  ///
+  /// The handler remains registered across provider changes.
+  ProviderEventSubscription addHandler(
+    ProviderEventType eventType,
+    ProviderEventHandler handler,
+  ) {
+    return _addHandler(eventType, handler, domain: null, apiWide: true);
+  }
+
+  /// Removes a previously registered API or client event handler.
+  void removeHandler(ProviderEventSubscription subscription) {
+    subscription.cancel();
+  }
 
   /// Gets a client bound to [domain], or to the default provider when omitted.
   OpenFeatureClient getClient([String? domain]) {
@@ -163,6 +179,10 @@ final class OpenFeatureAPI {
     _domainContexts.clear();
     _globalContext = EvaluationContext.empty;
     _hooks.clear();
+    for (final handler in _eventHandlers) {
+      handler.subscription._deactivate();
+    }
+    _eventHandlers.clear();
 
     try {
       await Future.wait(
@@ -214,7 +234,10 @@ final class OpenFeatureAPI {
     Object? initializationError;
     StackTrace? initializationStackTrace;
     if (record == null) {
-      record = _ProviderRecord(initialDomain: domain);
+      record = _ProviderRecord(
+        initialDomain: domain,
+        metadata: provider.metadata,
+      );
       _providerRecords[provider] = record;
       try {
         await _initialize(provider, record, domain);
@@ -236,6 +259,10 @@ final class OpenFeatureAPI {
       _domainProviders[domain] = provider;
     }
     record.bindingCount++;
+    for (final event in record.pendingBindingEvents) {
+      _dispatchEvent(provider, record, event);
+    }
+    record.pendingBindingEvents.clear();
 
     if (!identical(current, _noOpProvider)) {
       await _releaseProvider(current);
@@ -267,10 +294,7 @@ final class OpenFeatureAPI {
   }
 
   Future<void> _enqueueMutation(Future<void> Function() operation) {
-    final result = _mutationQueue.then(
-      (_) => operation(),
-      onError: (Object _, StackTrace _) => operation(),
-    );
+    final result = _mutationQueue.then((_) => operation());
     _mutationQueue = result.catchError((Object _) {});
     return result;
   }
@@ -282,11 +306,15 @@ final class OpenFeatureAPI {
   ) async {
     if (provider is ProviderEventSource) {
       record.eventSubscription = (provider as ProviderEventSource).events
-          .listen((event) => _processEvent(record, event));
+          .listen((event) => _processEvent(provider, record, event));
     }
 
     if (provider is! InitializableProvider) {
-      record.status = ProviderStatus.ready;
+      _processEvent(
+        provider,
+        record,
+        ProviderEvent(type: ProviderEventType.ready),
+      );
       return;
     }
     if (provider is! ProviderEventSource) {
@@ -355,7 +383,11 @@ final class OpenFeatureAPI {
     }
   }
 
-  void _processEvent(_ProviderRecord record, ProviderEvent event) {
+  void _processEvent(
+    FeatureProvider provider,
+    _ProviderRecord record,
+    ProviderEvent event,
+  ) {
     switch (event.type) {
       case ProviderEventType.ready:
       case ProviderEventType.contextChanged:
@@ -376,6 +408,12 @@ final class OpenFeatureAPI {
         break;
     }
 
+    if (record.bindingCount == 0) {
+      record.pendingBindingEvents.add(event);
+    } else {
+      _dispatchEvent(provider, record, event);
+    }
+
     if (event.type == ProviderEventType.ready ||
         event.type == ProviderEventType.contextChanged ||
         event.type == ProviderEventType.error) {
@@ -383,6 +421,120 @@ final class OpenFeatureAPI {
       if (terminalEvent != null && !terminalEvent.isCompleted) {
         terminalEvent.complete(record.status);
       }
+    }
+  }
+
+  ProviderEventSubscription _addHandler(
+    ProviderEventType eventType,
+    ProviderEventHandler handler, {
+    required String? domain,
+    required bool apiWide,
+  }) {
+    late final _EventHandlerRecord record;
+    late final ProviderEventSubscription subscription;
+    subscription = ProviderEventSubscription._(() {
+      _eventHandlers.remove(record);
+    });
+    record = _EventHandlerRecord(
+      eventType: eventType,
+      handler: handler,
+      domain: domain,
+      apiWide: apiWide,
+      subscription: subscription,
+    );
+    _eventHandlers.add(record);
+    _dispatchCurrentState(record);
+    return subscription;
+  }
+
+  void _dispatchCurrentState(_EventHandlerRecord handlerRecord) {
+    if (handlerRecord.apiWide) {
+      for (final entry in _providerRecords.entries) {
+        if (entry.value.bindingCount > 0) {
+          _dispatchCurrentStateForProvider(
+            handlerRecord,
+            entry.key,
+            entry.value,
+          );
+        }
+      }
+      return;
+    }
+
+    final provider = _providerForDomain(handlerRecord.domain);
+    final providerRecord = _providerRecords[provider];
+    if (providerRecord != null) {
+      _dispatchCurrentStateForProvider(handlerRecord, provider, providerRecord);
+    }
+  }
+
+  void _dispatchCurrentStateForProvider(
+    _EventHandlerRecord handlerRecord,
+    FeatureProvider provider,
+    _ProviderRecord providerRecord,
+  ) {
+    final eventType = switch (providerRecord.status) {
+      ProviderStatus.ready => ProviderEventType.ready,
+      ProviderStatus.reconciling => ProviderEventType.reconciling,
+      ProviderStatus.stale => ProviderEventType.stale,
+      ProviderStatus.error || ProviderStatus.fatal => ProviderEventType.error,
+      ProviderStatus.notReady => null,
+    };
+    if (eventType != handlerRecord.eventType) {
+      return;
+    }
+    _invokeHandler(
+      handlerRecord,
+      providerRecord,
+      ProviderEvent(
+        type: eventType!,
+        errorCode: providerRecord.status == ProviderStatus.fatal
+            ? ErrorCode.providerFatal
+            : null,
+      ),
+    );
+  }
+
+  void _dispatchEvent(
+    FeatureProvider provider,
+    _ProviderRecord providerRecord,
+    ProviderEvent event,
+  ) {
+    for (final handlerRecord in _eventHandlers.toList(growable: false)) {
+      if (!handlerRecord.subscription.isActive ||
+          handlerRecord.eventType != event.type) {
+        continue;
+      }
+      final isAssociated =
+          handlerRecord.apiWide ||
+          identical(_providerForDomain(handlerRecord.domain), provider);
+      if (isAssociated) {
+        _invokeHandler(handlerRecord, providerRecord, event);
+      }
+    }
+  }
+
+  void _invokeHandler(
+    _EventHandlerRecord handlerRecord,
+    _ProviderRecord providerRecord,
+    ProviderEvent event,
+  ) {
+    try {
+      handlerRecord.handler(
+        ProviderEventDetails(
+          type: event.type,
+          providerMetadata: providerRecord.metadata,
+          domain: handlerRecord.apiWide
+              ? providerRecord.initialDomain
+              : handlerRecord.domain,
+          flagsChanged: event.flagsChanged,
+          message: event.message,
+          errorCode: event.errorCode,
+          metadata: event.metadata,
+        ),
+      );
+    } on Object {
+      // A failing event handler must not block lifecycle or other handlers.
     }
   }
 
@@ -423,6 +575,26 @@ final class OpenFeatureClient {
 
   /// Adds client hooks without removing existing hooks.
   void addHooks(Iterable<Hook> hooks) => _hooks.addAll(hooks);
+
+  /// Adds a handler for events associated with this client.
+  ///
+  /// The handler remains registered across provider changes.
+  ProviderEventSubscription addHandler(
+    ProviderEventType eventType,
+    ProviderEventHandler handler,
+  ) {
+    return _api._addHandler(
+      eventType,
+      handler,
+      domain: metadata.domain,
+      apiWide: false,
+    );
+  }
+
+  /// Removes a previously registered client event handler.
+  void removeHandler(ProviderEventSubscription subscription) {
+    subscription.cancel();
+  }
 
   bool getBooleanValue(
     String flagKey,
@@ -654,12 +826,51 @@ final class OpenFeatureClient {
   }
 }
 
+/// Registration returned by API and client event-handler methods.
+final class ProviderEventSubscription {
+  ProviderEventSubscription._(this._cancelHandler);
+
+  final void Function() _cancelHandler;
+  bool _isActive = true;
+
+  bool get isActive => _isActive;
+
+  /// Stops future event delivery. Repeated calls have no effect.
+  void cancel() {
+    if (!_isActive) {
+      return;
+    }
+    _isActive = false;
+    _cancelHandler();
+  }
+
+  void _deactivate() => _isActive = false;
+}
+
+final class _EventHandlerRecord {
+  const _EventHandlerRecord({
+    required this.eventType,
+    required this.handler,
+    required this.domain,
+    required this.apiWide,
+    required this.subscription,
+  });
+
+  final ProviderEventType eventType;
+  final ProviderEventHandler handler;
+  final String? domain;
+  final bool apiWide;
+  final ProviderEventSubscription subscription;
+}
+
 final class _ProviderRecord {
-  _ProviderRecord({required this.initialDomain});
+  _ProviderRecord({required this.initialDomain, required this.metadata});
 
   final String? initialDomain;
+  final ProviderMetadata metadata;
   ProviderStatus status = ProviderStatus.notReady;
   int bindingCount = 0;
   StreamSubscription<ProviderEvent>? eventSubscription;
   Completer<ProviderStatus>? terminalEvent;
+  final List<ProviderEvent> pendingBindingEvents = <ProviderEvent>[];
 }
