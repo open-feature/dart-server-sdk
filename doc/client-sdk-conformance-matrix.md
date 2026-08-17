@@ -20,7 +20,7 @@ matrix update.
 - Specification baseline: OpenFeature v0.9.0
 - Initial prerelease: `0.0.1-beta.1`
 - First stable release: `0.0.1`
-- Status: proposed; not implemented
+- Status: initial beta contract implemented; full conformance is in progress
 
 ## Maturity Legend
 
@@ -119,8 +119,8 @@ Before the client package directory can reach `main`:
 
 - the root server archive excludes `/packages/`;
 - CI discovers and validates both root and nested packages;
-- each package passes analysis, tests, and `dart pub publish --dry-run` from its
-  own directory;
+- each package passes analysis, tests, and a package-specific
+  `dart pub publish --dry-run` archive check;
 - archive inspection proves the server package does not contain client source;
 - existing server tags remain in the `v0.0.x` format;
 - client tags use `openfeature_dart_client_sdk-v<version>`;

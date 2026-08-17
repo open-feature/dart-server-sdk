@@ -1,4 +1,4 @@
-# This workflow analyzes the Dart Server SDK and an example project
+# This workflow analyzes each Dart package.
 
 name: Contributor Workflow
 
@@ -6,10 +6,18 @@ on:
   workflow_call: # Makes the workflow reusable
 
 jobs:
-  analyze-core:
-    name: Analyze Core Dart Server SDK
+  analyze-package:
+    name: Analyze ${{ matrix.package.name }} package
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: server
+            path: .
+          - name: client
+            path: packages/openfeature_dart_client_sdk
 
     steps:
       - name: Checkout Code
@@ -20,44 +28,43 @@ jobs:
         # with:
         #   sdk: stable   # (optional; stable is the default)
 
-      # Find the Dart package root (directory that has pubspec.yaml).
-      - name: Locate package root
-        id: pkg
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Prefer repo root if it has a pubspec.yaml, otherwise take the first match.
-          if [[ -f "pubspec.yaml" ]]; then
-            echo "dir=." >> "$GITHUB_OUTPUT"
-          else
-            PKG_DIR=$(git ls-files | grep -E '(^|/)(pubspec\.yaml)$' | head -n 1 | xargs -r dirname)
-            if [[ -z "${PKG_DIR:-}" ]]; then
-              echo "No pubspec.yaml found in repository." >&2
-              exit 1
-            fi
-            echo "dir=$PKG_DIR" >> "$GITHUB_OUTPUT"
-          fi
-          echo "Using package dir: $(cat $GITHUB_OUTPUT)"
-
       - name: Install Dependencies
-        working-directory: ${{ steps.pkg.outputs.dir }}
+        working-directory: ${{ matrix.package.path }}
         run: |
-          echo "Installing dependencies for core SDK..."
+          echo "Installing dependencies for ${{ matrix.package.name }} SDK..."
           dart pub get
 
       - name: Check for Outdated Dependencies
-        working-directory: ${{ steps.pkg.outputs.dir }}
+        working-directory: ${{ matrix.package.path }}
         run: |
           echo "Checking for outdated dependencies..."
           dart pub outdated || true
 
       - name: Verify Dart Formatting
-        working-directory: ${{ steps.pkg.outputs.dir }}
+        working-directory: ${{ matrix.package.path }}
         run: dart format --output=none --set-exit-if-changed .
+
+      - name: Validate publication archive
+        working-directory: ${{ matrix.package.path }}
+        env:
+          PACKAGE_PATH: ${{ matrix.package.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$PACKAGE_PATH" == "." ]]; then
+            PUBLISH_OUTPUT=$(dart pub publish --dry-run 2>&1)
+          else
+            PUBLISH_OUTPUT=$(dart ../../tool/stage_client_package.dart --dry-run 2>&1)
+          fi
+          echo "$PUBLISH_OUTPUT"
+          if [[ "$PACKAGE_PATH" == "." ]] && grep -q "packages/openfeature_dart_client_sdk" <<< "$PUBLISH_OUTPUT"; then
+            echo "The server package archive contains client package files." >&2
+            exit 1
+          fi
 
       - name: Run Static Analysis (capture and show)
         id: analyze
-        working-directory: ${{ steps.pkg.outputs.dir }}
+        working-directory: ${{ matrix.package.path }}
         shell: bash
         run: |
           set -o pipefail
@@ -71,7 +78,7 @@ jobs:
 
       - name: Categorize and Count Analysis Results
         if: always()
-        working-directory: ${{ steps.pkg.outputs.dir }}
+        working-directory: ${{ matrix.package.path }}
         shell: bash
         run: |
           echo "Categorizing analysis results..."
@@ -105,7 +112,7 @@ jobs:
 
       - name: Identify Specific Commits for Issues
         if: always()
-        working-directory: ${{ steps.pkg.outputs.dir }}
+        working-directory: ${{ matrix.package.path }}
         shell: bash
         run: |
           echo "Identifying specific commits for files mentioned by analyzer..."
@@ -130,13 +137,13 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: core-sdk-analysis
+          name: ${{ matrix.package.name }}-sdk-analysis
           path: |
-            ${{ steps.pkg.outputs.dir }}/analysis_report.txt
-            ${{ steps.pkg.outputs.dir }}/error_log.txt
-            ${{ steps.pkg.outputs.dir }}/info_report.txt
-            ${{ steps.pkg.outputs.dir }}/warning_report.txt
-            ${{ steps.pkg.outputs.dir }}/error_report.txt
+            ${{ matrix.package.path }}/analysis_report.txt
+            ${{ matrix.package.path }}/error_log.txt
+            ${{ matrix.package.path }}/info_report.txt
+            ${{ matrix.package.path }}/warning_report.txt
+            ${{ matrix.package.path }}/error_report.txt
           retention-days: 7
 
       # Fail the job if the analyzer actually failed.

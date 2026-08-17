@@ -49,13 +49,14 @@ favorite feature flag management tool.
 
 <!-- x-hide-in-docs-end -->
 
-## Dart client SDK proposal
+## Dart client SDK beta
 
-This repository also contains the design proposal for a separate, pure-Dart
-OpenFeature client SDK intended for Dart VM, Dart web, and Flutter consumers.
-The client SDK is not implemented or published yet. The existing server SDK
-remains independently versioned and published.
+This repository also contains the first beta implementation of a separate,
+pure-Dart OpenFeature client SDK. The client package supports Dart VM, Dart web,
+and Flutter consumers. The existing server SDK remains independently versioned
+and published.
 
+- See the [client package](packages/openfeature_dart_client_sdk/).
 - Read the [client SDK architecture](doc/client-sdk-architecture.md).
 - Review the
   [client SDK conformance matrix](doc/client-sdk-conformance-matrix.md).
