@@ -10,14 +10,14 @@ import 'metadata.dart';
 import 'no_op_provider.dart';
 import 'provider.dart';
 
+/// Creates an API instance isolated from the process-wide singleton.
+///
+/// This function is exported only from the experimental library.
+OpenFeatureAPI createIsolatedOpenFeatureAPI() => OpenFeatureAPI._();
+
 /// The static-context OpenFeature API.
 final class OpenFeatureAPI {
   OpenFeatureAPI._();
-
-  /// Creates an isolated API instance.
-  ///
-  /// This API is experimental. Prefer [instance] for application code.
-  factory OpenFeatureAPI.createIsolated() => OpenFeatureAPI._();
 
   /// The process-wide default API instance.
   static final OpenFeatureAPI instance = OpenFeatureAPI._();
@@ -187,10 +187,7 @@ final class OpenFeatureAPI {
     try {
       await Future.wait(
         records.map((entry) async {
-          await entry.value.eventSubscription?.cancel();
-          if (entry.key is ShutdownProvider) {
-            await (entry.key as ShutdownProvider).shutdown();
-          }
+          await _disposeProvider(entry.key, entry.value);
         }),
       );
     } finally {
@@ -547,14 +544,36 @@ final class OpenFeatureAPI {
     if (record.bindingCount > 0) {
       return;
     }
-    await record.eventSubscription?.cancel();
+    await _disposeProvider(provider, record);
+  }
+
+  Future<void> _disposeProvider(
+    FeatureProvider provider,
+    _ProviderRecord record,
+  ) async {
+    Object? cleanupError;
+    StackTrace? cleanupStackTrace;
+    try {
+      await record.eventSubscription?.cancel();
+    } on Object catch (error, stackTrace) {
+      cleanupError = error;
+      cleanupStackTrace = stackTrace;
+    }
+
     try {
       if (provider is ShutdownProvider) {
         await (provider as ShutdownProvider).shutdown();
       }
+    } on Object catch (error, stackTrace) {
+      cleanupError ??= error;
+      cleanupStackTrace ??= stackTrace;
     } finally {
       record.status = ProviderStatus.notReady;
       _providerRecords.remove(provider);
+    }
+
+    if (cleanupError != null) {
+      Error.throwWithStackTrace(cleanupError, cleanupStackTrace!);
     }
   }
 }

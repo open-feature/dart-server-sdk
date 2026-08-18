@@ -402,6 +402,38 @@ void main() {
       await api.setProviderForDomainAndWait('shared', InMemoryProvider());
       expect(first.shutdownCalls, 1);
     });
+
+    test(
+      'replacement shuts down a provider when event cleanup fails',
+      () async {
+        final provider = _CancelFailingShutdownProvider();
+        await api.setProviderAndWait(provider);
+
+        await expectLater(
+          api.setProviderAndWait(InMemoryProvider({'flag': true})),
+          throwsA(isA<StateError>()),
+        );
+
+        expect(provider.shutdownCalls, 1);
+        expect(api.getClient().getBooleanValue('flag', false), isTrue);
+      },
+    );
+
+    test(
+      'API shutdown remains unconditional when event cleanup fails',
+      () async {
+        final failingCleanup = _CancelFailingShutdownProvider();
+        final otherProvider = _ShutdownProvider(const {});
+        await api.setProviderAndWait(failingCleanup);
+        await api.setProviderForDomainAndWait('other', otherProvider);
+
+        await expectLater(api.shutdown(), throwsA(isA<StateError>()));
+
+        expect(failingCleanup.shutdownCalls, 1);
+        expect(otherProvider.shutdownCalls, 1);
+        expect(api.getClient().providerStatus, ProviderStatus.notReady);
+      },
+    );
   });
 }
 
@@ -541,6 +573,26 @@ class _ShutdownProvider extends _TestProvider implements ShutdownProvider {
   _ShutdownProvider(super.flags);
 
   int shutdownCalls = 0;
+
+  @override
+  Future<void> shutdown() async {
+    shutdownCalls++;
+  }
+}
+
+class _CancelFailingShutdownProvider extends _TestProvider
+    implements ProviderEventSource, ShutdownProvider {
+  _CancelFailingShutdownProvider() : super(const {});
+
+  final StreamController<ProviderEvent> _events =
+      StreamController<ProviderEvent>(
+        onCancel: () =>
+            Future<void>.error(StateError('event subscription cleanup failed')),
+      );
+  int shutdownCalls = 0;
+
+  @override
+  Stream<ProviderEvent> get events => _events.stream;
 
   @override
   Future<void> shutdown() async {
