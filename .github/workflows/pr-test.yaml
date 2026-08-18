@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   test:
-    name: test
+    name: test (${{ matrix.package.name }}, ${{ matrix.os }}, Dart ${{ matrix.sdk }})
     # The development push already validates the exact promotion SHA. Keep
     # feature PR and merge-queue validation while avoiding duplicate runners.
     if: >-
@@ -37,6 +37,11 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         sdk: [3.12.2, stable, beta]
+        package:
+          - name: server
+            path: .
+          - name: client
+            path: packages/openfeature_dart_client_sdk
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
@@ -44,16 +49,19 @@ jobs:
           sdk: ${{ matrix.sdk }}
 
       - name: Install dependencies
+        working-directory: ${{ matrix.package.path }}
         run: dart pub get
 
       - name: Analyze
+        working-directory: ${{ matrix.package.path }}
         run: dart analyze
 
       - name: Run tests
+        working-directory: ${{ matrix.package.path }}
         run: dart test
 
   minimum-dependencies:
-    name: minimum dependencies
+    name: minimum dependencies (${{ matrix.package.name }})
     if: >-
       github.event_name != 'pull_request' ||
       (github.event.pull_request.draft == false &&
@@ -62,6 +70,14 @@ jobs:
          github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: server
+            path: .
+          - name: client
+            path: packages/openfeature_dart_client_sdk
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
@@ -69,10 +85,13 @@ jobs:
           sdk: 3.12.2
 
       - name: Install minimum dependencies
+        working-directory: ${{ matrix.package.path }}
         run: dart pub downgrade
 
       - name: Analyze
+        working-directory: ${{ matrix.package.path }}
         run: dart analyze
 
       - name: Run tests
+        working-directory: ${{ matrix.package.path }}
         run: dart test

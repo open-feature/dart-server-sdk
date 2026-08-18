@@ -68,13 +68,18 @@ that creates that directory, repository safety must ensure:
 
 - the root server package excludes `/packages/` from its publication archive;
 - CI discovers, analyzes, and tests every package explicitly;
-- `dart pub publish --dry-run` validates each package from its own directory;
+- `dart pub publish --dry-run` validates each package-specific archive;
 - archive-content checks fail if one package contains another package's source;
 - release and publish workflows route tags to the correct package directory.
 
 A root `.pubignore` that excludes `/packages/` is the minimum transitional
 server-archive protection. A Pub workspace may provide shared dependency
 resolution, but publishing remains package-specific.
+
+Pub applies the root `.pubignore` while it packages the nested client. The
+client publication command therefore stages only the client directory in a
+temporary location before it runs `dart pub publish`. CI and tag publication
+use the same staging command.
 
 Shared code should be extracted only when both packages require the same stable,
 specification-neutral contract. Candidate types include flag values, provider

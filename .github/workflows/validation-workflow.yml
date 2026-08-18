@@ -22,7 +22,7 @@ jobs:
           echo "Validating branch name..."
           echo "Branch name: $BRANCH_NAME"
 
-          if [[ "$BRANCH_NAME" =~ ^(development|main|release-please--branches--main--components--openfeature_dart_server_sdk)$ ]]; then
+          if [[ "$BRANCH_NAME" =~ ^(development|main|release-please--branches--main--components--(openfeature_dart_server_sdk|openfeature_dart_client_sdk))$ ]]; then
             echo "✅ Branch name '$BRANCH_NAME' is valid for a long-lived branch."
           elif [[ "$BRANCH_NAME" =~ ^dependabot/github_actions/development/[A-Za-z0-9._/-]+$ ]]; then
             echo "✅ Branch name '$BRANCH_NAME' is valid for a Dependabot GitHub Actions update."
