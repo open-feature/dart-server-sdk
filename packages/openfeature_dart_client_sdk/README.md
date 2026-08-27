@@ -55,6 +55,12 @@ a provider contract violation cannot indefinitely block context changes or
 shutdown. Tests and isolated integrations may select a shorter timeout through
 `createIsolatedOpenFeatureAPI(lifecycleTimeout: ...)`.
 
+When initialization or context reconciliation times out, the SDK quarantines
+and detaches that provider instance. Its underlying asynchronous work cannot be
+cancelled safely, so applications must register a new provider instance rather
+than retrying the timed-out one. Subscription cancellation and shutdown cleanup
+are bounded by the same timeout.
+
 A provider that implements `ContextReconciliationProvider` can have only one
 active API/domain binding. Use a separate provider instance for each static
 context. Providers that resolve entirely from the context passed to each

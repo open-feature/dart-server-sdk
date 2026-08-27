@@ -27,6 +27,9 @@ final class OpenFeatureAPI {
   static const FeatureProvider _noOpProvider = NoOpProvider();
   static final Map<FeatureProvider, OpenFeatureAPI> _providerOwners =
       HashMap<FeatureProvider, OpenFeatureAPI>.identity();
+  static final Expando<bool> _quarantinedProviders = Expando<bool>(
+    'openfeature_quarantined_provider',
+  );
 
   /// Maximum time allowed for one provider lifecycle operation.
   final Duration lifecycleTimeout;
@@ -244,6 +247,12 @@ final class OpenFeatureAPI {
     FeatureProvider provider, {
     required String? domain,
   }) async {
+    if (_quarantinedProviders[provider] == true) {
+      throw const OpenFeatureException(
+        'A provider instance that timed out cannot be reused. '
+        'Create a replacement provider instance.',
+      );
+    }
     final current = _providerForExactBinding(domain);
     if (identical(current, provider)) {
       return;
@@ -270,10 +279,15 @@ final class OpenFeatureAPI {
       try {
         await _initialize(provider, record, domain);
       } on Object catch (error, stackTrace) {
-        if (record.status != ProviderStatus.error &&
-            record.status != ProviderStatus.fatal) {
-          await _disposeProvider(provider, record);
-          rethrow;
+        if (record.quarantined ||
+            (record.status != ProviderStatus.error &&
+                record.status != ProviderStatus.fatal)) {
+          try {
+            await _disposeProvider(provider, record);
+          } on Object {
+            // Preserve the initialization failure when cleanup also fails.
+          }
+          Error.throwWithStackTrace(error, stackTrace);
         }
         initializationError = error;
         initializationStackTrace = stackTrace;
@@ -358,6 +372,7 @@ final class OpenFeatureAPI {
 
     final operation = _LifecycleOperation(ProviderEventType.ready);
     record.lifecycleOperation = operation;
+    var timedOut = false;
     try {
       final status =
           await (() async {
@@ -369,10 +384,13 @@ final class OpenFeatureAPI {
             return operation.future;
           })().timeout(
             lifecycleTimeout,
-            onTimeout: () => throw OpenFeatureException(
-              'Provider initialization did not complete within '
-              '${lifecycleTimeout.inMilliseconds} ms.',
-            ),
+            onTimeout: () {
+              timedOut = true;
+              throw OpenFeatureException(
+                'Provider initialization did not complete within '
+                '${lifecycleTimeout.inMilliseconds} ms.',
+              );
+            },
           );
       if (status == ProviderStatus.error || status == ProviderStatus.fatal) {
         throw OpenFeatureException(
@@ -382,6 +400,11 @@ final class OpenFeatureAPI {
               : ErrorCode.general,
         );
       }
+    } on Object {
+      if (timedOut) {
+        _markProviderQuarantined(provider, record);
+      }
+      rethrow;
     } finally {
       if (identical(record.lifecycleOperation, operation)) {
         record.lifecycleOperation = null;
@@ -409,6 +432,7 @@ final class OpenFeatureAPI {
     final previousContext = record.activeContext;
     final operation = _LifecycleOperation(ProviderEventType.contextChanged);
     record.lifecycleOperation = operation;
+    var timedOut = false;
     try {
       final status =
           await (() async {
@@ -420,10 +444,13 @@ final class OpenFeatureAPI {
             return operation.future;
           })().timeout(
             lifecycleTimeout,
-            onTimeout: () => throw OpenFeatureException(
-              'Provider reconciliation did not complete within '
-              '${lifecycleTimeout.inMilliseconds} ms.',
-            ),
+            onTimeout: () {
+              timedOut = true;
+              throw OpenFeatureException(
+                'Provider reconciliation did not complete within '
+                '${lifecycleTimeout.inMilliseconds} ms.',
+              );
+            },
           );
       if (status == ProviderStatus.error || status == ProviderStatus.fatal) {
         throw OpenFeatureException(
@@ -434,6 +461,12 @@ final class OpenFeatureAPI {
         );
       }
       record.activeContext = newContext;
+    } on Object catch (error, stackTrace) {
+      if (timedOut) {
+        await _quarantineProvider(provider, record);
+        Error.throwWithStackTrace(error, stackTrace);
+      }
+      rethrow;
     } finally {
       if (identical(record.lifecycleOperation, operation)) {
         record.lifecycleOperation = null;
@@ -446,6 +479,9 @@ final class OpenFeatureAPI {
     _ProviderRecord record,
     ProviderEvent event,
   ) {
+    if (record.quarantined || !identical(_providerRecords[provider], record)) {
+      return;
+    }
     switch (event.type) {
       case ProviderEventType.ready:
       case ProviderEventType.contextChanged:
@@ -601,27 +637,70 @@ final class OpenFeatureAPI {
     await _disposeProvider(provider, record);
   }
 
+  void _markProviderQuarantined(
+    FeatureProvider provider,
+    _ProviderRecord record,
+  ) {
+    record.quarantined = true;
+    _quarantinedProviders[provider] = true;
+  }
+
+  Future<void> _quarantineProvider(
+    FeatureProvider provider,
+    _ProviderRecord record,
+  ) async {
+    _markProviderQuarantined(provider, record);
+    if (identical(_defaultProvider, provider)) {
+      _defaultProvider = _noOpProvider;
+    }
+    _domainProviders.removeWhere((_, value) => identical(value, provider));
+    record.bindingCount = 0;
+    try {
+      await _disposeProvider(provider, record);
+    } on Object {
+      // The lifecycle timeout remains the primary failure reported to callers.
+    }
+  }
+
   Future<void> _disposeProvider(
     FeatureProvider provider,
     _ProviderRecord record,
   ) async {
     Object? cleanupError;
     StackTrace? cleanupStackTrace;
-    try {
-      await record.eventSubscription?.cancel();
-    } on Object catch (error, stackTrace) {
-      cleanupError = error;
-      cleanupStackTrace = stackTrace;
-    }
-
-    try {
-      if (provider is ShutdownProvider) {
-        await (provider as ShutdownProvider).shutdown();
+    final cleanup = () async {
+      try {
+        await record.eventSubscription?.cancel();
+      } on Object catch (error, stackTrace) {
+        cleanupError = error;
+        cleanupStackTrace = stackTrace;
       }
+
+      try {
+        if (provider is ShutdownProvider) {
+          await (provider as ShutdownProvider).shutdown();
+        }
+      } on Object catch (error, stackTrace) {
+        cleanupError ??= error;
+        cleanupStackTrace ??= stackTrace;
+      }
+    }();
+    try {
+      await cleanup.timeout(
+        lifecycleTimeout,
+        onTimeout: () => throw OpenFeatureException(
+          'Provider cleanup did not complete within '
+          '${lifecycleTimeout.inMilliseconds} ms.',
+        ),
+      );
     } on Object catch (error, stackTrace) {
       cleanupError ??= error;
       cleanupStackTrace ??= stackTrace;
     } finally {
+      record.eventSubscription = null;
+      record.lifecycleOperation = null;
+      record.pendingBindingEvents.clear();
+      record.bindingCount = 0;
       record.status = ProviderStatus.notReady;
       _providerRecords.remove(provider);
       if (identical(_providerOwners[provider], this)) {
@@ -629,8 +708,9 @@ final class OpenFeatureAPI {
       }
     }
 
-    if (cleanupError != null) {
-      Error.throwWithStackTrace(cleanupError, cleanupStackTrace!);
+    final error = cleanupError;
+    if (error != null) {
+      Error.throwWithStackTrace(error, cleanupStackTrace!);
     }
   }
 }
@@ -957,6 +1037,7 @@ final class _ProviderRecord {
   int bindingCount = 0;
   StreamSubscription<ProviderEvent>? eventSubscription;
   _LifecycleOperation? lifecycleOperation;
+  bool quarantined = false;
   final List<ProviderEvent> pendingBindingEvents = <ProviderEvent>[];
 }
 

@@ -63,7 +63,10 @@ jobs:
       - name: Compile client web smoke target
         if: matrix.package.name == 'client'
         working-directory: ${{ matrix.package.path }}
-        run: dart compile js test/web_compile_smoke.dart -o build/web_compile_smoke.js
+        shell: bash
+        run: |
+          mkdir -p build
+          dart compile js test/web_compile_smoke.dart -o build/web_compile_smoke.js
 
   minimum-dependencies:
     name: minimum dependencies (${{ matrix.package.name }})
@@ -104,4 +107,7 @@ jobs:
       - name: Compile client web smoke target
         if: matrix.package.name == 'client'
         working-directory: ${{ matrix.package.path }}
-        run: dart compile js test/web_compile_smoke.dart -o build/web_compile_smoke.js
+        shell: bash
+        run: |
+          mkdir -p build
+          dart compile js test/web_compile_smoke.dart -o build/web_compile_smoke.js

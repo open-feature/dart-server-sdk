@@ -14,8 +14,11 @@ Automated pub.dev publishing can be configured only after a package exists.
 For `0.0.1-beta.1`, an authorized OpenFeature publisher must:
 
 1. Merge the reviewed client beta promotion to `main`.
-2. Merge the generated client release PR. Release Please updates the manifest
-   from `0.0.0` and creates the
+2. In the generated client release PR, remove the one-time `release-as` setting
+   from `release-please-config.json`. The repository test suite deliberately
+   rejects a non-bootstrap manifest that retains this override. Verify that the
+   PR still proposes `0.0.1-beta.1`, then merge it. Release Please updates the
+   manifest from `0.0.0` and creates the
    `openfeature_dart_client_sdk-v0.0.1-beta.1` tag.
 3. Check out that exact tag and run:
 
@@ -27,8 +30,7 @@ For `0.0.1-beta.1`, an authorized OpenFeature publisher must:
 4. Transfer the package to the verified `openfeature.dev` publisher on pub.dev.
 5. Configure pub.dev automated publishing for this GitHub repository and the
    `openfeature_dart_client_sdk-v*` tag pattern.
-6. Remove the one-time `release-as` setting for the client package.
-7. Set the GitHub repository variable `CLIENT_PUBDEV_BOOTSTRAPPED` to `true`.
+6. Set the GitHub repository variable `CLIENT_PUBDEV_BOOTSTRAPPED` to `true`.
 
 Until the repository variable is enabled, client release tags deliberately
 print bootstrap instructions instead of silently attempting publication.

@@ -31,6 +31,41 @@ void main() {
       },
     );
 
+    test(
+      'initialization timeout stays bounded when shutdown never returns',
+      () async {
+        final api = createIsolatedOpenFeatureAPI(
+          lifecycleTimeout: const Duration(milliseconds: 25),
+        );
+        final provider = _HungCleanupProvider();
+
+        await expectLater(
+          api.setProviderAndWait(provider).timeout(const Duration(seconds: 1)),
+          throwsA(
+            isA<OpenFeatureException>().having(
+              (error) => error.message,
+              'message',
+              contains('initialization did not complete'),
+            ),
+          ),
+        );
+
+        expect(provider.shutdownCalls, 1);
+        expect(api.getClient().providerStatus, ProviderStatus.notReady);
+        await expectLater(
+          api.setProviderAndWait(provider),
+          throwsA(
+            isA<OpenFeatureException>().having(
+              (error) => error.message,
+              'message',
+              contains('cannot be reused'),
+            ),
+          ),
+        );
+        await api.shutdown().timeout(const Duration(seconds: 1));
+      },
+    );
+
     test('the final lifecycle event at callback return wins', () async {
       final api = createIsolatedOpenFeatureAPI();
       addTearDown(api.shutdown);
@@ -141,6 +176,49 @@ void main() {
         expect(successful.lastEvaluationContext, same(EvaluationContext.empty));
       },
     );
+
+    test('a reconciliation timeout quarantines late provider work', () async {
+      final api = createIsolatedOpenFeatureAPI(
+        lifecycleTimeout: const Duration(milliseconds: 25),
+      );
+      addTearDown(api.shutdown);
+      final delayed = _DelayedContextProvider();
+      await api.setProviderAndWait(delayed);
+
+      await expectLater(
+        api.setEvaluationContextAndWait(
+          EvaluationContext(targetingKey: 'delayed'),
+        ),
+        throwsA(
+          isA<OpenFeatureException>().having(
+            (error) => error.message,
+            'message',
+            contains('reconciliation did not complete'),
+          ),
+        ),
+      );
+
+      expect(api.getClient().providerStatus, ProviderStatus.notReady);
+      await expectLater(
+        api.setProviderAndWait(delayed),
+        throwsA(
+          isA<OpenFeatureException>().having(
+            (error) => error.message,
+            'message',
+            contains('cannot be reused'),
+          ),
+        ),
+      );
+
+      final replacement = _ContextProvider();
+      await api.setProviderAndWait(replacement);
+      delayed.release();
+      await delayed.finished;
+
+      expect(api.getClient().providerStatus, ProviderStatus.ready);
+      api.getClient().getBooleanValue('flag', false);
+      expect(replacement.lastEvaluationContext, same(EvaluationContext.empty));
+    });
   });
 }
 
@@ -222,7 +300,17 @@ final class _ThrowingLifecycleProvider extends _SilentLifecycleProvider {
   }
 }
 
-final class _ContextProvider extends _DelegatingProvider
+final class _HungCleanupProvider extends _SilentLifecycleProvider {
+  final Completer<void> _never = Completer<void>();
+
+  @override
+  Future<void> shutdown() {
+    shutdownCalls++;
+    return _never.future;
+  }
+}
+
+class _ContextProvider extends _DelegatingProvider
     implements ContextReconciliationProvider, ProviderEventSource {
   _ContextProvider({this.failTargetingKey});
 
@@ -259,6 +347,28 @@ final class _ContextProvider extends _DelegatingProvider
   ) {
     lastEvaluationContext = context;
     return super.resolveBooleanValue(flagKey, defaultValue, context);
+  }
+}
+
+final class _DelayedContextProvider extends _ContextProvider {
+  final Completer<void> _release = Completer<void>();
+  final Completer<void> _finished = Completer<void>();
+
+  Future<void> get finished => _finished.future;
+
+  void release() => _release.complete();
+
+  @override
+  Future<void> onContextChanged(
+    EvaluationContext previousContext,
+    EvaluationContext newContext,
+  ) async {
+    await _release.future;
+    try {
+      await super.onContextChanged(previousContext, newContext);
+    } finally {
+      _finished.complete();
+    }
   }
 }
 

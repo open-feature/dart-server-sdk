@@ -238,8 +238,11 @@ binding and must use separate instances for independently scoped contexts.
 Initialization and reconciliation waits are bounded to 30 seconds by default.
 An isolated API may configure a shorter timeout for tests. A provider that
 returns without emitting the operation's terminal event fails within that
-bound, is released when it never became active, and cannot permanently block
-the serialized mutation queue or shutdown.
+bound and cannot permanently block the serialized mutation queue or shutdown.
+Because Dart futures cannot be cancelled, a timed-out provider is detached and
+quarantined from reuse; late events are ignored and callers must supply a new
+provider instance. Subscription cancellation and provider shutdown are bounded
+by the same lifecycle timeout.
 
 Tests cover sign-in, sign-out, account switching, queued rapid updates, refresh
 failure, provider replacement, shutdown during reconciliation, and late work
