@@ -68,6 +68,14 @@ jobs:
           mkdir -p build
           dart compile js test/web_compile_smoke.dart -o build/web_compile_smoke.js
 
+      - name: Run client web smoke target in Chrome
+        if: >-
+          matrix.package.name == 'client' &&
+          matrix.os == 'ubuntu-latest' &&
+          matrix.sdk == '3.12.2'
+        working-directory: ${{ matrix.package.path }}
+        run: dart test -p chrome test/web_compile_smoke.dart
+
   minimum-dependencies:
     name: minimum dependencies (${{ matrix.package.name }})
     if: >-
@@ -111,3 +119,8 @@ jobs:
         run: |
           mkdir -p build
           dart compile js test/web_compile_smoke.dart -o build/web_compile_smoke.js
+
+      - name: Run client web smoke target in Chrome
+        if: matrix.package.name == 'client'
+        working-directory: ${{ matrix.package.path }}
+        run: dart test -p chrome test/web_compile_smoke.dart

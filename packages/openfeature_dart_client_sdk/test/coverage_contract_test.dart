@@ -60,9 +60,8 @@ void main() {
     api.clearEvaluationContextForDomain('unbound');
     await Future<void>.delayed(Duration.zero);
 
-    api.setProvider(defaultProvider);
-    api.setProviderForDomain('checkout', domainProvider);
-    await Future<void>.delayed(Duration.zero);
+    await api.setProviderAndWait(defaultProvider);
+    await api.setProviderForDomainAndWait('checkout', domainProvider);
     expect(defaultProvider.initializeCalls, 1);
     expect(domainProvider.initializeCalls, 1);
   });
@@ -72,12 +71,12 @@ void main() {
 
     await runZonedGuarded(() async {
       api.setProvider(_LifecycleProviderWithoutEvents());
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
+      await api.setProviderAndWait(InMemoryProvider({'replacement': true}));
     }, (error, _) => errors.add(error));
 
     expect(errors, isEmpty);
-    expect(api.getClient().providerStatus, ProviderStatus.notReady);
+    expect(api.getClient().providerStatus, ProviderStatus.ready);
+    expect(api.getClient().getBooleanValue('replacement', false), isTrue);
   });
 
   test('no-op provider supports every typed evaluation method', () {

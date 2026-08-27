@@ -56,11 +56,14 @@ pure-Dart OpenFeature client SDK. The client package supports Dart VM, Dart web,
 and Flutter consumers. The existing server SDK remains independently versioned
 and published.
 
-- See the [client package](packages/openfeature_dart_client_sdk/).
-- Read the [client SDK architecture](doc/client-sdk-architecture.md).
+- See the
+  [client package](https://github.com/open-feature/dart-server-sdk/tree/main/packages/openfeature_dart_client_sdk).
+- Read the
+  [client SDK architecture](https://github.com/open-feature/dart-server-sdk/blob/main/doc/client-sdk-architecture.md).
 - Review the
-  [client SDK conformance matrix](doc/client-sdk-conformance-matrix.md).
-- Read the [client beta release procedure](doc/client-sdk-release.md).
+  [client SDK conformance matrix](https://github.com/open-feature/dart-server-sdk/blob/main/doc/client-sdk-conformance-matrix.md).
+- Read the
+  [client beta release procedure](https://github.com/open-feature/dart-server-sdk/blob/main/doc/client-sdk-release.md).
 - Follow [issue #117](https://github.com/open-feature/dart-server-sdk/issues/117)
   for implementation progress.
 

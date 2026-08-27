@@ -42,6 +42,10 @@ and creates component-prefixed beta tags. The tag-triggered publish workflow
 stages the nested package before publishing so the root server `.pubignore`
 cannot remove client files from its archive.
 
+The package-local `.release-please-version` file and the generic marker on the
+pubspec version keep prerelease suffixes intact; Release Please's Dart updater
+treats a hyphenated prerelease suffix as Dart build metadata.
+
 Before every client release, verify formatting, analysis, tests, Dart web
 compilation, the staged pub.dev dry-run, and at least one external provider
 against the exact release commit.

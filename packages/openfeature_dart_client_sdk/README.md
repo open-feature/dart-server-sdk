@@ -86,5 +86,6 @@ parent package:
 dart tool/stage_client_package.dart --dry-run
 ```
 
-See the [beta release procedure](../../doc/client-sdk-release.md) for the
-first-publication bootstrap and later automated prereleases.
+See the
+[beta release procedure](https://github.com/open-feature/dart-server-sdk/blob/main/doc/client-sdk-release.md)
+for the first-publication bootstrap and later automated prereleases.

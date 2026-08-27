@@ -12,6 +12,11 @@ Future<void> main(List<String> arguments) async {
     exitCode = 64;
     return;
   }
+  if (hasConflictingPublicationModes(arguments)) {
+    stderr.writeln('The --publish and --dry-run flags cannot be combined.');
+    exitCode = 64;
+    return;
+  }
 
   final script = File.fromUri(Platform.script);
   final repositoryRoot = script.parent.parent;
@@ -42,6 +47,9 @@ Future<void> main(List<String> arguments) async {
     }
   }
 }
+
+bool hasConflictingPublicationModes(List<String> arguments) =>
+    arguments.contains('--publish') && arguments.contains('--dry-run');
 
 Future<void> _copyPackage(Directory source, Directory destination) async {
   await for (final entity in source.list(recursive: true, followLinks: false)) {

@@ -275,6 +275,25 @@ void main() {
         'first.finally',
       ]);
     });
+
+    test('structured defaults are immutable within hook context', () async {
+      final provider = _HookProvider(const {}, const []);
+      final mutationErrors = <Object>[];
+      await api.setProviderAndWait(provider);
+      final source = <String, Object?>{
+        'nested': <String, Object?>{'enabled': false},
+      };
+      final client = api.getClient()
+        ..addHooks([_DefaultMutationHook(mutationErrors)]);
+
+      final value = client.getStructureValue('missing', source);
+
+      expect(mutationErrors.single, isA<UnsupportedError>());
+      expect(source, {
+        'nested': {'enabled': false},
+      });
+      expect(value, source);
+    });
   });
 
   group('tracking', () {
@@ -597,6 +616,23 @@ class _CancelFailingShutdownProvider extends _TestProvider
   @override
   Future<void> shutdown() async {
     shutdownCalls++;
+  }
+}
+
+final class _DefaultMutationHook extends HookAdapter {
+  const _DefaultMutationHook(this.errors);
+
+  final List<Object> errors;
+
+  @override
+  void before(HookContext context, HookHints hints) {
+    try {
+      final defaultValue = context.defaultValue as Map<String, Object?>;
+      final nested = defaultValue['nested']! as Map<String, Object?>;
+      nested['enabled'] = true;
+    } on Object catch (error) {
+      errors.add(error);
+    }
   }
 }
 

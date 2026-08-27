@@ -66,10 +66,15 @@
       ]
     },
     "packages/openfeature_dart_client_sdk": {
-      "release-type": "dart",
+      "release-type": "simple",
+      "component": "openfeature_dart_client_sdk",
+      "package-name": "openfeature_dart_client_sdk",
+      "version-file": ".release-please-version",
+      "extra-files": [{"type": "generic", "path": "pubspec.yaml"}],
       "release-as": "0.0.1-beta.1",
       "prerelease": true,
       "prerelease-type": "beta",
+      "versioning": "prerelease",
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "include-component-in-tag": true,
