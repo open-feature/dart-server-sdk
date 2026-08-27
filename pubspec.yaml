@@ -1,44 +1,16 @@
-# To ensure long-term stability and maintain high standards of code quality,
-# we include only packages from well-known providers and official Dart and Google sources.
-# Specifically, packages are selected from the following trusted publishers:
-# - Google packages: https://pub.dev/publishers/google.dev/packages
-# - Official Dart team packages: https://dart.dev/resources/dart-team-packages
-#
-# This approach minimizes risks associated with unverified dependencies and guarantees
-# consistent support and updates from reputable maintainers.
+name: openfeature_dart_sdk_repository
+description: Repository tooling for the OpenFeature Dart SDK packages.
+publish_to: none
 
-# Package names are alphabetized
-
-name: openfeature_dart_server_sdk
-description: Official server-side Dart OpenFeature SDK.
-
-version: 0.0.23
-
-homepage: https://github.com/open-feature/dart-server-sdk
 environment:
   sdk: ^3.12.2
 
-dependencies:
-  # Core dependencies
-  collection: ^1.19.1 # For efficient list and map operations
-  logging: ^1.3.0 # For structured logging
-  meta: ^1.17.0 # For annotations like @required
-
 dev_dependencies:
-  # For testing
-  coverage: ^1.15.0 # For Code Coverage Reports
-  # Dart 3.12 removed the legacy frontend_server.dart.snapshot layout used by
-  # frontend_server_client 3.x. Keep minimum-dependency test runs on the
-  # SDK-layout-aware client.
-  frontend_server_client: ^4.0.0
-  git_hooks: ^1.0.2 # Provides hooks for locla ddevelopment
-  lints: ^6.0.0 # Recommended lints for maintaining code quality
-  mockito: ^5.5.1 # For mocking objects in unit tests
-  test: ^1.26.3 # Dart's core testing framework
+  git_hooks: ^1.0.2
+  test: ^1.26.3
 
-# Optional Local Hooks for development.
 git_hooks:
   hooks:
-    pre-commit: ../local_dev_tools/validate_commit.dart
-    commit-msg: ../local_dev_tools/validate_commit_msg.dart
-    pre-push: ../local_dev_tools/validate_branch.dart
+    pre-commit: local_dev_tools/validate_commit.dart
+    commit-msg: local_dev_tools/validate_commit_msg.dart
+    pre-push: local_dev_tools/validate_branch.dart

@@ -15,7 +15,7 @@ void main(List<String> args) {
   print('Branch name: $branchName');
 
   final validBranches = RegExp(
-    r'^(development|main|release-please--branches--main--components--openfeature_dart_server_sdk)$',
+    r'^(development|main|release-please--branches--main--components--(openfeature_dart_server_sdk|openfeature_dart_client_sdk))$',
   );
   final validFeatureBranch = RegExp(
     r'^(feat|fix|hotfix|chore|test|refactor|release|admin|docs|ci)/[a-z0-9._-]+$',

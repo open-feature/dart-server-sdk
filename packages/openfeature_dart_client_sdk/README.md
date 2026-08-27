@@ -77,10 +77,8 @@ provider, persistent storage, or Flutter APIs.
 
 ## Validate the package archive
 
-The repository root uses `.pubignore` to keep client source out of the server
-package. Pub also applies that parent rule to nested publication commands. Run
-the repository staging command to validate the client archive outside the
-parent package:
+Run the repository staging command to create and validate the same isolated
+client archive used by the publication workflow:
 
 ```text
 dart tool/stage_client_package.dart --dry-run

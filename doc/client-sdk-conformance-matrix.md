@@ -117,11 +117,10 @@ by the provider or optional Flutter adapter that owns those concerns.
 
 Before the client package directory can reach `main`:
 
-- the root server archive excludes `/packages/`;
-- CI discovers and validates both root and nested packages;
+- both publishable SDKs live under `packages/`;
+- CI discovers and validates both packages plus repository tooling;
 - each package passes analysis, tests, and a package-specific
   `dart pub publish --dry-run` archive check;
-- archive inspection proves the server package does not contain client source;
 - existing server tags remain in the `v0.0.x` format;
 - client tags use `openfeature_dart_client_sdk-v<version>`;
 - release branch validation accepts both known Release Please components;
