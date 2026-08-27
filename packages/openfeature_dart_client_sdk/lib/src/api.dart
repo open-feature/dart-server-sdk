@@ -13,16 +13,23 @@ import 'provider.dart';
 /// Creates an API instance isolated from the process-wide singleton.
 ///
 /// This function is exported only from the experimental library.
-OpenFeatureAPI createIsolatedOpenFeatureAPI() => OpenFeatureAPI._();
+OpenFeatureAPI createIsolatedOpenFeatureAPI({
+  Duration lifecycleTimeout = const Duration(seconds: 30),
+}) => OpenFeatureAPI._(lifecycleTimeout: lifecycleTimeout);
 
 /// The static-context OpenFeature API.
 final class OpenFeatureAPI {
-  OpenFeatureAPI._();
+  OpenFeatureAPI._({this.lifecycleTimeout = const Duration(seconds: 30)});
 
   /// The process-wide default API instance.
   static final OpenFeatureAPI instance = OpenFeatureAPI._();
 
   static const FeatureProvider _noOpProvider = NoOpProvider();
+  static final Map<FeatureProvider, OpenFeatureAPI> _providerOwners =
+      HashMap<FeatureProvider, OpenFeatureAPI>.identity();
+
+  /// Maximum time allowed for one provider lifecycle operation.
+  final Duration lifecycleTimeout;
 
   FeatureProvider _defaultProvider = _noOpProvider;
   final Map<String, FeatureProvider> _domainProviders =
@@ -110,11 +117,29 @@ final class OpenFeatureAPI {
       )
       ..remove(_noOpProvider);
 
-    await Future.wait(
-      providers.map(
-        (provider) => _reconcile(provider, previousContext, context),
-      ),
+    final outcomes = await Future.wait(
+      providers.map((provider) async {
+        try {
+          await _reconcile(provider, context);
+          return (provider: provider, error: null, stackTrace: null);
+        } on Object catch (error, stackTrace) {
+          return (provider: provider, error: error, stackTrace: stackTrace);
+        }
+      }),
     );
+    final failures = outcomes.where((outcome) => outcome.error != null);
+    if (failures.isNotEmpty) {
+      final reconciledProviders = outcomes
+          .where((outcome) => outcome.error == null)
+          .map((outcome) => outcome.provider);
+      await Future.wait(
+        reconciledProviders.map(
+          (provider) => _reconcile(provider, previousContext),
+        ),
+      );
+      final failure = failures.first;
+      Error.throwWithStackTrace(failure.error!, failure.stackTrace!);
+    }
     _globalContext = context;
   }
 
@@ -140,10 +165,9 @@ final class OpenFeatureAPI {
     String domain,
     EvaluationContext context,
   ) async {
-    final previousContext = _contextForDomain(domain);
     final provider = _domainProviders[domain];
     if (provider != null) {
-      await _reconcile(provider, previousContext, context);
+      await _reconcile(provider, context);
     }
     _domainContexts[domain] = context;
   }
@@ -154,10 +178,9 @@ final class OpenFeatureAPI {
   }
 
   Future<void> _clearDomainContext(String domain) async {
-    final previousContext = _contextForDomain(domain);
     final provider = _domainProviders[domain];
     if (provider != null && _domainContexts.containsKey(domain)) {
-      await _reconcile(provider, previousContext, _globalContext);
+      await _reconcile(provider, _globalContext);
     }
     _domainContexts.remove(domain);
   }
@@ -231,23 +254,36 @@ final class OpenFeatureAPI {
     Object? initializationError;
     StackTrace? initializationStackTrace;
     if (record == null) {
+      final owner = _providerOwners[provider];
+      if (owner != null && !identical(owner, this)) {
+        throw const OpenFeatureException(
+          'A provider instance cannot be active in more than one API instance.',
+        );
+      }
       record = _ProviderRecord(
         initialDomain: domain,
         metadata: provider.metadata,
+        activeContext: _contextForDomain(domain),
       );
+      _providerOwners[provider] = this;
       _providerRecords[provider] = record;
       try {
         await _initialize(provider, record, domain);
       } on Object catch (error, stackTrace) {
         if (record.status != ProviderStatus.error &&
             record.status != ProviderStatus.fatal) {
-          await record.eventSubscription?.cancel();
-          _providerRecords.remove(provider);
+          await _disposeProvider(provider, record);
           rethrow;
         }
         initializationError = error;
         initializationStackTrace = stackTrace;
       }
+    } else if (provider is ContextReconciliationProvider &&
+        record.bindingCount > 0) {
+      throw const OpenFeatureException(
+        'A context-reconciling provider can have only one active binding. '
+        'Use a separate provider instance for each independently scoped context.',
+      );
     }
 
     if (domain == null) {
@@ -320,14 +356,24 @@ final class OpenFeatureAPI {
       );
     }
 
-    final terminalEvent = Completer<ProviderStatus>();
-    record.terminalEvent = terminalEvent;
+    final operation = _LifecycleOperation(ProviderEventType.ready);
+    record.lifecycleOperation = operation;
     try {
-      await (provider as InitializableProvider).initialize(
-        _contextForDomain(domain),
-        domain: domain,
-      );
-      final status = await terminalEvent.future;
+      final status =
+          await (() async {
+            await (provider as InitializableProvider).initialize(
+              _contextForDomain(domain),
+              domain: domain,
+            );
+            operation.completeCallback();
+            return operation.future;
+          })().timeout(
+            lifecycleTimeout,
+            onTimeout: () => throw OpenFeatureException(
+              'Provider initialization did not complete within '
+              '${lifecycleTimeout.inMilliseconds} ms.',
+            ),
+          );
       if (status == ProviderStatus.error || status == ProviderStatus.fatal) {
         throw OpenFeatureException(
           'Provider initialization ended with status ${status.name}.',
@@ -337,13 +383,14 @@ final class OpenFeatureAPI {
         );
       }
     } finally {
-      record.terminalEvent = null;
+      if (identical(record.lifecycleOperation, operation)) {
+        record.lifecycleOperation = null;
+      }
     }
   }
 
   Future<void> _reconcile(
     FeatureProvider provider,
-    EvaluationContext previousContext,
     EvaluationContext newContext,
   ) async {
     if (provider is! ContextReconciliationProvider) {
@@ -359,14 +406,25 @@ final class OpenFeatureAPI {
     if (record == null) {
       return;
     }
-    final terminalEvent = Completer<ProviderStatus>();
-    record.terminalEvent = terminalEvent;
+    final previousContext = record.activeContext;
+    final operation = _LifecycleOperation(ProviderEventType.contextChanged);
+    record.lifecycleOperation = operation;
     try {
-      await (provider as ContextReconciliationProvider).onContextChanged(
-        previousContext,
-        newContext,
-      );
-      final status = await terminalEvent.future;
+      final status =
+          await (() async {
+            await (provider as ContextReconciliationProvider).onContextChanged(
+              previousContext,
+              newContext,
+            );
+            operation.completeCallback();
+            return operation.future;
+          })().timeout(
+            lifecycleTimeout,
+            onTimeout: () => throw OpenFeatureException(
+              'Provider reconciliation did not complete within '
+              '${lifecycleTimeout.inMilliseconds} ms.',
+            ),
+          );
       if (status == ProviderStatus.error || status == ProviderStatus.fatal) {
         throw OpenFeatureException(
           'Provider reconciliation ended with status ${status.name}.',
@@ -375,8 +433,11 @@ final class OpenFeatureAPI {
               : ErrorCode.general,
         );
       }
+      record.activeContext = newContext;
     } finally {
-      record.terminalEvent = null;
+      if (identical(record.lifecycleOperation, operation)) {
+        record.lifecycleOperation = null;
+      }
     }
   }
 
@@ -411,14 +472,7 @@ final class OpenFeatureAPI {
       _dispatchEvent(provider, record, event);
     }
 
-    if (event.type == ProviderEventType.ready ||
-        event.type == ProviderEventType.contextChanged ||
-        event.type == ProviderEventType.error) {
-      final terminalEvent = record.terminalEvent;
-      if (terminalEvent != null && !terminalEvent.isCompleted) {
-        terminalEvent.complete(record.status);
-      }
-    }
+    record.lifecycleOperation?.observe(event, record.status);
   }
 
   ProviderEventSubscription _addHandler(
@@ -570,6 +624,9 @@ final class OpenFeatureAPI {
     } finally {
       record.status = ProviderStatus.notReady;
       _providerRecords.remove(provider);
+      if (identical(_providerOwners[provider], this)) {
+        _providerOwners.remove(provider);
+      }
     }
 
     if (cleanupError != null) {
@@ -750,18 +807,18 @@ final class OpenFeatureClient {
     final provider = _api._providerForDomain(metadata.domain);
     final evaluationContext = _api._contextForDomain(metadata.domain);
     final hints = options?.hookHints ?? HookHints();
-    late final List<Hook> hooks;
-    late final ProviderMetadata providerMetadata;
+    final hooks = <Hook>[..._api._hooks, ..._hooks, ...?options?.hooks];
+    ProviderMetadata providerMetadata =
+        _api._providerRecords[provider]?.metadata ??
+        const ProviderMetadata(name: 'unknown');
+    Object? setupError;
     try {
       providerMetadata = provider.metadata;
-      hooks = <Hook>[
-        ..._api._hooks,
-        ..._hooks,
-        ...?options?.hooks,
-        if (provider is ProviderHooks) ...(provider as ProviderHooks).hooks,
-      ];
+      if (provider is ProviderHooks) {
+        hooks.addAll((provider as ProviderHooks).hooks);
+      }
     } on Object catch (error) {
-      return _errorDetails(flagKey, defaultValue, error);
+      setupError = error;
     }
 
     final hookContexts = hooks
@@ -778,30 +835,34 @@ final class OpenFeatureClient {
         .toList(growable: false);
 
     FlagEvaluationDetails<T>? details;
-    Object? evaluationError;
+    Object? evaluationError = setupError;
     try {
-      for (var index = 0; index < hooks.length; index++) {
-        hooks[index].before(hookContexts[index], hints);
-      }
-      final resolution = resolve(provider, evaluationContext);
-      details = FlagEvaluationDetails<T>(
-        flagKey: flagKey,
-        value: resolution.errorCode == null ? resolution.value : defaultValue,
-        errorCode: resolution.errorCode,
-        errorMessage: resolution.errorMessage,
-        reason: resolution.reason,
-        variant: resolution.variant,
-        flagMetadata: resolution.flagMetadata,
-      );
-      if (resolution.errorCode != null) {
-        evaluationError = OpenFeatureException(
-          resolution.errorMessage ?? 'Provider resolution failed.',
-          errorCode: resolution.errorCode!,
-        );
-      } else {
-        for (var index = hooks.length - 1; index >= 0; index--) {
-          hooks[index].after(hookContexts[index], details, hints);
+      if (setupError == null) {
+        for (var index = 0; index < hooks.length; index++) {
+          hooks[index].before(hookContexts[index], hints);
         }
+        final resolution = resolve(provider, evaluationContext);
+        details = FlagEvaluationDetails<T>(
+          flagKey: flagKey,
+          value: resolution.errorCode == null ? resolution.value : defaultValue,
+          errorCode: resolution.errorCode,
+          errorMessage: resolution.errorMessage,
+          reason: resolution.errorCode == null ? resolution.reason : 'ERROR',
+          variant: resolution.variant,
+          flagMetadata: resolution.flagMetadata,
+        );
+        if (resolution.errorCode != null) {
+          evaluationError = OpenFeatureException(
+            resolution.errorMessage ?? 'Provider resolution failed.',
+            errorCode: resolution.errorCode!,
+          );
+        } else {
+          for (var index = hooks.length - 1; index >= 0; index--) {
+            hooks[index].after(hookContexts[index], details, hints);
+          }
+        }
+      } else {
+        details = _errorDetails(flagKey, defaultValue, setupError);
       }
     } on Object catch (error) {
       evaluationError = error;
@@ -883,13 +944,50 @@ final class _EventHandlerRecord {
 }
 
 final class _ProviderRecord {
-  _ProviderRecord({required this.initialDomain, required this.metadata});
+  _ProviderRecord({
+    required this.initialDomain,
+    required this.metadata,
+    required this.activeContext,
+  });
 
   final String? initialDomain;
   final ProviderMetadata metadata;
+  EvaluationContext activeContext;
   ProviderStatus status = ProviderStatus.notReady;
   int bindingCount = 0;
   StreamSubscription<ProviderEvent>? eventSubscription;
-  Completer<ProviderStatus>? terminalEvent;
+  _LifecycleOperation? lifecycleOperation;
   final List<ProviderEvent> pendingBindingEvents = <ProviderEvent>[];
+}
+
+final class _LifecycleOperation {
+  _LifecycleOperation(this.successEventType);
+
+  final ProviderEventType successEventType;
+  final Completer<ProviderStatus> _terminal = Completer<ProviderStatus>();
+  ProviderStatus? _latestStatus;
+  bool _callbackCompleted = false;
+
+  Future<ProviderStatus> get future => _terminal.future;
+
+  void observe(ProviderEvent event, ProviderStatus status) {
+    if (event.type != successEventType &&
+        event.type != ProviderEventType.error) {
+      return;
+    }
+    _latestStatus = status;
+    _completeIfReady();
+  }
+
+  void completeCallback() {
+    _callbackCompleted = true;
+    _completeIfReady();
+  }
+
+  void _completeIfReady() {
+    final status = _latestStatus;
+    if (_callbackCompleted && status != null && !_terminal.isCompleted) {
+      _terminal.complete(status);
+    }
+  }
 }

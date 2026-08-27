@@ -54,6 +54,10 @@ jobs:
             /^LF:/ { lines_found += $2 }
             /^LH:/ { lines_hit += $2 }
             END {
+              if (lines_found == 0) {
+                print "Client coverage report contains no executable lines." > "/dev/stderr"
+                exit 1
+              }
               coverage = 100 * lines_hit / lines_found
               printf "Client line coverage: %d/%d (%.2f%%)\n", lines_hit, lines_found, coverage
               if (coverage < 95) exit 1

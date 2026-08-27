@@ -36,9 +36,12 @@ jobs:
       - name: Publish client package
         if: >-
           ${{ startsWith(github.ref_name, 'openfeature_dart_client_sdk-v') &&
-              github.ref_name != 'openfeature_dart_client_sdk-v0.0.1-beta.1' }}
+              vars.CLIENT_PUBDEV_BOOTSTRAPPED == 'true' }}
         run: dart tool/stage_client_package.dart --publish
       - name: Explain first client publication
-        if: ${{ github.ref_name == 'openfeature_dart_client_sdk-v0.0.1-beta.1' }}
+        if: >-
+          ${{ startsWith(github.ref_name, 'openfeature_dart_client_sdk-v') &&
+              vars.CLIENT_PUBDEV_BOOTSTRAPPED != 'true' }}
         run: |
-          echo "The first client prerelease requires the documented manual pub.dev bootstrap."
+          echo "Client publishing is disabled until the first manual pub.dev bootstrap is complete."
+          echo "Follow doc/client-sdk-release.md, then set CLIENT_PUBDEV_BOOTSTRAPPED=true."

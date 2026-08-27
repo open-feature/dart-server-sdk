@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'stage_client_package_paths.dart';
+
 Future<void> main(List<String> arguments) async {
   final publish = arguments.contains('--publish');
   final unknownArguments = arguments
@@ -44,7 +46,7 @@ Future<void> main(List<String> arguments) async {
 Future<void> _copyPackage(Directory source, Directory destination) async {
   await for (final entity in source.list(recursive: true, followLinks: false)) {
     final relativePath = entity.path.substring(source.path.length + 1);
-    if (_isExcluded(relativePath)) {
+    if (isExcludedClientPackagePath(relativePath)) {
       continue;
     }
     final targetPath = _join(destination.path, relativePath);
@@ -60,14 +62,6 @@ Future<void> _copyPackage(Directory source, Directory destination) async {
       );
     }
   }
-}
-
-bool _isExcluded(String relativePath) {
-  final firstSegment = relativePath.split(Platform.pathSeparator).first;
-  return firstSegment == '.dart_tool' ||
-      firstSegment == 'build' ||
-      firstSegment == 'coverage' ||
-      firstSegment == 'pubspec.lock';
 }
 
 String _join(String first, String second, [String? third]) {

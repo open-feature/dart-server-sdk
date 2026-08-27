@@ -229,9 +229,17 @@ before making a new binding active.
 A provider declaring itself domain-scoped can be bound to at most one domain,
 regardless of whether multiple domains currently have equal contexts. The SDK
 rejects a second domain binding and leaves the first intact. The bound domain is
-passed to initialization. A provider that does not declare itself domain-scoped
-may serve multiple domains; providers maintaining domain-specific caches or
-telemetry must declare themselves domain-scoped or use separate instances.
+passed to initialization. A provider that does not reconcile cached context may
+serve multiple domains because each resolver receives the selected context.
+Until the provider contract has a domain-aware reconciliation callback, a
+provider implementing `ContextReconciliationProvider` can have only one active
+binding and must use separate instances for independently scoped contexts.
+
+Initialization and reconciliation waits are bounded to 30 seconds by default.
+An isolated API may configure a shorter timeout for tests. A provider that
+returns without emitting the operation's terminal event fails within that
+bound, is released when it never became active, and cannot permanently block
+the serialized mutation queue or shutdown.
 
 Tests cover sign-in, sign-out, account switching, queued rapid updates, refresh
 failure, provider replacement, shutdown during reconciliation, and late work
