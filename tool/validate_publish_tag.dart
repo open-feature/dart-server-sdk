@@ -4,8 +4,9 @@ const String clientPackageDirectory = 'packages/openfeature_dart_client_sdk';
 const String serverPackageDirectory = 'packages/openfeature_dart_server_sdk';
 
 final RegExp _semanticVersion = RegExp(
-  r'^[0-9]+\.[0-9]+\.[0-9]+'
-  r'(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?'
+  r'^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)'
+  r'(?:-(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)'
+  r'(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?'
   r'(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$',
 );
 

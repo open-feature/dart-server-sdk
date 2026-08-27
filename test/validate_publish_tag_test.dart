@@ -25,12 +25,45 @@ void main() {
     );
   });
 
+  test('accepts valid numeric prerelease and build identifiers', () {
+    expect(
+      () => validatePublishTag(
+        tag: 'openfeature_dart_client_sdk-v1.2.3-0+build.01',
+        packageDirectory: clientPackageDirectory,
+        pubspec: 'version: 1.2.3-0+build.01\n',
+      ),
+      returnsNormally,
+    );
+  });
+
   test('rejects malformed versions', () {
     expect(
       () => validatePublishTag(
         tag: 'openfeature_dart_client_sdk-vnext',
         packageDirectory: clientPackageDirectory,
         pubspec: 'version: 0.0.1-beta.1\n',
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('rejects leading zeroes in core numeric identifiers', () {
+    expect(
+      () => validatePublishTag(
+        tag: 'v01.2.3',
+        packageDirectory: serverPackageDirectory,
+        pubspec: 'version: 01.2.3\n',
+      ),
+      throwsFormatException,
+    );
+  });
+
+  test('rejects leading zeroes in numeric prerelease identifiers', () {
+    expect(
+      () => validatePublishTag(
+        tag: 'v1.2.3-01',
+        packageDirectory: serverPackageDirectory,
+        pubspec: 'version: 1.2.3-01\n',
       ),
       throwsFormatException,
     );

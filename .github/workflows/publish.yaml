@@ -6,6 +6,7 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+' # Server tag: v{{version}}
       - 'openfeature_dart_client_sdk-v[0-9]+.[0-9]+.[0-9]+'
       - 'openfeature_dart_client_sdk-v[0-9]+.[0-9]+.[0-9]+-*'
+      - 'openfeature_dart_client_sdk-v[0-9]+.[0-9]+.[0-9]+\+*'
 
 jobs:
   publish:

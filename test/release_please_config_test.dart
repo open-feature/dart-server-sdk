@@ -53,6 +53,10 @@ void main() {
     expect(publishWorkflow, contains('dart tool/validate_publish_tag.dart'));
     expect(
       publishWorkflow,
+      contains(r'openfeature_dart_client_sdk-v[0-9]+.[0-9]+.[0-9]+\+*'),
+    );
+    expect(
+      publishWorkflow,
       isNot(contains("'openfeature_dart_client_sdk-v*'")),
     );
   });
