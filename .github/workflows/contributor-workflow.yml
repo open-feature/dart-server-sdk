@@ -69,7 +69,9 @@ jobs:
       - name: Compile client web smoke target
         if: matrix.package.name == 'client'
         working-directory: ${{ matrix.package.path }}
-        run: dart compile js test/web_compile_smoke.dart -o build/web_compile_smoke.js
+        run: |
+          mkdir -p build
+          dart compile js test/web_compile_smoke.dart -o build/web_compile_smoke.js
 
       - name: Run client web smoke target in Chrome
         if: matrix.package.name == 'client'
@@ -140,7 +142,7 @@ jobs:
 
           for file in $FILES; do
             if [[ -f "$file" ]]; then
-              git_log=$(git -C "$GITHUB_WORKSPACE" log -n 1 --pretty=format:"%h by %an <%ae>" -- "$file" || true)
+              git_log=$(git log -n 1 --pretty=format:"%h by %an <%ae>" -- "$file" || true)
               echo "File: $file"
               echo "Last change: ${git_log:-unknown}"
               echo ""
