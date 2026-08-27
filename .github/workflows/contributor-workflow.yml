@@ -51,16 +51,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          STATUS=0
+          set +e
           if [[ "$PACKAGE_PATH" == "." ]]; then
             PUBLISH_OUTPUT=$(dart pub publish --dry-run 2>&1)
+            STATUS=$?
           else
             PUBLISH_OUTPUT=$(dart ../../tool/stage_client_package.dart --dry-run 2>&1)
+            STATUS=$?
           fi
+          set -e
           echo "$PUBLISH_OUTPUT"
+          if [[ $STATUS -ne 0 ]]; then
+            exit "$STATUS"
+          fi
           if [[ "$PACKAGE_PATH" == "." ]] && grep -q "packages/openfeature_dart_client_sdk" <<< "$PUBLISH_OUTPUT"; then
             echo "The server package archive contains client package files." >&2
             exit 1
           fi
+
+      - name: Compile client web smoke target
+        if: matrix.package.name == 'client'
+        working-directory: ${{ matrix.package.path }}
+        run: dart compile js test/web_compile_smoke.dart -o build/web_compile_smoke.js
 
       - name: Run Static Analysis (capture and show)
         id: analyze

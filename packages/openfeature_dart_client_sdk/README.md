@@ -50,7 +50,25 @@ Implement only the optional capabilities that the provider needs:
 
 An initializable or reconciling provider must also implement
 `ProviderEventSource`. It must emit the terminal lifecycle event before its
-method terminates.
+method terminates. The SDK bounds lifecycle waits to 30 seconds by default so
+a provider contract violation cannot indefinitely block context changes or
+shutdown. Tests and isolated integrations may select a shorter timeout through
+`createIsolatedOpenFeatureAPI(lifecycleTimeout: ...)`.
+
+When initialization or context reconciliation times out, the SDK quarantines
+and detaches that provider instance. Its underlying asynchronous work cannot be
+cancelled safely, so applications must register a new provider instance rather
+than retrying the timed-out one. Subscription cancellation and shutdown cleanup
+are bounded by the same timeout.
+
+A provider that implements `ContextReconciliationProvider` can have only one
+active API/domain binding. Use a separate provider instance for each static
+context. Providers that resolve entirely from the context passed to each
+resolver and do not reconcile cached state may be shared across domains.
+
+The package currently lives in the server SDK repository while the project
+validates the beta. Its package name and Dart import path are independent; a
+later repository move will be announced with migration guidance.
 
 ## Scope
 
@@ -67,3 +85,6 @@ parent package:
 ```text
 dart tool/stage_client_package.dart --dry-run
 ```
+
+See the [beta release procedure](../../doc/client-sdk-release.md) for the
+first-publication bootstrap and later automated prereleases.

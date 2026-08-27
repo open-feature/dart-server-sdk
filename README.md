@@ -60,8 +60,13 @@ and published.
 - Read the [client SDK architecture](doc/client-sdk-architecture.md).
 - Review the
   [client SDK conformance matrix](doc/client-sdk-conformance-matrix.md).
+- Read the [client beta release procedure](doc/client-sdk-release.md).
 - Follow [issue #117](https://github.com/open-feature/dart-server-sdk/issues/117)
   for implementation progress.
+
+The nested client directory is a transitional beta layout. The client package
+name and import path are independently versioned; any later repository or
+folder move will be announced with migration guidance.
 
 ## Quick start
 

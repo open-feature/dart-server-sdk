@@ -6,5 +6,6 @@
 
 # Ignore Dart local build tools
 **/.dart_tool/
+**/build/
 **/pubspec.lock
-coverage/
+**/coverage/
