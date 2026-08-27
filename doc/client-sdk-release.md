@@ -4,9 +4,8 @@ The Dart client SDK is independently versioned from the server SDK. Client
 changes use the `openfeature_dart_client_sdk-v<version>` tag format and must not
 require a server package release. Release Please opens separate component pull
 requests so maintainers can merge the client release without publishing the
-server package. Because the server package remains temporarily at repository
-root, shared top-level monorepo commits may still appear in a proposed server
-release; review or close that proposal independently.
+server package. Both SDKs live under `packages/`, so Release Please can scope
+each proposal to the package directory that owns the change.
 
 ## First pub.dev publication
 
@@ -39,8 +38,8 @@ print bootstrap instructions instead of silently attempting publication.
 
 Release Please tracks the client from `packages/openfeature_dart_client_sdk`
 and creates component-prefixed beta tags. The tag-triggered publish workflow
-stages the nested package before publishing so the root server `.pubignore`
-cannot remove client files from its archive.
+stages the package before publishing so the validated archive is identical to
+the archive used for the manual first-publication bootstrap.
 
 The package-local `.release-please-version` file and the generic marker on the
 pubspec version keep prerelease suffixes intact; Release Please's Dart updater

@@ -24,7 +24,7 @@ jobs:
           if [[ "$TAG_NAME" == openfeature_dart_client_sdk-v* ]]; then
             echo "directory=packages/openfeature_dart_client_sdk" >> "$GITHUB_OUTPUT"
           else
-            echo "directory=." >> "$GITHUB_OUTPUT"
+            echo "directory=packages/openfeature_dart_server_sdk" >> "$GITHUB_OUTPUT"
           fi
       - name: Install dependencies
         working-directory: ${{ steps.package.outputs.directory }}

@@ -12,7 +12,7 @@ jobs:
       matrix:
         package:
           - name: server
-            path: .
+            path: packages/openfeature_dart_server_sdk
           - name: client
             path: packages/openfeature_dart_client_sdk
 

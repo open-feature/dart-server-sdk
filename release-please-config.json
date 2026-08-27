@@ -2,13 +2,14 @@
   "signoff": "OpenFeature Bot <109696520+openfeaturebot@users.noreply.github.com>",
   "separate-pull-requests": true,
   "packages": {
-    ".": {
+    "packages/openfeature_dart_server_sdk": {
       "release-type": "dart",
+      "component": "openfeature_dart_server_sdk",
+      "package-name": "openfeature_dart_server_sdk",
       "prerelease": false,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
       "include-component-in-tag": false,
-      "exclude-paths": [".github", "doc", "packages", "test", "tool"],
       "extra-files": ["README.md"],
       "changelog-sections": [
         {

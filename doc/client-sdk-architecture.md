@@ -61,25 +61,16 @@ The first monorepo iteration contains:
 | `openfeature_dart_server_sdk` | Existing dynamic-context SDK | Server Dart; current API remains compatible |
 | `openfeature_dart_client_sdk` | Static-context API, provider lifecycle, hooks, events, tracking, and evaluation | Pure Dart; web-compatible; no Flutter dependency |
 
-During the incremental migration, the server package remains at the repository
-root and the client package is added at
-`packages/openfeature_dart_client_sdk/`. Before or in the same pull request
-that creates that directory, repository safety must ensure:
+Both publishable SDKs live under `packages/`. Repository safety must ensure:
 
-- the root server package excludes `/packages/` from its publication archive;
 - CI discovers, analyzes, and tests every package explicitly;
 - `dart pub publish --dry-run` validates each package-specific archive;
-- archive-content checks fail if one package contains another package's source;
 - release and publish workflows route tags to the correct package directory.
 
-A root `.pubignore` that excludes `/packages/` is the minimum transitional
-server-archive protection. A Pub workspace may provide shared dependency
-resolution, but publishing remains package-specific.
-
-Pub applies the root `.pubignore` while it packages the nested client. The
-client publication command therefore stages only the client directory in a
-temporary location before it runs `dart pub publish`. CI and tag publication
-use the same staging command.
+The client publication command continues to stage only the client directory in
+a temporary location before it runs `dart pub publish`. CI and tag publication
+use the same staging command. The server package publishes directly from
+`packages/openfeature_dart_server_sdk`.
 
 Shared code should be extracted only when both packages require the same stable,
 specification-neutral contract. Candidate types include flag values, provider
@@ -274,20 +265,22 @@ Migration follows independently reviewed phases:
 
 1. **Architecture:** approve this architecture, package boundaries, naming,
    versioning, and the v0.9.0 conformance matrix.
-2. **Package safety and CI:** add root server archive exclusions, package
-   discovery, per-package analysis/tests, per-package publication dry runs, and
-   release routing that preserves existing server releases.
+2. **Package safety and CI:** add package discovery, per-package
+   analysis/tests, per-package publication dry runs, and release routing that
+   preserves existing server releases.
 3. **Additive client beta:** add `packages/openfeature_dart_client_sdk/`, its
-   tests, changelog, documentation, and `0.0.1-beta.1` release path without
-   moving or renaming the root server package.
-4. **Provider and platform validation:** exercise exact client commits or
+   tests, changelog, documentation, and `0.0.1-beta.1` release path.
+4. **Package alignment:** relocate the server package to
+   `packages/openfeature_dart_server_sdk/`, preserve its release history and
+   tag format, and document the path change for Git consumers.
+5. **Provider and platform validation:** exercise exact client commits or
    immutable prereleases across pure Dart web, Flutter consumers, and
    independently maintained providers.
-5. **Stable client release:** publish `0.0.1` only after the conformance and
+6. **Stable client release:** publish `0.0.1` only after the conformance and
    release gates in this document pass.
 
 The established server tag format remains `v0.0.x`; for example, its next
-release may be `v0.0.23`. Client tags include the component to avoid ambiguity,
+release may be `v0.0.24`. Client tags include the component to avoid ambiguity,
 for example `openfeature_dart_client_sdk-v0.0.1-beta.1` and
 `openfeature_dart_client_sdk-v0.0.1`.
 
@@ -296,24 +289,21 @@ client prerelease must therefore be published manually from the exact release
 tag by an authorized uploader, transferred to the appropriate verified
 publisher, and then configured for tag-bound OIDC publishing.
 
-The transitional layout is:
+The repository layout is:
 
 ```text
 dart-server-sdk/
 |-- doc/
-|-- lib/                         # current server package
 |-- packages/
+|   |-- openfeature_dart_server_sdk/
 |   `-- openfeature_dart_client_sdk/
-|-- test/                        # current server tests
-|-- .pubignore                  # excludes /packages/ from server archive
-`-- pubspec.yaml                # current server package and workspace root
+|-- test/                        # repository tooling tests
+|-- tool/                        # repository tooling
+`-- pubspec.yaml                # non-publishable repository tooling package
 ```
 
-Relocating the server package to `packages/openfeature_dart_server_sdk/` or
-renaming the repository to `open-feature/dart-sdk` remains an optional later
-decision. Either change requires a separate compatibility review covering Git
-dependencies, links, badges, automation, provider references, and release
-history. Neither is a commitment or prerequisite of the initial client beta.
+Renaming the repository to `open-feature/dart-sdk` remains an optional later
+decision and is not part of this package-layout change.
 
 ## Provider Validation
 

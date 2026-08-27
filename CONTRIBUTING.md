@@ -18,10 +18,17 @@ Here’s the updated **README** tailored for **Open Feature** and GitHub:
 
 ### **Installation and Dependencies**
 
-Install dependencies with:
+Install repository tooling dependencies, then install the package you are
+working on:
 ```bash
 dart pub get
+cd packages/openfeature_dart_server_sdk
+dart pub get
+# or: cd packages/openfeature_dart_client_sdk && dart pub get
 ```
+
+Run package commands from that package's directory. Root `dart test` validates
+repository release and staging tooling rather than either SDK implementation.
 
 We aim to minimize runtime dependencies. Please review new dependencies carefully and follow Dart's best practices when proposing additions.
 
@@ -271,10 +278,11 @@ Contributing to the project is highly encouraged! Please follow these steps to s
    - Add appropriate unit and integration tests to ensure coverage.
 
 3. **Run Tests Locally**:
-   - Validate your changes locally to ensure they don't break existing functionality:
+   - Validate the repository tooling and both packages locally:
      ```bash
-     dart analyze
      dart test
+     cd packages/openfeature_dart_server_sdk && dart analyze && dart test
+     cd ../openfeature_dart_client_sdk && dart analyze && dart test
      ```
 
 4. **Commit Your Changes**:
