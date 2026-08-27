@@ -123,6 +123,124 @@ void main() {
       expect(domainProvider.activeContext.targetingKey, 'user-a');
     },
   );
+
+  test('unrelated domain mutations reconcile concurrently', () async {
+    final checkoutProvider = _GatedContextProvider(name: 'checkout');
+    final searchProvider = _GatedContextProvider(name: 'search');
+    await api.setProviderForDomainAndWait('checkout', checkoutProvider);
+    await api.setProviderForDomainAndWait('search', searchProvider);
+
+    final checkoutChange = api.setEvaluationContextForDomainAndWait(
+      'checkout',
+      EvaluationContext(targetingKey: 'checkout-user'),
+    );
+    await checkoutProvider.waitForChange(1);
+    final searchChange = api.setEvaluationContextForDomainAndWait(
+      'search',
+      EvaluationContext(targetingKey: 'search-user'),
+    );
+
+    await searchProvider.waitForChange(1).timeout(const Duration(seconds: 1));
+    checkoutProvider.allowChange(0);
+    searchProvider.allowChange(0);
+    await Future.wait([checkoutChange, searchChange]);
+
+    expect(checkoutProvider.activeContext.targetingKey, 'checkout-user');
+    expect(searchProvider.activeContext.targetingKey, 'search-user');
+  });
+
+  test(
+    'a slow domain reconciliation does not block other registration',
+    () async {
+      final checkoutProvider = _GatedContextProvider(name: 'checkout');
+      await api.setProviderForDomainAndWait('checkout', checkoutProvider);
+
+      final checkoutChange = api.setEvaluationContextForDomainAndWait(
+        'checkout',
+        EvaluationContext(targetingKey: 'checkout-user'),
+      );
+      await checkoutProvider.waitForChange(1);
+
+      await api
+          .setProviderForDomainAndWait(
+            'search',
+            InMemoryProvider({'flag': true}),
+          )
+          .timeout(const Duration(seconds: 1));
+      expect(api.getClient('search').getBooleanValue('flag', false), isTrue);
+
+      checkoutProvider.allowChange(0);
+      await checkoutChange;
+    },
+  );
+
+  test(
+    'a new global-fallback binding waits for an active global change',
+    () async {
+      final defaultProvider = _GatedContextProvider(name: 'default');
+      await api.setProviderAndWait(defaultProvider);
+      final nextContext = EvaluationContext(targetingKey: 'global-user');
+      final globalChange = api.setEvaluationContextAndWait(nextContext);
+      await defaultProvider.waitForChange(1);
+
+      final domainProvider = _GatedContextProvider(name: 'checkout');
+      final registration = api.setProviderForDomainAndWait(
+        'checkout',
+        domainProvider,
+      );
+      var registrationCompleted = false;
+      registration.then((_) => registrationCompleted = true);
+      await Future<void>.delayed(Duration.zero);
+      expect(registrationCompleted, isFalse);
+
+      defaultProvider.allowChange(0);
+      await Future.wait([globalChange, registration]);
+      api.getClient('checkout').getBooleanValue('flag', false);
+      expect(domainProvider.lastEvaluationContext, same(nextContext));
+    },
+  );
+
+  test(
+    'context-changed handlers evaluate with the committed context',
+    () async {
+      final provider = _GatedContextProvider();
+      await api.setProviderAndWait(provider);
+      final nextContext = EvaluationContext(targetingKey: 'next-user');
+      EvaluationContext? handlerContext;
+      api.getClient().addHandler(ProviderEventType.contextChanged, (_) {
+        api.getClient().getBooleanValue('flag', false);
+        handlerContext = provider.lastEvaluationContext;
+      });
+
+      final contextChange = api.setEvaluationContextAndWait(nextContext);
+      await provider.waitForChange(1);
+      provider.allowChange(0);
+      await contextChange;
+
+      expect(handlerContext, same(nextContext));
+    },
+  );
+
+  test(
+    'an unbound domain uses global context until it has a provider',
+    () async {
+      final defaultProvider = _GatedContextProvider(name: 'default');
+      await api.setProviderAndWait(defaultProvider);
+      final domainContext = EvaluationContext(targetingKey: 'domain-user');
+      await api.setEvaluationContextForDomainAndWait('checkout', domainContext);
+
+      api.getClient('checkout').getBooleanValue('flag', false);
+      expect(
+        defaultProvider.lastEvaluationContext,
+        same(EvaluationContext.empty),
+      );
+
+      final domainProvider = _GatedContextProvider(name: 'checkout');
+      await api.setProviderForDomainAndWait('checkout', domainProvider);
+      api.getClient('checkout').getBooleanValue('flag', false);
+      expect(domainProvider.lastEvaluationContext, same(domainContext));
+    },
+  );
 }
 
 final class _GatedContextProvider

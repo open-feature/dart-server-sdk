@@ -168,9 +168,9 @@ for the complete API documentation.
 ### Providers
 
 [Providers](https://openfeature.dev/docs/reference/concepts/provider) are an
-abstraction between a flag management system and the OpenFeature SDK. Look
-[here](https://openfeature.dev//ecosystem?instant_search%5BrefinementList%5D%5Btype%5D%5B0%5D=Provider&instant_search%5BrefinementList%5D%5BallTechnologies%5D%5B0%5D=Dart)
-for a complete list of available providers. If the provider you need does not
+abstraction between a flag management system and the OpenFeature SDK. See the
+[available providers](https://openfeature.dev//ecosystem?instant_search%5BrefinementList%5D%5Btype%5D%5B0%5D=Provider&instant_search%5BrefinementList%5D%5BallTechnologies%5D%5B0%5D=Dart)
+for a complete list. If the provider you need does not
 exist yet, see [Develop a provider](#develop-a-provider).
 
 ```dart
@@ -222,9 +222,9 @@ final result = await client.getBooleanFlag(
 ### Hooks
 
 [Hooks](https://openfeature.dev/docs/reference/concepts/hooks) allow custom
-logic to be added at well-defined points of the flag evaluation life-cycle. Look
-[here](https://openfeature.dev/ecosystem/?instant_search%5BrefinementList%5D%5Btype%5D%5B0%5D=Hook&instant_search%5BrefinementList%5D%5Btechnology%5D%5B0%5D=Dart)
-for a complete list of available hooks.
+logic to be added at well-defined points of the flag evaluation life-cycle. See
+the [available hooks](https://openfeature.dev/ecosystem/?instant_search%5BrefinementList%5D%5Btype%5D%5B0%5D=Hook&instant_search%5BrefinementList%5D%5Btechnology%5D%5B0%5D=Dart)
+for a complete list.
 
 Once you have added a hook dependency, it can be registered at the global or
 client level.

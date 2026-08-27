@@ -50,6 +50,26 @@ void main() {
       publishWorkflow,
       contains('directory=packages/openfeature_dart_client_sdk'),
     );
+    expect(publishWorkflow, contains('dart tool/validate_publish_tag.dart'));
+    expect(
+      publishWorkflow,
+      contains(r'openfeature_dart_client_sdk-v[0-9]+.[0-9]+.[0-9]+\+*'),
+    );
+    expect(
+      publishWorkflow,
+      isNot(contains("'openfeature_dart_client_sdk-v*'")),
+    );
+  });
+
+  test('the legacy stable check name aggregates the current test matrix', () {
+    final testWorkflow = File(
+      '.github/workflows/pr-test.yaml',
+    ).readAsStringSync();
+
+    expect(testWorkflow, contains('name: test (ubuntu-latest, stable)'));
+    expect(testWorkflow, contains('needs: test'));
+    expect(testWorkflow, contains('MATRIX_RESULT:'));
+    expect(testWorkflow, contains('needs.test.result'));
   });
 
   test('client releases use prerelease-safe generic version updates', () {

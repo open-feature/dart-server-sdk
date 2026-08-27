@@ -191,9 +191,10 @@ affected provider:
    previous active context and the requested context.
 3. For asynchronous reconciliation, the provider emits
    `PROVIDER_RECONCILING`; the SDK updates status before running handlers.
-4. On normal completion, the provider emits `PROVIDER_CONTEXT_CHANGED`; after
-   the callback has terminated and that event has been processed, the SDK marks
-   that revision active for the binding.
+4. On normal completion, the provider emits `PROVIDER_CONTEXT_CHANGED`. After
+   the callback has terminated, the SDK marks that revision active before it
+   dispatches the terminal event to handlers. Evaluations started by those
+   handlers therefore use the announced revision.
 5. On abnormal completion, the provider emits `PROVIDER_ERROR`, using the
    `PROVIDER_FATAL` error code only for an irrecoverable error.
 6. The awaitable mutator for a revision settles after all providers affected by
@@ -203,6 +204,12 @@ The SDK does not synthesize or suppress provider reconciliation events. Per-
 provider serialization avoids reentrant terminal-event ambiguity while still
 running the callback for every context mutation required by the specification.
 A late result cannot replace state for a later active revision.
+
+A context override for a domain without its own provider remains pending. While
+that domain falls back to the default provider, evaluations use the global
+context so the context passed to the resolver matches the default provider's
+reconciled state. The pending domain override becomes active when a provider is
+bound to that domain.
 
 During `RECONCILING`, a resolver may return a value only when the provider can
 prove that the value belongs to the active context; otherwise it reports an
