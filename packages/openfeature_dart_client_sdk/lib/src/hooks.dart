@@ -20,12 +20,12 @@ final class HookHints {
 final class HookContext {
   HookContext({
     required this.flagKey,
-    required this.defaultValue,
+    required Object defaultValue,
     required this.flagValueType,
     required this.clientMetadata,
     required this.providerMetadata,
     required this.evaluationContext,
-  });
+  }) : defaultValue = immutableValue(defaultValue, path: 'defaultValue')!;
 
   final String flagKey;
   final Object defaultValue;

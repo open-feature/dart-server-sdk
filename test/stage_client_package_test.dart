@@ -1,5 +1,6 @@
 import 'package:test/test.dart';
 
+import '../tool/stage_client_package.dart' as staging_command;
 import '../tool/stage_client_package_paths.dart';
 
 void main() {
@@ -34,5 +35,19 @@ void main() {
         reason: path,
       );
     }
+  });
+
+  test('client staging detects conflicting publication flags', () {
+    expect(
+      staging_command.hasConflictingPublicationModes(const [
+        '--publish',
+        '--dry-run',
+      ]),
+      isTrue,
+    );
+    expect(
+      staging_command.hasConflictingPublicationModes(const ['--dry-run']),
+      isFalse,
+    );
   });
 }

@@ -116,14 +116,21 @@ void main() {
     provider.emit(ProviderEventType.stale);
     final staleEvents = <ProviderEventDetails>[];
     api.getClient().addHandler(ProviderEventType.stale, staleEvents.add);
-    provider.emit(ProviderEventType.error, errorCode: ErrorCode.providerFatal);
+    provider.emit(
+      ProviderEventType.error,
+      errorCode: ErrorCode.invalidContext,
+      message: 'invalid targeting key',
+      metadata: {'retryable': false},
+    );
     final errorEvents = <ProviderEventDetails>[];
     api.getClient().addHandler(ProviderEventType.error, errorEvents.add);
 
     expect(readyEvents, hasLength(1));
     expect(staleEvents, hasLength(1));
-    expect(api.getClient().providerStatus, ProviderStatus.fatal);
-    expect(errorEvents.single.errorCode, ErrorCode.providerFatal);
+    expect(api.getClient().providerStatus, ProviderStatus.error);
+    expect(errorEvents.single.errorCode, ErrorCode.invalidContext);
+    expect(errorEvents.single.message, 'invalid targeting key');
+    expect(errorEvents.single.metadata, {'retryable': false});
   });
 
   test('removal is idempotent and shutdown resets handlers', () async {
@@ -168,6 +175,7 @@ final class _EventProvider implements FeatureProvider, ProviderEventSource {
   void emit(
     ProviderEventType type, {
     Iterable<String> flagsChanged = const [],
+    String? message,
     ErrorCode? errorCode,
     Map<String, Object> metadata = const {},
   }) {
@@ -175,6 +183,7 @@ final class _EventProvider implements FeatureProvider, ProviderEventSource {
       ProviderEvent(
         type: type,
         flagsChanged: flagsChanged,
+        message: message,
         errorCode: errorCode,
         metadata: metadata,
       ),

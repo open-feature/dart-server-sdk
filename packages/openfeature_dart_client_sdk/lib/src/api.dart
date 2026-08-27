@@ -136,9 +136,16 @@ final class OpenFeatureAPI {
           .where((outcome) => outcome.error == null)
           .map((outcome) => outcome.provider);
       await Future.wait(
-        reconciledProviders.map(
-          (provider) => _reconcile(provider, previousContext),
-        ),
+        reconciledProviders.map((provider) async {
+          try {
+            await _reconcile(provider, previousContext);
+          } on Object {
+            final record = _providerRecords[provider];
+            if (record != null) {
+              await _quarantineProvider(provider, record);
+            }
+          }
+        }),
       );
       final failure = failures.first;
       Error.throwWithStackTrace(failure.error!, failure.stackTrace!);
@@ -486,17 +493,21 @@ final class OpenFeatureAPI {
       case ProviderEventType.ready:
       case ProviderEventType.contextChanged:
         record.status = ProviderStatus.ready;
+        record.latestStateEvent = event;
         break;
       case ProviderEventType.error:
         record.status = event.errorCode == ErrorCode.providerFatal
             ? ProviderStatus.fatal
             : ProviderStatus.error;
+        record.latestStateEvent = event;
         break;
       case ProviderEventType.stale:
         record.status = ProviderStatus.stale;
+        record.latestStateEvent = event;
         break;
       case ProviderEventType.reconciling:
         record.status = ProviderStatus.reconciling;
+        record.latestStateEvent = event;
         break;
       case ProviderEventType.configurationChanged:
         break;
@@ -570,14 +581,16 @@ final class OpenFeatureAPI {
     if (eventType != handlerRecord.eventType) {
       return;
     }
+    final latestStateEvent = providerRecord.latestStateEvent;
     _invokeHandler(
       handlerRecord,
       providerRecord,
       ProviderEvent(
         type: eventType!,
-        errorCode: providerRecord.status == ProviderStatus.fatal
-            ? ErrorCode.providerFatal
-            : null,
+        flagsChanged: latestStateEvent?.flagsChanged ?? const [],
+        message: latestStateEvent?.message,
+        errorCode: latestStateEvent?.errorCode,
+        metadata: latestStateEvent?.metadata ?? const {},
       ),
     );
   }
@@ -668,14 +681,16 @@ final class OpenFeatureAPI {
   ) async {
     Object? cleanupError;
     StackTrace? cleanupStackTrace;
-    final cleanup = () async {
+    final cancellation = () async {
       try {
         await record.eventSubscription?.cancel();
       } on Object catch (error, stackTrace) {
         cleanupError = error;
         cleanupStackTrace = stackTrace;
       }
+    }();
 
+    final shutdown = () async {
       try {
         if (provider is ShutdownProvider) {
           await (provider as ShutdownProvider).shutdown();
@@ -685,17 +700,25 @@ final class OpenFeatureAPI {
         cleanupStackTrace ??= stackTrace;
       }
     }();
+    final cleanup = Future.wait([cancellation, shutdown]);
+    var timedOut = false;
     try {
       await cleanup.timeout(
         lifecycleTimeout,
-        onTimeout: () => throw OpenFeatureException(
-          'Provider cleanup did not complete within '
-          '${lifecycleTimeout.inMilliseconds} ms.',
-        ),
+        onTimeout: () {
+          timedOut = true;
+          throw OpenFeatureException(
+            'Provider cleanup did not complete within '
+            '${lifecycleTimeout.inMilliseconds} ms.',
+          );
+        },
       );
     } on Object catch (error, stackTrace) {
       cleanupError ??= error;
       cleanupStackTrace ??= stackTrace;
+      if (timedOut) {
+        _markProviderQuarantined(provider, record);
+      }
     } finally {
       record.eventSubscription = null;
       record.lifecycleOperation = null;
@@ -1038,6 +1061,7 @@ final class _ProviderRecord {
   StreamSubscription<ProviderEvent>? eventSubscription;
   _LifecycleOperation? lifecycleOperation;
   bool quarantined = false;
+  ProviderEvent? latestStateEvent;
   final List<ProviderEvent> pendingBindingEvents = <ProviderEvent>[];
 }
 

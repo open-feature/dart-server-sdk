@@ -1,4 +1,5 @@
 /.dart_tool/
+/.release-please-version
 /build/
 /coverage/
 /pubspec.lock

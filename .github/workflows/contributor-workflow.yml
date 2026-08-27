@@ -75,6 +75,11 @@ jobs:
         working-directory: ${{ matrix.package.path }}
         run: dart compile js test/web_compile_smoke.dart -o build/web_compile_smoke.js
 
+      - name: Run client web smoke target in Chrome
+        if: matrix.package.name == 'client'
+        working-directory: ${{ matrix.package.path }}
+        run: dart test -p chrome test/web_compile_smoke.dart
+
       - name: Run Static Analysis (capture and show)
         id: analyze
         working-directory: ${{ matrix.package.path }}

@@ -172,8 +172,36 @@ void main() {
           (EvaluationContext.empty, rejected),
           (rejected, EvaluationContext.empty),
         ]);
-        successful.resolveBooleanValue('flag', false, EvaluationContext.empty);
+        api.getClient().getBooleanValue('flag', false);
         expect(successful.lastEvaluationContext, same(EvaluationContext.empty));
+      },
+    );
+
+    test(
+      'a rollback failure quarantines its provider and preserves the original error',
+      () async {
+        final api = createIsolatedOpenFeatureAPI();
+        addTearDown(api.shutdown);
+        final rollbackFails = _ContextProvider(failRollback: true);
+        final forwardFails = _ContextProvider(failTargetingKey: 'rejected');
+        await api.setProviderAndWait(rollbackFails);
+        await api.setProviderForDomainAndWait('checkout', forwardFails);
+
+        await expectLater(
+          api.setEvaluationContextAndWait(
+            EvaluationContext(targetingKey: 'rejected'),
+          ),
+          throwsA(
+            isA<OpenFeatureException>().having(
+              (error) => error.message,
+              'message',
+              contains('ended with status error'),
+            ),
+          ),
+        );
+
+        expect(api.getClient().providerStatus, ProviderStatus.notReady);
+        expect(api.getClient().getBooleanValue('flag', false), isFalse);
       },
     );
 
@@ -219,6 +247,41 @@ void main() {
       api.getClient().getBooleanValue('flag', false);
       expect(replacement.lastEvaluationContext, same(EvaluationContext.empty));
     });
+
+    test(
+      'cleanup timeout starts shutdown and quarantines the provider',
+      () async {
+        final api = createIsolatedOpenFeatureAPI(
+          lifecycleTimeout: const Duration(milliseconds: 25),
+        );
+        addTearDown(api.shutdown);
+        final provider = _HungCancellationProvider();
+        await api.setProviderAndWait(provider);
+
+        await expectLater(
+          api.setProviderAndWait(InMemoryProvider({'replacement': true})),
+          throwsA(
+            isA<OpenFeatureException>().having(
+              (error) => error.message,
+              'message',
+              contains('cleanup did not complete'),
+            ),
+          ),
+        );
+
+        expect(provider.shutdownCalls, 1);
+        await expectLater(
+          api.setProviderAndWait(provider),
+          throwsA(
+            isA<OpenFeatureException>().having(
+              (error) => error.message,
+              'message',
+              contains('timed out cannot be reused'),
+            ),
+          ),
+        );
+      },
+    );
   });
 }
 
@@ -312,9 +375,10 @@ final class _HungCleanupProvider extends _SilentLifecycleProvider {
 
 class _ContextProvider extends _DelegatingProvider
     implements ContextReconciliationProvider, ProviderEventSource {
-  _ContextProvider({this.failTargetingKey});
+  _ContextProvider({this.failTargetingKey, this.failRollback = false});
 
   final String? failTargetingKey;
+  final bool failRollback;
   final StreamController<ProviderEvent> _events =
       StreamController<ProviderEvent>.broadcast(sync: true);
   final List<(EvaluationContext, EvaluationContext)> changes = [];
@@ -330,6 +394,11 @@ class _ContextProvider extends _DelegatingProvider
     EvaluationContext newContext,
   ) async {
     changes.add((previousContext, newContext));
+    if (failRollback &&
+        previousContext.targetingKey == 'rejected' &&
+        newContext.targetingKey == null) {
+      throw StateError('rollback failed');
+    }
     if (failTargetingKey != null &&
         newContext.targetingKey == failTargetingKey) {
       _events.add(ProviderEvent(type: ProviderEventType.error));
@@ -347,6 +416,22 @@ class _ContextProvider extends _DelegatingProvider
   ) {
     lastEvaluationContext = context;
     return super.resolveBooleanValue(flagKey, defaultValue, context);
+  }
+}
+
+final class _HungCancellationProvider extends _DelegatingProvider
+    implements ProviderEventSource, ShutdownProvider {
+  final Completer<void> _cancellation = Completer<void>();
+  late final StreamController<ProviderEvent> _events =
+      StreamController<ProviderEvent>(onCancel: () => _cancellation.future);
+  int shutdownCalls = 0;
+
+  @override
+  Stream<ProviderEvent> get events => _events.stream;
+
+  @override
+  Future<void> shutdown() async {
+    shutdownCalls++;
   }
 }
 
