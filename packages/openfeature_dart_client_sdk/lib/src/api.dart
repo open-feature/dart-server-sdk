@@ -44,7 +44,13 @@ final class OpenFeatureAPI {
   final List<_EventHandlerRecord> _eventHandlers = <_EventHandlerRecord>[];
   final Map<FeatureProvider, _ProviderRecord> _providerRecords =
       HashMap<FeatureProvider, _ProviderRecord>.identity();
-  Future<void> _mutationQueue = Future<void>.value();
+  final Map<String?, Future<void>> _bindingMutationQueues =
+      <String?, Future<void>>{};
+  final Map<FeatureProvider, Future<void>> _providerMutationQueues =
+      HashMap<FeatureProvider, Future<void>>.identity();
+  final Set<String> _knownDomains = <String>{};
+  final Set<String> _projectedDomainContexts = <String>{};
+  final Map<String, int> _domainContextRevisions = <String, int>{};
 
   /// Adds API hooks without removing existing hooks.
   void addHooks(Iterable<Hook> hooks) => _hooks.addAll(hooks);
@@ -81,7 +87,13 @@ final class OpenFeatureAPI {
 
   /// Registers the default provider after its initialization terminates.
   Future<void> setProviderAndWait(FeatureProvider provider) {
-    return _enqueueMutation(() => _setProvider(provider, domain: null));
+    return _enqueueBindingMutations([null], () {
+      final current = _providerForExactBinding(null);
+      return _enqueueProviderMutations([
+        current,
+        provider,
+      ], () => _setProvider(provider, domain: null));
+    });
   }
 
   /// Starts registration of [provider] for [domain].
@@ -96,7 +108,20 @@ final class OpenFeatureAPI {
     String domain,
     FeatureProvider provider,
   ) {
-    return _enqueueMutation(() => _setProvider(provider, domain: domain));
+    _knownDomains.add(domain);
+    final globalPredecessor = _projectedDomainContexts.contains(domain)
+        ? null
+        : _bindingMutationQueues[null];
+    return _enqueueBindingMutations([domain], () async {
+      if (globalPredecessor != null) {
+        await globalPredecessor.catchError((Object _) {});
+      }
+      final current = _providerForExactBinding(domain);
+      return _enqueueProviderMutations([
+        current,
+        provider,
+      ], () => _setProvider(provider, domain: domain));
+    });
   }
 
   /// Starts a global context change.
@@ -106,12 +131,25 @@ final class OpenFeatureAPI {
 
   /// Sets the global static evaluation context.
   Future<void> setEvaluationContextAndWait(EvaluationContext context) {
-    return _enqueueMutation(() => _setGlobalContext(context));
+    final affectedBindings = <String?>[
+      null,
+      ..._knownDomains.where(
+        (domain) =>
+            !_domainContexts.containsKey(domain) ||
+            !_projectedDomainContexts.contains(domain),
+      ),
+    ];
+    return _enqueueBindingMutations(affectedBindings, () {
+      final providers = _providersUsingGlobalContext();
+      return _enqueueProviderMutations(
+        providers,
+        () => _setGlobalContext(context, providers),
+      );
+    });
   }
 
-  Future<void> _setGlobalContext(EvaluationContext context) async {
-    final previousContext = _globalContext;
-    final providers = HashSet<FeatureProvider>.identity()
+  Set<FeatureProvider> _providersUsingGlobalContext() {
+    return HashSet<FeatureProvider>.identity()
       ..add(_defaultProvider)
       ..addAll(
         _domainProviders.entries
@@ -119,30 +157,54 @@ final class OpenFeatureAPI {
             .map((entry) => entry.value),
       )
       ..remove(_noOpProvider);
+  }
+
+  Future<void> _setGlobalContext(
+    EvaluationContext context,
+    Set<FeatureProvider> providers,
+  ) async {
+    final previousContext = _globalContext;
 
     final outcomes = await Future.wait(
       providers.map((provider) async {
         try {
-          await _reconcile(provider, context);
-          return (provider: provider, error: null, stackTrace: null);
+          final reconciliation = await _reconcile(provider, context);
+          return (
+            provider: provider,
+            reconciliation: reconciliation,
+            error: null,
+            stackTrace: null,
+          );
         } on Object catch (error, stackTrace) {
-          return (provider: provider, error: error, stackTrace: stackTrace);
+          return (
+            provider: provider,
+            reconciliation: null,
+            error: error,
+            stackTrace: stackTrace,
+          );
         }
       }),
     );
     final failures = outcomes.where((outcome) => outcome.error != null);
     if (failures.isNotEmpty) {
-      final reconciledProviders = outcomes
-          .where((outcome) => outcome.error == null)
-          .map((outcome) => outcome.provider);
+      final successfulOutcomes = outcomes.where(
+        (outcome) => outcome.error == null,
+      );
+      for (final outcome in successfulOutcomes) {
+        _dispatchReconciliationEvent(outcome.provider, outcome.reconciliation);
+      }
       await Future.wait(
-        reconciledProviders.map((provider) async {
+        successfulOutcomes.map((outcome) async {
           try {
-            await _reconcile(provider, previousContext);
+            final rollback = await _reconcile(
+              outcome.provider,
+              previousContext,
+            );
+            _dispatchReconciliationEvent(outcome.provider, rollback);
           } on Object {
-            final record = _providerRecords[provider];
+            final record = _providerRecords[outcome.provider];
             if (record != null) {
-              await _quarantineProvider(provider, record);
+              await _quarantineProvider(outcome.provider, record);
             }
           }
         }),
@@ -151,6 +213,9 @@ final class OpenFeatureAPI {
       Error.throwWithStackTrace(failure.error!, failure.stackTrace!);
     }
     _globalContext = context;
+    for (final outcome in outcomes) {
+      _dispatchReconciliationEvent(outcome.provider, outcome.reconciliation);
+    }
   }
 
   /// Starts a context change for [domain].
@@ -168,7 +233,21 @@ final class OpenFeatureAPI {
     String domain,
     EvaluationContext context,
   ) {
-    return _enqueueMutation(() => _setDomainContext(domain, context));
+    _knownDomains.add(domain);
+    _projectedDomainContexts.add(domain);
+    final revision = (_domainContextRevisions[domain] ?? 0) + 1;
+    _domainContextRevisions[domain] = revision;
+    return _enqueueBindingMutations([domain], () {
+      final provider = _providerForExactBinding(domain);
+      return _enqueueProviderMutations([provider], () async {
+        try {
+          await _setDomainContext(domain, context);
+        } on Object {
+          _restoreProjectedDomainContext(domain, revision);
+          rethrow;
+        }
+      });
+    });
   }
 
   Future<void> _setDomainContext(
@@ -176,23 +255,56 @@ final class OpenFeatureAPI {
     EvaluationContext context,
   ) async {
     final provider = _domainProviders[domain];
+    _ReconciliationResult? reconciliation;
     if (provider != null) {
-      await _reconcile(provider, context);
+      reconciliation = await _reconcile(provider, context);
     }
     _domainContexts[domain] = context;
+    if (provider != null) {
+      _dispatchReconciliationEvent(provider, reconciliation);
+    }
   }
 
   /// Clears a domain context and restores global-context fallback.
   Future<void> clearEvaluationContextForDomainAndWait(String domain) {
-    return _enqueueMutation(() => _clearDomainContext(domain));
+    _knownDomains.add(domain);
+    _projectedDomainContexts.remove(domain);
+    final revision = (_domainContextRevisions[domain] ?? 0) + 1;
+    _domainContextRevisions[domain] = revision;
+    return _enqueueBindingMutations([domain], () {
+      final provider = _providerForExactBinding(domain);
+      return _enqueueProviderMutations([provider], () async {
+        try {
+          await _clearDomainContext(domain);
+        } on Object {
+          _restoreProjectedDomainContext(domain, revision);
+          rethrow;
+        }
+      });
+    });
+  }
+
+  void _restoreProjectedDomainContext(String domain, int revision) {
+    if (_domainContextRevisions[domain] != revision) {
+      return;
+    }
+    if (_domainContexts.containsKey(domain)) {
+      _projectedDomainContexts.add(domain);
+    } else {
+      _projectedDomainContexts.remove(domain);
+    }
   }
 
   Future<void> _clearDomainContext(String domain) async {
     final provider = _domainProviders[domain];
+    _ReconciliationResult? reconciliation;
     if (provider != null && _domainContexts.containsKey(domain)) {
-      await _reconcile(provider, _globalContext);
+      reconciliation = await _reconcile(provider, _globalContext);
     }
     _domainContexts.remove(domain);
+    if (provider != null) {
+      _dispatchReconciliationEvent(provider, reconciliation);
+    }
   }
 
   /// Starts clearing a domain context.
@@ -203,13 +315,20 @@ final class OpenFeatureAPI {
   }
 
   /// Shuts down all active providers and resets API state.
-  Future<void> shutdown() => _enqueueMutation(_shutdown);
+  Future<void> shutdown() {
+    return _enqueueBindingMutations([null, ..._knownDomains], () {
+      return _enqueueProviderMutations(_providerRecords.keys, _shutdown);
+    });
+  }
 
   Future<void> _shutdown() async {
     final records = _providerRecords.entries.toList(growable: false);
     _defaultProvider = _noOpProvider;
     _domainProviders.clear();
     _domainContexts.clear();
+    _knownDomains.clear();
+    _projectedDomainContexts.clear();
+    _domainContextRevisions.clear();
     _globalContext = EvaluationContext.empty;
     _hooks.clear();
     for (final handler in _eventHandlers) {
@@ -236,6 +355,18 @@ final class OpenFeatureAPI {
   }
 
   EvaluationContext _contextForDomain(String? domain) {
+    final provider = _providerForExactBinding(domain);
+    if (identical(provider, _noOpProvider)) {
+      return _globalContext;
+    }
+    final record = _providerRecords[provider];
+    if (provider is ContextReconciliationProvider && record != null) {
+      return record.activeContext;
+    }
+    return _requestedContextForDomain(domain);
+  }
+
+  EvaluationContext _requestedContextForDomain(String? domain) {
     if (domain == null) {
       return _globalContext;
     }
@@ -279,7 +410,7 @@ final class OpenFeatureAPI {
       record = _ProviderRecord(
         initialDomain: domain,
         metadata: provider.metadata,
-        activeContext: _contextForDomain(domain),
+        activeContext: _requestedContextForDomain(domain),
       );
       _providerOwners[provider] = this;
       _providerRecords[provider] = record;
@@ -347,9 +478,65 @@ final class OpenFeatureAPI {
     }
   }
 
-  Future<void> _enqueueMutation(Future<void> Function() operation) {
-    final result = _mutationQueue.then((_) => operation());
-    _mutationQueue = result.catchError((Object _) {});
+  Future<T> _enqueueBindingMutations<T>(
+    Iterable<String?> domains,
+    Future<T> Function() operation,
+  ) {
+    final keys = domains.toSet();
+    final predecessors = keys
+        .map((key) => _bindingMutationQueues[key] ?? Future<void>.value())
+        .toSet();
+    final result = Future.wait(
+      predecessors.map((future) => future.catchError((Object _) {})),
+    ).then((_) => operation());
+    final tail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    for (final key in keys) {
+      _bindingMutationQueues[key] = tail;
+    }
+    unawaited(
+      tail.then((_) {
+        for (final key in keys) {
+          if (identical(_bindingMutationQueues[key], tail)) {
+            _bindingMutationQueues.remove(key);
+          }
+        }
+      }),
+    );
+    return result;
+  }
+
+  Future<T> _enqueueProviderMutations<T>(
+    Iterable<FeatureProvider> providers,
+    Future<T> Function() operation,
+  ) {
+    final keys = HashSet<FeatureProvider>.identity()
+      ..addAll(providers)
+      ..remove(_noOpProvider);
+    final predecessors = keys
+        .map((key) => _providerMutationQueues[key] ?? Future<void>.value())
+        .toSet();
+    final result = Future.wait(
+      predecessors.map((future) => future.catchError((Object _) {})),
+    ).then((_) => operation());
+    final tail = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    for (final key in keys) {
+      _providerMutationQueues[key] = tail;
+    }
+    unawaited(
+      tail.then((_) {
+        for (final key in keys) {
+          if (identical(_providerMutationQueues[key], tail)) {
+            _providerMutationQueues.remove(key);
+          }
+        }
+      }),
+    );
     return result;
   }
 
@@ -384,7 +571,7 @@ final class OpenFeatureAPI {
       final status =
           await (() async {
             await (provider as InitializableProvider).initialize(
-              _contextForDomain(domain),
+              _requestedContextForDomain(domain),
               domain: domain,
             );
             operation.completeCallback();
@@ -419,12 +606,16 @@ final class OpenFeatureAPI {
     }
   }
 
-  Future<void> _reconcile(
+  Future<_ReconciliationResult?> _reconcile(
     FeatureProvider provider,
     EvaluationContext newContext,
   ) async {
     if (provider is! ContextReconciliationProvider) {
-      return;
+      final record = _providerRecords[provider];
+      if (record != null) {
+        record.activeContext = newContext;
+      }
+      return null;
     }
     if (provider is! ProviderEventSource) {
       throw const OpenFeatureException(
@@ -434,7 +625,7 @@ final class OpenFeatureAPI {
 
     final record = _providerRecords[provider];
     if (record == null) {
-      return;
+      return null;
     }
     final previousContext = record.activeContext;
     final operation = _LifecycleOperation(ProviderEventType.contextChanged);
@@ -468,6 +659,14 @@ final class OpenFeatureAPI {
         );
       }
       record.activeContext = newContext;
+      final terminalEvent = operation.terminalEvent;
+      if (terminalEvent == null ||
+          terminalEvent.type != ProviderEventType.contextChanged) {
+        throw const OpenFeatureException(
+          'Provider reconciliation completed without a context-changed event.',
+        );
+      }
+      return _ReconciliationResult(record, terminalEvent);
     } on Object catch (error, stackTrace) {
       if (timedOut) {
         await _quarantineProvider(provider, record);
@@ -489,6 +688,24 @@ final class OpenFeatureAPI {
     if (record.quarantined || !identical(_providerRecords[provider], record)) {
       return;
     }
+    final operation = record.lifecycleOperation;
+    if (event.type == ProviderEventType.contextChanged &&
+        operation?.successEventType == ProviderEventType.contextChanged) {
+      operation!.observe(event, ProviderStatus.ready);
+      return;
+    }
+    _applyEventState(record, event);
+
+    if (record.bindingCount == 0) {
+      record.pendingBindingEvents.add(event);
+    } else {
+      _dispatchEvent(provider, record, event);
+    }
+
+    operation?.observe(event, record.status);
+  }
+
+  void _applyEventState(_ProviderRecord record, ProviderEvent event) {
     switch (event.type) {
       case ProviderEventType.ready:
       case ProviderEventType.contextChanged:
@@ -512,14 +729,25 @@ final class OpenFeatureAPI {
       case ProviderEventType.configurationChanged:
         break;
     }
+  }
 
-    if (record.bindingCount == 0) {
-      record.pendingBindingEvents.add(event);
-    } else {
-      _dispatchEvent(provider, record, event);
+  void _dispatchReconciliationEvent(
+    FeatureProvider provider,
+    _ReconciliationResult? reconciliation,
+  ) {
+    if (reconciliation == null) {
+      return;
     }
-
-    record.lifecycleOperation?.observe(event, record.status);
+    final record = reconciliation.record;
+    if (record.quarantined || !identical(_providerRecords[provider], record)) {
+      return;
+    }
+    _applyEventState(record, reconciliation.event);
+    if (record.bindingCount == 0) {
+      record.pendingBindingEvents.add(reconciliation.event);
+    } else {
+      _dispatchEvent(provider, record, reconciliation.event);
+    }
   }
 
   ProviderEventSubscription _addHandler(
@@ -1065,15 +1293,24 @@ final class _ProviderRecord {
   final List<ProviderEvent> pendingBindingEvents = <ProviderEvent>[];
 }
 
+final class _ReconciliationResult {
+  const _ReconciliationResult(this.record, this.event);
+
+  final _ProviderRecord record;
+  final ProviderEvent event;
+}
+
 final class _LifecycleOperation {
   _LifecycleOperation(this.successEventType);
 
   final ProviderEventType successEventType;
   final Completer<ProviderStatus> _terminal = Completer<ProviderStatus>();
   ProviderStatus? _latestStatus;
+  ProviderEvent? _terminalEvent;
   bool _callbackCompleted = false;
 
   Future<ProviderStatus> get future => _terminal.future;
+  ProviderEvent? get terminalEvent => _terminalEvent;
 
   void observe(ProviderEvent event, ProviderStatus status) {
     if (event.type != successEventType &&
@@ -1081,6 +1318,7 @@ final class _LifecycleOperation {
       return;
     }
     _latestStatus = status;
+    _terminalEvent = event;
     _completeIfReady();
   }
 

@@ -76,6 +76,23 @@ jobs:
         working-directory: ${{ matrix.package.path }}
         run: dart test -p chrome test/web_compile_smoke.dart
 
+  stable-required:
+    name: test (ubuntu-latest, stable)
+    needs: test
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.draft == false &&
+        !(github.event.pull_request.base.ref == 'main' &&
+          github.event.pull_request.head.ref == 'development' &&
+          github.event.pull_request.head.repo.full_name == github.repository)))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify test matrix
+        env:
+          MATRIX_RESULT: ${{ needs.test.result }}
+        run: test "$MATRIX_RESULT" = success
+
   minimum-dependencies:
     name: minimum dependencies (${{ matrix.package.name }})
     if: >-
