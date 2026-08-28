@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.24](https://github.com/open-feature/dart-server-sdk/compare/v0.0.23...v0.0.24) (2026-08-28)
+
+
+### ✨ New Features
+
+* **client:** promote static-context SDK beta ([#148](https://github.com/open-feature/dart-server-sdk/issues/148)) ([1012cfe](https://github.com/open-feature/dart-server-sdk/commit/1012cfee6478bff153f356b87fb55d0e495d64b9))
+
 ## [0.0.23](https://github.com/open-feature/dart-server-sdk/compare/v0.0.22...v0.0.23) (2026-08-14)
 
 This release contains the first lifecycle and evaluation-safety work toward
