@@ -7,25 +7,36 @@ jobs:
   test-and-upload:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: server
+            path: packages/openfeature_dart_server_sdk
+          - name: client
+            path: packages/openfeature_dart_client_sdk
 
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Set up Dart
-        uses: dart-lang/setup-dart@65eb853c7ba17dde3be364c3d2858773e7144260 # v1
+        uses: dart-lang/setup-dart@7654d458321ee25acccccfdb86cd48bd95768ff1 # v1.8.0
         with:
           sdk: stable
 
       - name: Install dependencies
+        working-directory: ${{ matrix.package.path }}
         run: dart pub get
 
       - name: Run tests with coverage
+        working-directory: ${{ matrix.package.path }}
         run: |
           mkdir -p coverage
           dart test --coverage=coverage
 
       - name: Generate LCOV report
+        working-directory: ${{ matrix.package.path }}
         run: |
           dart run coverage:format_coverage \
             --in=coverage \
@@ -34,14 +45,34 @@ jobs:
             --report-on=lib \
             --packages=.dart_tool/package_config.json
 
+      - name: Verify client coverage threshold
+        if: matrix.package.name == 'client'
+        working-directory: ${{ matrix.package.path }}
+        shell: bash
+        run: |
+          awk -F: '
+            /^LF:/ { lines_found += $2 }
+            /^LH:/ { lines_hit += $2 }
+            END {
+              if (lines_found == 0) {
+                print "Client coverage report contains no executable lines." > "/dev/stderr"
+                exit 1
+              }
+              coverage = 100 * lines_hit / lines_found
+              printf "Client line coverage: %d/%d (%.2f%%)\n", lines_hit, lines_found, coverage
+              if (coverage < 95) exit 1
+            }
+          ' coverage/lcov.info
+
       - name: List coverage files
+        working-directory: ${{ matrix.package.path }}
         run: ls -al coverage
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: coverage-report
-          path: coverage/lcov.info
+          name: coverage-report-${{ matrix.package.name }}
+          path: ${{ matrix.package.path }}/coverage/lcov.info
 
   upload-coverage:
     runs-on: ubuntu-latest
@@ -52,18 +83,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Download coverage artifact
+      - name: Download server coverage artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: coverage-report
-          path: coverage
+          name: coverage-report-server
+          path: coverage/server
+
+      - name: Download client coverage artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: coverage-report-client
+          path: coverage/client
 
       - name: List coverage files after download
-        run: ls -al coverage
+        run: ls -al coverage/server coverage/client
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         with:
           token: ${{ secrets.CODECOV__UPLOAD_TOKEN }} # omit for public repos if you want
           slug: open-feature/dart-server-sdk
-          files: coverage/lcov.info
+          files: coverage/server/lcov.info,coverage/client/lcov.info

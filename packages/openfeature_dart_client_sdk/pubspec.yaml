@@ -1,0 +1,20 @@
+name: openfeature_dart_client_sdk
+description: Official static-context Dart client SDK for OpenFeature.
+version: 0.0.1-beta.1 # x-release-please-version
+homepage: https://github.com/open-feature/dart-server-sdk
+repository: https://github.com/open-feature/dart-server-sdk
+issue_tracker: https://github.com/open-feature/dart-server-sdk/issues
+
+environment:
+  sdk: ^3.12.2
+
+dev_dependencies:
+  # Keep minimum-dependency tests on analyzer dependencies compatible with Dart 3.12.
+  analyzer: ^8.1.1
+  coverage: ^1.15.0
+  # Dart 3.12 requires the SDK-layout-aware frontend server client.
+  frontend_server_client: ^4.0.0
+  lints: ^6.0.0
+  # Keep the Chrome test runner on the two-argument connection callback API.
+  shelf_web_socket: ^2.0.1
+  test: ^1.26.3

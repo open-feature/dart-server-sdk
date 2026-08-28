@@ -20,7 +20,7 @@ matrix update.
 - Specification baseline: OpenFeature v0.9.0
 - Initial prerelease: `0.0.1-beta.1`
 - First stable release: `0.0.1`
-- Status: proposed; not implemented
+- Status: initial beta contract implemented; full conformance is in progress
 
 ## Maturity Legend
 
@@ -54,7 +54,7 @@ signal.
 | Evaluation context values | Hardening | Requirements 3.1.1 through 3.1.4 | Immutable `EvaluationContext` with targeting key and typed attributes | Targeting key; boolean, string, number, datetime, and structure values; unique keys; keyed and complete-map access; deep immutability |
 | Global static context | Hardening | Conditional requirement 3.2.2.1 | Global `setEvaluationContext` and `setEvaluationContextAndWait` | Non-awaiting failures are contained; awaited revision completes after all affected providers process its lifecycle outcome |
 | No client, invocation, or transaction context | Hardening/Experimental | Conditional requirements 3.2.2.2 and 3.3.2.1 | Evaluation methods omit context parameters; no transaction-context propagator API | Compile-time public API has no client/invocation context setter or evaluation parameter and no transaction propagator |
-| Domain context | Hardening | Conditional requirements 3.2.2.3 and 3.2.2.4 | Domain set, clear, and corresponding `AndWait` mutators | Domain override; global fallback; clear; binding isolation; non-domain-scoped provider sharing; domain-scoped second binding rejection |
+| Domain context | Hardening | Conditional requirements 3.2.2.3 and 3.2.2.4 | Domain set, clear, and corresponding `AndWait` mutators | Domain override; global fallback; unbound overrides remain pending until a domain provider is bound; clear; binding isolation; non-domain-scoped provider sharing; domain-scoped second binding rejection |
 | Context change dispatch | Hardening | Conditional requirements 3.2.4.1 and 3.2.4.2 | Internal reconciliation scheduler | A global mutation reaches all providers using global context; a domain mutation reaches only its associated provider |
 | Ordered reconciliation | Hardening/Project gate | Conditional requirements 5.3.4.1 through 5.3.4.3 | Requested and active revisions with a serialized queue per provider | Every mutation runs; active identity never moves backward; each awaited revision has per-call completion; providers can reconcile concurrently with one another but not reentrantly with themselves |
 | Hook context and hints | Hardening | Requirements 4.1.1 through 4.1.5 and 4.2.1 through 4.2.2.3 | Immutable invocation fields and hints, mutable per-hook data | Required fields and metadata; hook-data isolation and propagation; immutable context, hints, client metadata, and provider metadata |
@@ -62,7 +62,7 @@ signal.
 | Provider events | Hardening | Requirements 5.1.1 through 5.1.5 | Provider event stream with ready, error, configuration-changed, stale, reconciling, and context-changed events | Associated API/client handlers only; `PROVIDER_FATAL` remains an error code, not an event; details include appropriate error data |
 | Event handlers | Hardening | Requirements 5.2.1 through 5.2.7 | Typed API/client registration and removal | Details include provider name; one failing handler does not block others; handlers survive provider changes; removal works |
 | Initialization events | Hardening | Requirements 5.3.1 through 5.3.3 | Provider-emitted ready/error events and immediate late-handler execution | Status updates before handlers; ready/error emitted before initialize terminates; event delivery is processed before `AndWait` settles; late handler runs immediately for current state |
-| Reconciliation events | Hardening | Conditional requirements 5.3.4.1 through 5.3.4.3 and requirement 5.3.5 | Provider-emitted reconciling, context-changed, and error events | Async reconciliation announces `RECONCILING`; terminal event reflects the callback outcome; SDK updates status before handlers and neither synthesizes nor suppresses provider events |
+| Reconciliation events | Hardening | Conditional requirements 5.3.4.1 through 5.3.4.3 and requirement 5.3.5 | Provider-emitted reconciling, context-changed, and error events | Async reconciliation announces `RECONCILING`; terminal event reflects the callback outcome; successful context is active before terminal handlers run; SDK updates status before handlers and neither synthesizes nor suppresses provider events |
 | Tracking | Experimental | Condition 2.7.1, conditional requirement 6.1.2.1, and requirements 6.1.3, 6.1.4, 6.2.1, and 6.2.2 | Non-blocking `void track(name, details)` using active static context | Provider receives current context and typed details; unsupported tracking no-ops; call does not await I/O; bounded shutdown follows documented flush policy |
 | In-memory provider | Project gate | Included Utilities, Appendix A | Public testing provider | Predefined typed flags; context callbacks; flag-set replacement emits configuration-changed with the union of old and new keys |
 | End-to-end suite | Project gate | Included Utilities, Appendix A and Appendix B | Self-contained conformance fixture using the in-memory provider | Applicable official Gherkin scenarios run without a vendor service or credentials |
@@ -117,11 +117,10 @@ by the provider or optional Flutter adapter that owns those concerns.
 
 Before the client package directory can reach `main`:
 
-- the root server archive excludes `/packages/`;
-- CI discovers and validates both root and nested packages;
-- each package passes analysis, tests, and `dart pub publish --dry-run` from its
-  own directory;
-- archive inspection proves the server package does not contain client source;
+- both publishable SDKs live under `packages/`;
+- CI discovers and validates both packages plus repository tooling;
+- each package passes analysis, tests, and a package-specific
+  `dart pub publish --dry-run` archive check;
 - existing server tags remain in the `v0.0.x` format;
 - client tags use `openfeature_dart_client_sdk-v<version>`;
 - release branch validation accepts both known Release Please components;

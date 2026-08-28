@@ -1,8 +1,11 @@
 {
   "signoff": "OpenFeature Bot <109696520+openfeaturebot@users.noreply.github.com>",
+  "separate-pull-requests": true,
   "packages": {
-    ".": {
+    "packages/openfeature_dart_server_sdk": {
       "release-type": "dart",
+      "component": "openfeature_dart_server_sdk",
+      "package-name": "openfeature_dart_server_sdk",
       "prerelease": false,
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": true,
@@ -60,6 +63,57 @@
           "type": "test",
           "hidden": true,
           "section": "🧪 Tests"
+        }
+      ]
+    },
+    "packages/openfeature_dart_client_sdk": {
+      "release-type": "simple",
+      "component": "openfeature_dart_client_sdk",
+      "package-name": "openfeature_dart_client_sdk",
+      "version-file": ".release-please-version",
+      "extra-files": [{"type": "generic", "path": "pubspec.yaml"}],
+      "release-as": "0.0.1-beta.1",
+      "prerelease": true,
+      "prerelease-type": "beta",
+      "versioning": "prerelease",
+      "bump-minor-pre-major": true,
+      "bump-patch-for-minor-pre-major": true,
+      "include-component-in-tag": true,
+      "changelog-sections": [
+        {
+          "type": "fix",
+          "section": "🐛 Bug Fixes"
+        },
+        {
+          "type": "feat",
+          "section": "✨ New Features"
+        },
+        {
+          "type": "docs",
+          "section": "📚 Documentation"
+        },
+        {
+          "type": "perf",
+          "section": "🚀 Performance"
+        },
+        {
+          "type": "deps",
+          "section": "📦 Dependencies"
+        },
+        {
+          "type": "chore",
+          "hidden": true,
+          "section": "🧹 Chore"
+        },
+        {
+          "type": "ci",
+          "hidden": true,
+          "section": "🚦 CI"
+        },
+        {
+          "type": "test",
+          "hidden": true,
+          "section": "✅ Tests"
         }
       ]
     }

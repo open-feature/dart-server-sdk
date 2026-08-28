@@ -61,20 +61,16 @@ The first monorepo iteration contains:
 | `openfeature_dart_server_sdk` | Existing dynamic-context SDK | Server Dart; current API remains compatible |
 | `openfeature_dart_client_sdk` | Static-context API, provider lifecycle, hooks, events, tracking, and evaluation | Pure Dart; web-compatible; no Flutter dependency |
 
-During the incremental migration, the server package remains at the repository
-root and the client package is added at
-`packages/openfeature_dart_client_sdk/`. Before or in the same pull request
-that creates that directory, repository safety must ensure:
+Both publishable SDKs live under `packages/`. Repository safety must ensure:
 
-- the root server package excludes `/packages/` from its publication archive;
 - CI discovers, analyzes, and tests every package explicitly;
-- `dart pub publish --dry-run` validates each package from its own directory;
-- archive-content checks fail if one package contains another package's source;
+- `dart pub publish --dry-run` validates each package-specific archive;
 - release and publish workflows route tags to the correct package directory.
 
-A root `.pubignore` that excludes `/packages/` is the minimum transitional
-server-archive protection. A Pub workspace may provide shared dependency
-resolution, but publishing remains package-specific.
+The client publication command continues to stage only the client directory in
+a temporary location before it runs `dart pub publish`. CI and tag publication
+use the same staging command. The server package publishes directly from
+`packages/openfeature_dart_server_sdk`.
 
 Shared code should be extracted only when both packages require the same stable,
 specification-neutral contract. Candidate types include flag values, provider
@@ -195,9 +191,10 @@ affected provider:
    previous active context and the requested context.
 3. For asynchronous reconciliation, the provider emits
    `PROVIDER_RECONCILING`; the SDK updates status before running handlers.
-4. On normal completion, the provider emits `PROVIDER_CONTEXT_CHANGED`; after
-   the callback has terminated and that event has been processed, the SDK marks
-   that revision active for the binding.
+4. On normal completion, the provider emits `PROVIDER_CONTEXT_CHANGED`. After
+   the callback has terminated, the SDK marks that revision active before it
+   dispatches the terminal event to handlers. Evaluations started by those
+   handlers therefore use the announced revision.
 5. On abnormal completion, the provider emits `PROVIDER_ERROR`, using the
    `PROVIDER_FATAL` error code only for an irrecoverable error.
 6. The awaitable mutator for a revision settles after all providers affected by
@@ -207,6 +204,12 @@ The SDK does not synthesize or suppress provider reconciliation events. Per-
 provider serialization avoids reentrant terminal-event ambiguity while still
 running the callback for every context mutation required by the specification.
 A late result cannot replace state for a later active revision.
+
+A context override for a domain without its own provider remains pending. While
+that domain falls back to the default provider, evaluations use the global
+context so the context passed to the resolver matches the default provider's
+reconciled state. The pending domain override becomes active when a provider is
+bound to that domain.
 
 During `RECONCILING`, a resolver may return a value only when the provider can
 prove that the value belongs to the active context; otherwise it reports an
@@ -224,9 +227,20 @@ before making a new binding active.
 A provider declaring itself domain-scoped can be bound to at most one domain,
 regardless of whether multiple domains currently have equal contexts. The SDK
 rejects a second domain binding and leaves the first intact. The bound domain is
-passed to initialization. A provider that does not declare itself domain-scoped
-may serve multiple domains; providers maintaining domain-specific caches or
-telemetry must declare themselves domain-scoped or use separate instances.
+passed to initialization. A provider that does not reconcile cached context may
+serve multiple domains because each resolver receives the selected context.
+Until the provider contract has a domain-aware reconciliation callback, a
+provider implementing `ContextReconciliationProvider` can have only one active
+binding and must use separate instances for independently scoped contexts.
+
+Initialization and reconciliation waits are bounded to 30 seconds by default.
+An isolated API may configure a shorter timeout for tests. A provider that
+returns without emitting the operation's terminal event fails within that
+bound and cannot permanently block the serialized mutation queue or shutdown.
+Because Dart futures cannot be cancelled, a timed-out provider is detached and
+quarantined from reuse; late events are ignored and callers must supply a new
+provider instance. Subscription cancellation and provider shutdown are bounded
+by the same lifecycle timeout.
 
 Tests cover sign-in, sign-out, account switching, queued rapid updates, refresh
 failure, provider replacement, shutdown during reconciliation, and late work
@@ -258,20 +272,22 @@ Migration follows independently reviewed phases:
 
 1. **Architecture:** approve this architecture, package boundaries, naming,
    versioning, and the v0.9.0 conformance matrix.
-2. **Package safety and CI:** add root server archive exclusions, package
-   discovery, per-package analysis/tests, per-package publication dry runs, and
-   release routing that preserves existing server releases.
+2. **Package safety and CI:** add package discovery, per-package
+   analysis/tests, per-package publication dry runs, and release routing that
+   preserves existing server releases.
 3. **Additive client beta:** add `packages/openfeature_dart_client_sdk/`, its
-   tests, changelog, documentation, and `0.0.1-beta.1` release path without
-   moving or renaming the root server package.
-4. **Provider and platform validation:** exercise exact client commits or
+   tests, changelog, documentation, and `0.0.1-beta.1` release path.
+4. **Package alignment:** relocate the server package to
+   `packages/openfeature_dart_server_sdk/`, preserve its release history and
+   tag format, and document the path change for Git consumers.
+5. **Provider and platform validation:** exercise exact client commits or
    immutable prereleases across pure Dart web, Flutter consumers, and
    independently maintained providers.
-5. **Stable client release:** publish `0.0.1` only after the conformance and
+6. **Stable client release:** publish `0.0.1` only after the conformance and
    release gates in this document pass.
 
 The established server tag format remains `v0.0.x`; for example, its next
-release may be `v0.0.23`. Client tags include the component to avoid ambiguity,
+release may be `v0.0.24`. Client tags include the component to avoid ambiguity,
 for example `openfeature_dart_client_sdk-v0.0.1-beta.1` and
 `openfeature_dart_client_sdk-v0.0.1`.
 
@@ -280,24 +296,21 @@ client prerelease must therefore be published manually from the exact release
 tag by an authorized uploader, transferred to the appropriate verified
 publisher, and then configured for tag-bound OIDC publishing.
 
-The transitional layout is:
+The repository layout is:
 
 ```text
 dart-server-sdk/
 |-- doc/
-|-- lib/                         # current server package
 |-- packages/
+|   |-- openfeature_dart_server_sdk/
 |   `-- openfeature_dart_client_sdk/
-|-- test/                        # current server tests
-|-- .pubignore                  # excludes /packages/ from server archive
-`-- pubspec.yaml                # current server package and workspace root
+|-- test/                        # repository tooling tests
+|-- tool/                        # repository tooling
+`-- pubspec.yaml                # non-publishable repository tooling package
 ```
 
-Relocating the server package to `packages/openfeature_dart_server_sdk/` or
-renaming the repository to `open-feature/dart-sdk` remains an optional later
-decision. Either change requires a separate compatibility review covering Git
-dependencies, links, badges, automation, provider references, and release
-history. Neither is a commitment or prerequisite of the initial client beta.
+Renaming the repository to `open-feature/dart-sdk` remains an optional later
+decision and is not part of this package-layout change.
 
 ## Provider Validation
 
