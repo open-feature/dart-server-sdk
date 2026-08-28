@@ -72,7 +72,6 @@
       "package-name": "openfeature_dart_client_sdk",
       "version-file": ".release-please-version",
       "extra-files": [{"type": "generic", "path": "pubspec.yaml"}],
-      "release-as": "0.0.1-beta.1",
       "prerelease": true,
       "prerelease-type": "beta",
       "versioning": "prerelease",
