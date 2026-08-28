@@ -129,4 +129,41 @@ void main() {
       );
     },
   );
+
+  test('release changelogs have a single Release Please owner', () {
+    final manifest =
+        jsonDecode(File('.release-please-manifest.json').readAsStringSync())
+            as Map<String, Object?>;
+    final clientVersion =
+        manifest['packages/openfeature_dart_client_sdk']! as String;
+    final clientChangelog = File(
+      'packages/openfeature_dart_client_sdk/CHANGELOG.md',
+    ).readAsStringSync();
+    final serverChangelog = File(
+      'packages/openfeature_dart_server_sdk/CHANGELOG.md',
+    ).readAsStringSync();
+    final clientBetaHeadings = RegExp(
+      r'^## \[?0\.0\.1-beta\.1\]?',
+      multiLine: true,
+    ).allMatches(clientChangelog);
+
+    if (clientVersion == '0.0.0') {
+      expect(
+        clientChangelog.trim(),
+        '<!-- Release Please will generate the 0.0.1-beta.1 entry. -->',
+        reason:
+            'The bootstrap marker keeps pub validation warning-free while '
+            'Release Please creates the first visible changelog entry.',
+      );
+    } else {
+      expect(clientBetaHeadings, hasLength(1));
+    }
+    expect(
+      serverChangelog,
+      isNot(contains(RegExp(r'^## Unreleased$', multiLine: true))),
+      reason:
+          'Release Please inserts generated versions before numeric headings '
+          'and does not consume an Unreleased block.',
+    );
+  });
 }

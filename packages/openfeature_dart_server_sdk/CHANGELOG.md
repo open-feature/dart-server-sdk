@@ -1,14 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Repository layout
-
-- Move the server package source to
-  `packages/openfeature_dart_server_sdk`. Pub.dev dependencies and Dart import
-  paths are unchanged. Git dependencies must set
-  `path: packages/openfeature_dart_server_sdk`.
-
 ## [0.0.23](https://github.com/open-feature/dart-server-sdk/compare/v0.0.22...v0.0.23) (2026-08-14)
 
 This release contains the first lifecycle and evaluation-safety work toward
