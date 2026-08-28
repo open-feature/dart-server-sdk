@@ -2,10 +2,18 @@
 
 ## [0.0.24](https://github.com/open-feature/dart-server-sdk/compare/v0.0.23...v0.0.24) (2026-08-28)
 
+This release repackages the server SDK under
+`packages/openfeature_dart_server_sdk`. The Dart package name, pub.dev
+dependency, public API, and `package:` imports are unchanged.
 
-### ✨ New Features
+### Repository layout migration
 
-* **client:** promote static-context SDK beta ([#148](https://github.com/open-feature/dart-server-sdk/issues/148)) ([1012cfe](https://github.com/open-feature/dart-server-sdk/commit/1012cfee6478bff153f356b87fb55d0e495d64b9))
+* Move the published server package from the repository root to
+  `packages/openfeature_dart_server_sdk`
+  ([#151](https://github.com/open-feature/dart-server-sdk/pull/151)).
+* Git dependencies must now set
+  `path: packages/openfeature_dart_server_sdk`; pub.dev consumers require no
+  dependency or import changes.
 
 ## [0.0.23](https://github.com/open-feature/dart-server-sdk/compare/v0.0.22...v0.0.23) (2026-08-14)
 

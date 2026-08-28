@@ -21,12 +21,17 @@ void main() {
     expect(serverConfig['component'], 'openfeature_dart_server_sdk');
     expect(serverConfig['package-name'], 'openfeature_dart_server_sdk');
     expect(serverConfig['include-component-in-tag'], isFalse);
-    expect(manifest['packages/openfeature_dart_server_sdk'], '0.0.23');
-
     final serverPubspec = File(
       'packages/openfeature_dart_server_sdk/pubspec.yaml',
     ).readAsStringSync();
-    expect(serverPubspec, contains('version: 0.0.23'));
+    final serverVersion =
+        manifest['packages/openfeature_dart_server_sdk']! as String;
+    expect(
+      serverPubspec,
+      contains(
+        RegExp('^version: ${RegExp.escape(serverVersion)}\$', multiLine: true),
+      ),
+    );
     expect(serverPubspec, contains('name: openfeature_dart_server_sdk'));
   });
 
