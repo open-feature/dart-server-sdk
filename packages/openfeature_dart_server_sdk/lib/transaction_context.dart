@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:meta/meta.dart';
+import 'src/context_snapshot.dart';
 
 /// Transaction context holder
 class TransactionContext {
@@ -11,13 +12,14 @@ class TransactionContext {
 
   TransactionContext({
     required this.transactionId,
-    required this.attributes,
+    required Map<String, dynamic> attributes,
     this.parent,
-  }) : createdAt = DateTime.now();
+  }) : attributes = snapshotContextMap(attributes),
+       createdAt = DateTime.now();
 
   Map<String, dynamic> get effectiveAttributes {
     final parentAttrs = parent?.effectiveAttributes ?? {};
-    return {...parentAttrs, ...attributes};
+    return snapshotContextMap({...parentAttrs, ...attributes});
   }
 
   void scheduleCleanup(Duration timeout) {

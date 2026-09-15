@@ -5,6 +5,7 @@ import 'feature_provider.dart';
 import 'hooks.dart';
 import 'open_feature_event.dart';
 import 'transaction_context.dart';
+import 'src/context_snapshot.dart';
 
 /// Client metadata for identification
 class ClientMetadata {
@@ -72,8 +73,9 @@ class FeatureClient {
     TransactionContextManager? transactionManager,
     Stream<OpenFeatureEvent>? eventStream,
   }) : _hookManager = hookManager,
-       _defaultContext = defaultContext,
-       _apiContext = apiContext ?? const EvaluationContext(attributes: {}),
+       _defaultContext = defaultContext.snapshot(),
+       _apiContext =
+           apiContext?.snapshot() ?? const EvaluationContext(attributes: {}),
        _apiContextResolver = apiContextResolver,
        _fallbackProvider = provider ?? InMemoryProvider({}),
        _providerResolver = providerResolver,
@@ -144,12 +146,12 @@ class FeatureClient {
 
   Map<String, dynamic> _buildEffectiveContext(EvaluationContext? context) {
     final apiContext = _apiContextResolver?.call() ?? _apiContext;
-    return {
+    return snapshotContextMap({
       ...apiContext.toProviderContext(),
       ..._transactionManager.currentContext?.effectiveAttributes ?? {},
       ..._defaultContext.toProviderContext(),
       ...context?.toProviderContext() ?? {},
-    };
+    });
   }
 
   void _ensureProviderCanEvaluate(FeatureProvider evaluationProvider) {
