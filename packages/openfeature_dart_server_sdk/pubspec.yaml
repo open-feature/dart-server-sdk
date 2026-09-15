@@ -14,9 +14,9 @@ description: Official server-side Dart OpenFeature SDK.
 
 version: 0.0.24
 
-homepage: https://github.com/open-feature/dart-server-sdk
-repository: https://github.com/open-feature/dart-server-sdk/tree/main/packages/openfeature_dart_server_sdk
-issue_tracker: https://github.com/open-feature/dart-server-sdk/issues
+homepage: https://github.com/open-feature/dart-sdk
+repository: https://github.com/open-feature/dart-sdk/tree/main/packages/openfeature_dart_server_sdk
+issue_tracker: https://github.com/open-feature/dart-sdk/issues
 environment:
   sdk: ^3.12.2
 

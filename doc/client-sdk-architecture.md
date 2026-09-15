@@ -299,7 +299,7 @@ publisher, and then configured for tag-bound OIDC publishing.
 The repository layout is:
 
 ```text
-dart-server-sdk/
+dart-sdk/
 |-- doc/
 |-- packages/
 |   |-- openfeature_dart_server_sdk/
