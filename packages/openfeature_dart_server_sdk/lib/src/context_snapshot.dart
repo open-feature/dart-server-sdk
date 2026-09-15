@@ -3,7 +3,10 @@ import 'dart:collection';
 /// Copies the v0.9.0 context value model into an immutable Dart structure.
 /// Null is supported inside structured values, as in JSON, but not as a
 /// top-level custom field. Collections must be acyclic and maps string-keyed.
-Map<String, dynamic> snapshotContextMap(Map<String, dynamic> attributes) {
+Map<String, dynamic> snapshotContextMap(
+  Map<String, dynamic> attributes, {
+  bool validateTargetingKey = true,
+}) {
   final ancestors = HashSet<Object>.identity();
 
   dynamic copy(dynamic value, {bool structured = false}) {
@@ -43,7 +46,9 @@ Map<String, dynamic> snapshotContextMap(Map<String, dynamic> attributes) {
 
   final result = <String, dynamic>{};
   for (final entry in attributes.entries) {
-    if (entry.key == 'targetingKey' && entry.value is! String) {
+    if (validateTargetingKey &&
+        entry.key == 'targetingKey' &&
+        entry.value is! String) {
       throw ArgumentError('The targeting key must be a string.');
     }
     result[entry.key] = copy(entry.value);
