@@ -8,6 +8,7 @@ import 'feature_provider.dart';
 import 'hooks.dart';
 import 'open_feature_event.dart';
 import 'provider_lifecycle.dart';
+import 'src/provider_adapter.dart';
 import 'src/provider_lifecycle_manager.dart';
 
 /// Compatibility adapter for the legacy positional-map API.
@@ -155,6 +156,12 @@ class OpenFeatureAPI {
   static final Logger _logger = Logger('OpenFeatureAPI');
   static OpenFeatureAPI? _instance;
 
+  final _providerAdapters = Expando<FeatureProvider>('provider adapters');
+  FeatureProvider _adaptProvider(Provider provider) {
+    if (provider is FeatureProvider) return provider;
+    return _providerAdapters[provider] ??= ResolverProviderAdapter(provider);
+  }
+
   late FeatureProvider _provider;
   final Map<String, FeatureProvider> _providerRegistry = {};
   final Map<String, FeatureProvider> _domainProviderBindings = {};
@@ -163,6 +170,7 @@ class OpenFeatureAPI {
   final DomainManager _domainManager = DomainManager();
   late final ProviderLifecycleManager _lifecycleManager;
   final List<OpenFeatureHook> _hooks = [];
+  final List<Hook> _evaluationHooks = [];
   OpenFeatureEvaluationContext? _globalContext;
   StreamSubscription<Domain>? _domainSubscription;
   StreamSubscription<LogRecord>? _logSubscription;
@@ -241,13 +249,15 @@ class OpenFeatureAPI {
     );
   }
 
-  Future<void> setProvider(FeatureProvider provider) async {
+  Future<void> setProvider(Provider definition) async {
+    final provider = _adaptProvider(definition);
     _logger.info('Setting provider: ${provider.name}');
     await _setDefaultProvider(provider, rethrowInitializationError: false);
   }
 
   /// Set provider and wait for it to be ready
-  Future<void> setProviderAndWait(FeatureProvider provider) async {
+  Future<void> setProviderAndWait(Provider definition) async {
+    final provider = _adaptProvider(definition);
     _logger.info('Setting provider and waiting: ${provider.name}');
     await _setDefaultProvider(provider, rethrowInitializationError: true);
   }
@@ -262,7 +272,7 @@ class OpenFeatureAPI {
     StackTrace? initializationStack;
 
     try {
-      await _lifecycleManager.initialize(provider);
+      await _lifecycleManager.initialize(provider, context: evaluationContext);
     } catch (error, stackTrace) {
       initializationError = error;
       initializationStack = stackTrace;
@@ -347,7 +357,8 @@ class OpenFeatureAPI {
   ///
   /// The identifier defaults to provider metadata for backwards compatibility.
   /// Callers registering same-name instances must supply distinct identifiers.
-  String registerProvider(FeatureProvider provider, {String? providerId}) {
+  String registerProvider(Provider definition, {String? providerId}) {
+    final provider = _adaptProvider(definition);
     final id = providerId ?? provider.metadata.name;
     if (id.isEmpty) {
       throw ArgumentError.value(id, 'providerId', 'must not be empty');
@@ -399,11 +410,12 @@ class OpenFeatureAPI {
   }
 
   Future<String> registerProviderAndWait(
-    FeatureProvider provider, {
+    Provider definition, {
     String? providerId,
   }) async {
+    final provider = _adaptProvider(definition);
     final id = registerProvider(provider, providerId: providerId);
-    await _lifecycleManager.initialize(provider);
+    await _lifecycleManager.initialize(provider, context: evaluationContext);
     return id;
   }
 
@@ -465,13 +477,11 @@ class OpenFeatureAPI {
         const EvaluationContext(attributes: {});
 
     final hookManager = HookManager();
-    for (final hook in _hooks) {
-      hookManager.addHook(_wrapHook(hook));
-    }
 
     return FeatureClient(
-      metadata: ClientMetadata(name: name),
+      metadata: ClientMetadata(name: name, domain: domain ?? name),
       hookManager: hookManager,
+      apiHooksResolver: () => List.unmodifiable(_evaluationHooks),
       apiContext: resolveApiContext(),
       apiContextResolver: resolveApiContext,
       defaultContext: const EvaluationContext(attributes: {}),
@@ -513,7 +523,12 @@ class OpenFeatureAPI {
 
   void addHooks(List<OpenFeatureHook> hooks) {
     _hooks.addAll(hooks);
+    _evaluationHooks.addAll(hooks.map(_wrapHook));
   }
+
+  /// Adds typed hooks at API scope, including for already-created clients.
+  void addEvaluationHooks(Iterable<Hook> hooks) =>
+      _evaluationHooks.addAll(hooks);
 
   List<OpenFeatureHook> get hooks => List.unmodifiable(_hooks);
 
@@ -571,9 +586,10 @@ class OpenFeatureAPI {
 
   Future<void> setProviderForDomainAndWait(
     String domain,
-    FeatureProvider provider, {
+    Provider definition, {
     String? providerId,
   }) async {
+    final provider = _adaptProvider(definition);
     final id = registerProvider(provider, providerId: providerId);
     final request = _recordDomainBindingRequest(domain, id);
     try {
@@ -625,7 +641,11 @@ class OpenFeatureAPI {
       for (final domain in domains)
         domain: _domainBindingGenerations[domain] ?? 0,
     };
-    await _lifecycleManager.initialize(provider);
+    await _lifecycleManager.initialize(
+      provider,
+      context: evaluationContext,
+      domain: requestGenerations.keys.firstOrNull,
+    );
     for (final request in requestGenerations.entries) {
       await _bindDomainProvider(
         request.key,

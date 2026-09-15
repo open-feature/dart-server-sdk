@@ -1,6 +1,8 @@
 // Hook interface with OpenTelemetry support
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
+import 'evaluation_context.dart';
 import 'client.dart';
 import 'feature_provider.dart';
 import 'src/context_snapshot.dart';
@@ -61,15 +63,25 @@ class EvaluationDetails {
   final String reason;
   final DateTime evaluationTime;
   final Map<String, dynamic>? additionalDetails;
+  final ErrorCode? errorCode;
+  final String? errorMessage;
+  final Map<String, dynamic> flagMetadata;
 
   EvaluationDetails({
     required this.flagKey,
-    required this.value,
+    required dynamic value,
     this.variant,
     this.reason = 'DEFAULT',
     required this.evaluationTime,
-    this.additionalDetails,
-  });
+    Map<String, dynamic>? additionalDetails,
+    this.errorCode,
+    this.errorMessage,
+    Map<String, dynamic> flagMetadata = const {},
+  }) : value = _snapshotHookValue(value),
+       additionalDetails = additionalDetails == null
+           ? null
+           : Map.unmodifiable(additionalDetails),
+       flagMetadata = _snapshotHookValue(flagMetadata);
 }
 
 /// Mutable data container that propagates between hook stages (spec Section 4.6)
@@ -77,7 +89,7 @@ class EvaluationDetails {
 /// within a single flag evaluation lifecycle.
 class HookData {
   final Map<String, dynamic> _data = {};
-  final Map<Object, HookData> _scopedData = {};
+  final Map<Object, HookData> _scopedData = HashMap.identity();
 
   /// Set a value in hook data
   void set(String key, dynamic value) {
@@ -112,6 +124,8 @@ class HookContext {
   final dynamic defaultValue;
   final FlagValueType? flagValueType;
   final HookData hookData;
+  final HookHints hints;
+  final EvaluationDetails? evaluationDetails;
 
   HookContext({
     required this.flagKey,
@@ -124,6 +138,8 @@ class HookContext {
     this.defaultValue,
     this.flagValueType,
     HookData? hookData,
+    this.hints = const HookHints(),
+    this.evaluationDetails,
   }) : evaluationContext = Map.unmodifiable(
          Map<String, dynamic>.from(evaluationContext ?? const {}),
        ),
@@ -134,7 +150,13 @@ class HookContext {
 class HookHints {
   final Map<String, dynamic> hints;
 
+  /// Legacy constructor; runtime entry points capture an immutable snapshot.
   const HookHints({this.hints = const {}});
+
+  factory HookHints.immutable(Map<String, dynamic> hints) =>
+      HookHints(hints: snapshotContextMap(hints, validateTargetingKey: false));
+
+  HookHints snapshot() => HookHints.immutable(hints);
 }
 
 /// Interface for implementing hooks
@@ -173,12 +195,18 @@ class HookManager {
   /// Register a new hook
   void addHook(Hook hook) {
     _hooks.add(hook);
-    _sortHooks();
   }
 
   void removeHook(Hook hook) {
-    _hooks.remove(hook);
+    final index = _hooks.indexWhere(
+      (registered) => identical(registered, hook),
+    );
+    if (index >= 0) _hooks.removeAt(index);
   }
+
+  /// Registration order for SDK evaluations; legacy priorities apply only to
+  /// direct standalone manager execution.
+  List<Hook> get registeredHooks => List.unmodifiable(_hooks);
 
   /// Execute hooks for a specific stage
   Future<Map<String, dynamic>> executeHooks(
@@ -194,30 +222,43 @@ class HookManager {
     dynamic defaultValue,
     FlagValueType? flagValueType,
     HookData? hookData,
+    Iterable<Hook> additionalHooks = const [],
+    List<Hook>? executionHooks,
+    void Function(Map<String, dynamic>)? onContextChanged,
   }) async {
     var currentContext = snapshotContextMap(context ?? const {});
     final evaluationHookData = hookData ?? HookData();
-    for (final hook in _hooksForStage(stage)) {
-      final hookContext = HookContext(
-        flagKey: flagKey,
-        evaluationContext: currentContext,
-        result: result,
-        error: error,
-        clientMetadata: clientMetadata,
-        providerMetadata: providerMetadata,
-        defaultValue: defaultValue,
-        flagValueType: flagValueType,
-        hookData: evaluationHookData._scopeFor(hook),
-      );
-
+    final immutableHints = (hints ?? const HookHints()).snapshot();
+    for (final hook in _hooksForStage(stage, additionalHooks, executionHooks)) {
       try {
+        if (hook is EvaluationHook && !hook.stages.contains(stage)) continue;
+        final hookContext = HookContext(
+          flagKey: flagKey,
+          evaluationContext: currentContext,
+          result: _snapshotHookValue(result),
+          error: error,
+          clientMetadata: clientMetadata,
+          providerMetadata: providerMetadata == null
+              ? null
+              : ProviderMetadata(
+                  name: providerMetadata.name,
+                  version: providerMetadata.version,
+                  attributes: Map.unmodifiable(providerMetadata.attributes),
+                ),
+          defaultValue: _snapshotHookValue(defaultValue),
+          flagValueType: flagValueType,
+          hookData: evaluationHookData._scopeFor(hook),
+          hints: immutableHints,
+          evaluationDetails: evaluationDetails,
+        );
+
         final contextUpdates = await _executeHookWithTimeout(
           hook,
           stage,
           hookContext,
           hook.metadata.config.timeout,
           evaluationDetails,
-          hints,
+          hints == null ? null : immutableHints,
         );
 
         if (stage == HookStage.BEFORE &&
@@ -227,30 +268,35 @@ class HookManager {
             ...currentContext,
             ...contextUpdates,
           });
+          onContextChanged?.call(currentContext);
         }
       } catch (e) {
         if (stage == HookStage.BEFORE || stage == HookStage.AFTER) {
           rethrow;
         }
-        print('Error in ${hook.metadata.name} hook: $e');
+        // Error/finally failures cannot suppress remaining cleanup hooks.
       }
     }
 
     return currentContext;
   }
 
-  /// Sort hooks by priority
-  void _sortHooks() {
-    _hooks.sort(
-      (a, b) => a.metadata.priority.index.compareTo(b.metadata.priority.index),
-    );
-  }
-
-  List<Hook> _hooksForStage(HookStage stage) {
-    if (stage == HookStage.BEFORE) {
-      return List.unmodifiable(_hooks);
+  List<Hook> _hooksForStage(
+    HookStage stage,
+    Iterable<Hook> additionalHooks,
+    List<Hook>? executionHooks,
+  ) {
+    final local = [..._hooks];
+    if (executionHooks == null) {
+      local.sort(
+        (a, b) =>
+            a.metadata.priority.index.compareTo(b.metadata.priority.index),
+      );
     }
-    return _hooks.reversed.toList(growable: false);
+    final combined = executionHooks ?? [...local, ...additionalHooks];
+    return List.unmodifiable(
+      stage == HookStage.BEFORE ? combined : combined.reversed,
+    );
   }
 
   /// Execute a single hook with timeout
@@ -681,5 +727,97 @@ class OpenTelemetryHook extends BaseHook {
 
     // Call the telemetry callback if provided
     telemetryCallback?.call(otelAttributes);
+  }
+}
+
+// Hook-visible structured values are private snapshots. Application fallbacks
+// themselves retain identity and are never replaced by these copies.
+dynamic _snapshotHookValue(dynamic value) => value is Map || value is List
+    ? snapshotContextMap({'value': value})['value']
+    : value;
+
+/// Immutable per-invocation hook registration and hints.
+class EvaluationOptions {
+  final List<Hook> hooks;
+  final HookHints hints;
+  EvaluationOptions({Iterable<Hook> hooks = const [], HookHints? hints})
+    : hooks = List.unmodifiable(hooks),
+      hints = (hints ?? const HookHints()).snapshot();
+}
+
+typedef BeforeEvaluationHook =
+    FutureOr<EvaluationContext?> Function(HookContext context, HookHints hints);
+typedef AfterEvaluationHook =
+    FutureOr<void> Function(
+      HookContext context,
+      EvaluationDetails details,
+      HookHints hints,
+    );
+typedef ErrorEvaluationHook =
+    FutureOr<void> Function(
+      HookContext context,
+      Exception error,
+      HookHints hints,
+    );
+
+/// A hook declaring only its supported stages, with typed stage arguments.
+/// Existing Hook/BaseHook implementations remain supported unchanged.
+class EvaluationHook extends BaseHook {
+  final BeforeEvaluationHook? _before;
+  final AfterEvaluationHook? _after;
+  final ErrorEvaluationHook? _error;
+  final AfterEvaluationHook? _finallyAfter;
+  final Set<HookStage> stages;
+
+  EvaluationHook({
+    required super.metadata,
+    BeforeEvaluationHook? before,
+    AfterEvaluationHook? after,
+    ErrorEvaluationHook? error,
+    AfterEvaluationHook? finallyAfter,
+  }) : _before = before,
+       _after = after,
+       _error = error,
+       _finallyAfter = finallyAfter,
+       stages = Set.unmodifiable({
+         if (before != null) HookStage.BEFORE,
+         if (after != null) HookStage.AFTER,
+         if (error != null) HookStage.ERROR,
+         if (finallyAfter != null) HookStage.FINALLY,
+       }) {
+    if (stages.isEmpty) {
+      throw ArgumentError('A hook must specify at least one stage.');
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> before(HookContext context) async =>
+      (await _before?.call(context, context.hints))?.toProviderContext();
+  @override
+  Future<void> after(HookContext context) async {
+    await _after?.call(context, context.evaluationDetails!, context.hints);
+  }
+
+  @override
+  Future<void> error(HookContext context) async {
+    await _error?.call(context, context.error!, context.hints);
+  }
+
+  /// Dart spelling of the specification's finally stage.
+  Future<void> finallyAfter(
+    HookContext context,
+    EvaluationDetails details, [
+    HookHints? hints,
+  ]) async {
+    await _finallyAfter?.call(context, details, hints ?? context.hints);
+  }
+
+  @override
+  Future<void> finally_(
+    HookContext context,
+    EvaluationDetails? details, [
+    HookHints? hints,
+  ]) async {
+    await finallyAfter(context, details!, hints);
   }
 }
