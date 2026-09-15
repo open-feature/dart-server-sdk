@@ -481,7 +481,7 @@ class OpenFeatureAPI {
     }
 
     return FeatureClient(
-      metadata: ClientMetadata(name: name),
+      metadata: ClientMetadata(name: name, domain: domain ?? name),
       hookManager: hookManager,
       apiContext: resolveApiContext(),
       apiContextResolver: resolveApiContext,
