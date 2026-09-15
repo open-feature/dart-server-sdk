@@ -15,6 +15,10 @@ Context integrity work for OpenFeature v0.9 adds immutable construction and
 runtime snapshots. See the [context migration guide](doc/evaluation-context-migration.md)
 for supported values, legacy compatibility and the remaining conformance scope.
 
+New providers can implement a minimal resolver contract and opt into lifecycle,
+hooks and tracking. See the [provider migration guide](doc/provider-capabilities-migration.md)
+for the additive API and legacy lifecycle policy.
+
 <p align="center" class="github-badges">
   <a href="https://github.com/open-feature/spec/releases/tag/v0.8.0">
     <img alt="Specification" src="https://img.shields.io/static/v1?label=specification&message=v0.8.0&color=yellow&style=for-the-badge" />
