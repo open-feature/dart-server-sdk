@@ -3,7 +3,7 @@
 The Dart server and client SDKs now use the same package layout:
 
 ```text
-dart-server-sdk/
+dart-sdk/
 |-- packages/
 |   |-- openfeature_dart_server_sdk/
 |   `-- openfeature_dart_client_sdk/
@@ -27,7 +27,7 @@ Before:
 dependencies:
   openfeature_dart_server_sdk:
     git:
-      url: https://github.com/open-feature/dart-server-sdk.git
+      url: https://github.com/open-feature/dart-sdk.git
 ```
 
 After:
@@ -36,7 +36,7 @@ After:
 dependencies:
   openfeature_dart_server_sdk:
     git:
-      url: https://github.com/open-feature/dart-server-sdk.git
+      url: https://github.com/open-feature/dart-sdk.git
       path: packages/openfeature_dart_server_sdk
 ```
 

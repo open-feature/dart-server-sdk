@@ -1,7 +1,7 @@
 # Evaluation context snapshots
 
 This is the context-integrity implementation for
-[#159](https://github.com/open-feature/dart-server-sdk/issues/159), based on
+[#159](https://github.com/open-feature/dart-sdk/issues/159), based on
 [OpenFeature v0.9.0 section 3](https://github.com/open-feature/spec/blob/v0.9.0/specification/sections/03-evaluation-context.md).
 It is not a full SDK conformance claim.
 

@@ -1,7 +1,7 @@
 # Dart server SDK OpenFeature v0.9 conformance matrix
 
 Status: maintainer proposal
-Tracks: [#121](https://github.com/open-feature/dart-server-sdk/issues/121)
+Tracks: [#121](https://github.com/open-feature/dart-sdk/issues/121)
 Specification baseline: [OpenFeature v0.9.0](https://github.com/open-feature/spec/releases/tag/v0.9.0)
 Implementation baseline: lifecycle work proposed in #131
 
