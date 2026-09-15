@@ -25,9 +25,9 @@ The conformance work must preserve:
 - invocation-scoped dynamic context;
 - public compatibility through adapters and deprecations where practical.
 
-Moving the server package under a future monorepo `packages/` directory and
-renaming this repository to `dart-sdk` remain later compatibility changes. They
-must not be bundled into the v0.9 behavioral implementation.
+The repository is now `open-feature/dart-sdk`, and both SDKs use the
+`packages/` layout. Those migration changes are complete and independent of
+the remaining v0.9 behavioral implementation.
 
 ## Legend
 
@@ -101,8 +101,8 @@ evaluation.
 4. Normalize hooks, events, tracking, shutdown, and independent API instances.
 5. Add the complete requirement-indexed suite and migration guide.
 6. Publish a server SDK prerelease for external provider validation.
-7. Treat monorepo relocation and repository renaming as later, independently
-   reversible changes.
+7. Preserve the completed package relocation and repository rename as the
+   baseline; they do not imply completion of the conformance work above.
 
 Each implementation PR should reference #121, identify the matrix rows it
 closes, and avoid mixing client-SDK or repository-migration changes into the

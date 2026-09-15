@@ -21,13 +21,13 @@ Repository-relative consumers must update paths that assumed the server SDK
 was at the repository root. This includes Git dependencies, local path
 dependencies, scripts, and CI jobs.
 
-Before:
+Before (historical layout; not a current dependency configuration):
 
 ```yaml
 dependencies:
   openfeature_dart_server_sdk:
     git:
-      url: https://github.com/open-feature/dart-sdk.git
+      url: https://github.com/open-feature/dart-server-sdk.git
 ```
 
 After:
