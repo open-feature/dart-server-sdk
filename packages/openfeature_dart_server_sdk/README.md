@@ -10,6 +10,11 @@
 <h2 align="center">OpenFeature Dart Server SDK</h2>
 
 <!-- x-hide-in-docs-end -->
+
+Context integrity work for OpenFeature v0.9 adds immutable construction and
+runtime snapshots. See the [context migration guide](doc/evaluation-context-migration.md)
+for supported values, legacy compatibility and the remaining conformance scope.
+
 <p align="center" class="github-badges">
   <a href="https://github.com/open-feature/spec/releases/tag/v0.8.0">
     <img alt="Specification" src="https://img.shields.io/static/v1?label=specification&message=v0.8.0&color=yellow&style=for-the-badge" />

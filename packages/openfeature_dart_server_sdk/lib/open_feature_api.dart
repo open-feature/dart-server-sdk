@@ -10,24 +10,29 @@ import 'open_feature_event.dart';
 import 'provider_lifecycle.dart';
 import 'src/provider_lifecycle_manager.dart';
 
+/// Compatibility adapter for the legacy positional-map API.
+/// New code can use [EvaluationContext.immutable] and
+/// [OpenFeatureAPI.setEvaluationContext] directly.
 class OpenFeatureEvaluationContext {
-  final String? targetingKey;
-  final Map<String, dynamic> attributes;
+  final EvaluationContext _context;
+  String? get targetingKey => _context.targetingKey;
+  Map<String, dynamic> get attributes => _context.attributes;
 
   OpenFeatureEvaluationContext(
     Map<String, dynamic> attributes, {
-    this.targetingKey,
-  }) : attributes = Map.unmodifiable(Map.of(attributes));
+    String? targetingKey,
+  }) : _context = EvaluationContext.immutable(
+         attributes: attributes,
+         targetingKey: targetingKey,
+       );
+
+  OpenFeatureEvaluationContext._(this._context);
 
   OpenFeatureEvaluationContext merge(OpenFeatureEvaluationContext other) {
-    return OpenFeatureEvaluationContext({
-      ...attributes,
-      ...other.attributes,
-    }, targetingKey: other.targetingKey ?? targetingKey);
+    return OpenFeatureEvaluationContext._(_context.merge(other._context));
   }
 
-  EvaluationContext toEvaluationContext() =>
-      EvaluationContext(targetingKey: targetingKey, attributes: attributes);
+  EvaluationContext toEvaluationContext() => _context;
 }
 
 abstract class OpenFeatureHook {
@@ -485,6 +490,15 @@ class OpenFeatureAPI {
   FeatureProvider get provider => _provider;
 
   ProviderState get providerStatus => _lifecycleManager.statusOf(_provider);
+
+  /// Set global evaluation fields using the canonical context representation.
+  /// Existing clients resolve the latest snapshot on their next evaluation.
+  void setEvaluationContext(EvaluationContext context) {
+    setGlobalContext(OpenFeatureEvaluationContext._(context.snapshot()));
+  }
+
+  EvaluationContext? get evaluationContext =>
+      _globalContext?.toEvaluationContext();
 
   void setGlobalContext(OpenFeatureEvaluationContext context) {
     _logger.info('Setting global context');

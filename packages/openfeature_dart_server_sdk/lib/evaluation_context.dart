@@ -3,6 +3,7 @@
 // Extends the existing basic context to support hierarchical contexts and targeting rules
 
 import 'dart:collection';
+import 'src/context_snapshot.dart';
 
 /// Represents a targeting rule operator
 enum TargetingOperator {
@@ -152,7 +153,8 @@ class _EvaluationCache {
   void clear() => _cache.clear();
 }
 
-/// Evaluation context with enhanced targeting capabilities
+/// Canonical evaluation context with optional legacy targeting helpers.
+/// Use [EvaluationContext.immutable] to snapshot caller-owned data immediately.
 class EvaluationContext {
   final String? targetingKey;
   final Map<String, dynamic> attributes;
@@ -161,6 +163,9 @@ class EvaluationContext {
   final Duration cacheDuration;
   static final _cache = _EvaluationCache();
 
+  /// Legacy const-compatible construction. Caller-owned fields are captured
+  /// when this value crosses an SDK boundary, not at construction time.
+  /// Prefer [EvaluationContext.immutable] for new code.
   const EvaluationContext({
     this.targetingKey,
     required this.attributes,
@@ -168,6 +173,36 @@ class EvaluationContext {
     this.rules = const [],
     this.cacheDuration = const Duration(minutes: 5),
   });
+
+  /// Copies and freezes all evaluation fields, including nested maps/lists.
+  /// The map-form `targetingKey` is a compatibility alias for [targetingKey];
+  /// an explicit argument takes precedence at the same context level.
+  factory EvaluationContext.immutable({
+    String? targetingKey,
+    Map<String, dynamic> attributes = const {},
+    EvaluationContext? parent,
+    List<TargetingRule> rules = const [],
+    Duration cacheDuration = const Duration(minutes: 5),
+  }) {
+    final copied = Map<String, dynamic>.of(snapshotContextMap(attributes));
+    final mapKey = copied.remove('targetingKey') as String?;
+    return EvaluationContext(
+      targetingKey: targetingKey ?? mapKey,
+      attributes: Map<String, dynamic>.unmodifiable(copied),
+      parent: parent?.snapshot(),
+      rules: List<TargetingRule>.unmodifiable(rules),
+      cacheDuration: cacheDuration,
+    );
+  }
+
+  /// Captures a legacy context and its complete parent chain for SDK use.
+  EvaluationContext snapshot() => EvaluationContext.immutable(
+    targetingKey: targetingKey,
+    attributes: attributes,
+    parent: parent,
+    rules: rules,
+    cacheDuration: cacheDuration,
+  );
 
   /// Return the complete context in the legacy provider-map representation.
   ///
@@ -179,11 +214,10 @@ class EvaluationContext {
       ...parent?.toProviderContext() ?? const <String, dynamic>{},
       ...attributes,
     };
-    final effectiveTargetingKey = targetingKey ?? parent?.targetingKey;
-    if (effectiveTargetingKey != null) {
-      result['targetingKey'] = effectiveTargetingKey;
+    if (targetingKey != null) {
+      result['targetingKey'] = targetingKey;
     }
-    return result;
+    return snapshotContextMap(result);
   }
 
   /// Get an attribute value, checking parent context if not found
@@ -194,13 +228,8 @@ class EvaluationContext {
   /// Create a new context by merging with another
   /// Per spec: overriding context targeting key takes precedence
   EvaluationContext merge(EvaluationContext other) {
-    return EvaluationContext(
-      targetingKey: other.targetingKey ?? targetingKey,
-      attributes: {
-        ...parent?.attributes ?? {},
-        ...attributes,
-        ...other.attributes,
-      },
+    return EvaluationContext.immutable(
+      attributes: {...toProviderContext(), ...other.toProviderContext()},
       rules: [...rules, ...other.rules],
       cacheDuration: cacheDuration,
     );
