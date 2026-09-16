@@ -26,7 +26,7 @@ Hooks receive a read-only outer view and return contributions as before.
 
 Use `EvaluationContext.immutable`, `.snapshot()` or the new canonical
 `setEvaluationContext` setter to explicitly capture data. All three use the
-same strict value contract. Snapshot before passing data to legacy APIs when
+same snapshot contract. Snapshot before passing data to legacy APIs when
 isolation is required:
 
 ```dart
@@ -61,14 +61,21 @@ retains its prior behavior. Merging two immutable contexts produces an immutable
 context; a merge involving a legacy context preserves legacy values. Call
 `.snapshot()` on that result to opt into validation and isolation.
 
-The strict value model accepts null, bool, String, num, DateTime, string-keyed
+For attributes and rule metadata, the strict value model accepts null, bool,
+String, num, DateTime, string-keyed
 maps and lists at every depth. DateTime retains its Dart instant/timezone.
 Unsupported objects, functions, sets, lazy Iterables, non-string keys and
 cycles throw `ArgumentError` during explicit construction. Errors include the
 field path, such as `attributes.account.orders[0].total`, without printing the
 field's value. Convert provider-specific data deliberately before opting in.
 
-Strict snapshots normalize nested collections to `List<Object?>` and
+Rule operands use the targeting evaluator's broader value model. Their nested
+maps/lists are copied and frozen, including non-string map keys, and cycles
+are rejected. Non-collection operands such as enums, Duration, Uri and custom
+objects retain their identity. Custom mutable objects, sets and other Iterables
+remain caller-owned and must stay stable for the snapshot's lifetime.
+
+Attribute and metadata snapshots normalize nested collections to `List<Object?>` and
 `Map<String, Object?>`; they do not promise the original generic arguments or
 concrete collection subclasses. Read a typed list using
 `(context.getAttribute('groups') as List).cast<String>()`, or make a mutable
@@ -89,6 +96,10 @@ the left explicit key, then local map aliases (right before left). Inherited
 keys are used only if neither context has a local key. Immutable construction
 normalizes a local map alias to the canonical targeting-key field. Both complete parent chains contribute other fields. This preserves the
 legacy explicit-key precedence without discarding inherited fields.
+
+Both the canonical context and legacy wrapper merge concatenate the local rule
+lists (left, then right) and retain the left context's cache duration. Parent
+attributes are flattened; parent rule inheritance is not retained by merge.
 
 The SDK's evaluation/tracking context levels have a separate precedence:
 API -> transaction -> client -> invocation, with before-hook contributions
@@ -114,6 +125,8 @@ The conformance matrix distinguishes opt-in guarantees from those gaps.
 
 `context_review_regression_test.dart` exercises legacy values, typed casts,
 provider writes, tracking, key precedence, child/rule snapshots and paths.
+`rule_snapshot_merge_regression_test.dart` covers arbitrary rule operands,
+nested collection isolation, operand cycles and wrapper merge preservation.
 `context_contract_test.dart` checks the strict model, five-level precedence,
 explicit isolation across awaited hooks and overlapping transactions, and
 late global replacement. Both independently published SDKs contain the same

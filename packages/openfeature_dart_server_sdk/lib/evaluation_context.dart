@@ -185,7 +185,9 @@ class EvaluationContext {
          ...attributes,
        });
 
-  /// Copies and freezes all evaluation fields, including nested maps/lists.
+  /// Copies and freezes evaluation fields, including nested maps/lists.
+  /// Rule operands outside maps/lists are retained by reference; callers must
+  /// keep custom mutable operands stable for the lifetime of the snapshot.
   /// The map-form `targetingKey` is a compatibility alias for [targetingKey];
   /// an explicit argument takes precedence at the same context level.
   factory EvaluationContext.immutable({
@@ -366,7 +368,7 @@ TargetingRule _snapshotRule(
     return TargetingRule(
       rule.attribute,
       rule.operator,
-      snapshotContextValue(rule.value, path: '$path.value'),
+      _snapshotRuleValue(rule.value, '$path.value', HashSet<Object>.identity()),
       metadata: rule.metadata == null
           ? null
           : snapshotContextMap(rule.metadata!, path: '$path.metadata'),
@@ -374,5 +376,40 @@ TargetingRule _snapshotRule(
     );
   } finally {
     ancestors.remove(rule);
+  }
+}
+
+// Rule operands have a wider value model than context attributes. Freeze their
+// maps/lists without imposing the attribute scalar or string-key restrictions.
+dynamic _snapshotRuleValue(dynamic value, String path, Set<Object> ancestors) {
+  if (value is! List && value is! Map) return value;
+  if (!ancestors.add(value)) {
+    throw InvalidContextException('$path: structures must be acyclic');
+  }
+  try {
+    if (value is List) {
+      return List<dynamic>.unmodifiable([
+        for (var i = 0; i < value.length; i++)
+          _snapshotRuleValue(value[i], '$path[$i]', ancestors),
+      ]);
+    }
+    final result = <dynamic, dynamic>{};
+    var index = 0;
+    for (final entry in (value as Map).entries) {
+      final key = _snapshotRuleValue(
+        entry.key,
+        '$path.keys[$index]',
+        ancestors,
+      );
+      result[key] = _snapshotRuleValue(
+        entry.value,
+        '$path.values[$index]',
+        ancestors,
+      );
+      index++;
+    }
+    return Map<dynamic, dynamic>.unmodifiable(result);
+  } finally {
+    ancestors.remove(value);
   }
 }
