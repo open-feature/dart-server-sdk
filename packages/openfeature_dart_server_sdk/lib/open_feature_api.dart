@@ -21,15 +21,19 @@ class OpenFeatureEvaluationContext {
   OpenFeatureEvaluationContext(
     Map<String, dynamic> attributes, {
     String? targetingKey,
-  }) : _context = EvaluationContext.immutable(
-         attributes: attributes,
+  }) : _context = EvaluationContext(
+         attributes: Map<String, dynamic>.unmodifiable(attributes),
          targetingKey: targetingKey,
        );
 
   OpenFeatureEvaluationContext._(this._context);
 
   OpenFeatureEvaluationContext merge(OpenFeatureEvaluationContext other) {
-    return OpenFeatureEvaluationContext._(_context.merge(other._context));
+    final merged = _context.merge(other._context);
+    return OpenFeatureEvaluationContext(
+      merged.attributes,
+      targetingKey: merged.targetingKey,
+    );
   }
 
   EvaluationContext toEvaluationContext() => _context;

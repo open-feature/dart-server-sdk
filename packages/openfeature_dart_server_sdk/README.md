@@ -11,10 +11,6 @@
 
 <!-- x-hide-in-docs-end -->
 
-Context integrity work for OpenFeature v0.9 adds immutable construction and
-runtime snapshots. See the [context migration guide](doc/evaluation-context-migration.md)
-for supported values, legacy compatibility and the remaining conformance scope.
-
 <p align="center" class="github-badges">
   <a href="https://github.com/open-feature/spec/releases/tag/v0.8.0">
     <img alt="Specification" src="https://img.shields.io/static/v1?label=specification&message=v0.8.0&color=yellow&style=for-the-badge" />
@@ -53,6 +49,11 @@ vendor-agnostic, community-driven API for feature flagging that works with your
 favorite feature flag management tool.
 
 <!-- x-hide-in-docs-end -->
+
+Immutable evaluation contexts are available as an explicit opt-in. Legacy context
+APIs retain their existing value and collection behavior. See the
+[context migration guide](https://github.com/open-feature/dart-sdk/blob/main/packages/openfeature_dart_server_sdk/doc/evaluation-context-migration.md)
+for snapshot semantics and the remaining conformance scope.
 
 ## Repository source and client SDK beta
 
